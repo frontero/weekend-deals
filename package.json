@@ -1,0 +1,36 @@
+{
+  "name": "weekend-deals",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Spot unusually cheap Landal weekend getaways by comparing current prices with each park's normal weekend price.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite build && vite preview",
+    "collect": "node --env-file-if-exists=.env.local server/collect-cli.mjs",
+    "background:on": "node scripts/background.mjs on",
+    "background:off": "node scripts/background.mjs off",
+    "background:now": "node scripts/background.mjs now",
+    "background:status": "node scripts/background.mjs status",
+    "storage:copy": "node --env-file-if-exists=.env.local scripts/copy-to-turso.mjs",
+    "smoke": "node --env-file-if-exists=.env.local scripts/smoke-test.mjs",
+    "cloud:deploy": "vite build && npm run -s smoke && node --env-file-if-exists=.env.local node_modules/wrangler/bin/wrangler.js deploy",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "vue": "^3.5.44"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "playwright-core": "^1.56.1",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.5",
+    "wrangler": "^4.151.3"
+  }
+}

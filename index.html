@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weekendje weg – buitenkansjes bij Landal, Topparken en Molecaten</title>
+    <meta
+      name="description"
+      content="Weekenden weg (vrijdag tot maandag) die duidelijk onder de normale prijs van het park zitten, met prijsgeschiedenis en boekadvies: nu boeken of wachten?"
+    />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="nl_NL" />
+    <meta property="og:site_name" content="Weekendje weg" />
+    <meta property="og:title" content="Weekendje weg – buitenkansjes voor een weekend weg" />
+    <meta
+      property="og:description"
+      content="Weekenden bij Landal, Topparken en Molecaten die duidelijk onder de normale prijs van het park zitten."
+    />
+    <script>
+      // A theme chosen in the app (see src/composables/useTheme.js), applied before the first paint.
+      try {
+        const theme = localStorage.getItem('weekend-deals:theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

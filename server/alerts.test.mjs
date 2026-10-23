@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { alertMessage, cleanSearch, newOrCheaper, NTFY_SERVER, sendNotification } from './alerts.mjs';
+
+const deal = (code, priceCents, discount = 0.3) => ({
+  park: { code, name: `Park ${code}` },
+  weekend: { arrival: '2026-11-13', departure: '2026-11-16', priceCents, discount },
+});
+
+test('keeps only the known filters, and the home only roughly', () => {
+  const search = cleanSearch({
+    minDiscountPercent: 20,
+    brands: ['landal', 3],
+    search: 'veluwe',
+    origin: { lat: 52.09073, lng: 5.12142, label: 'Domplein 1, Utrecht' },
+    maxDistanceKm: 50,
+    sort: 'price',
+    evil: { $where: 1 },
+  });
+  assert.deepEqual(search, {
+    minDiscountPercent: 20,
+    search: 'veluwe',
+    brands: ['landal'],
+    maxDistanceKm: 50,
+    origin: { lat: 52.09, lng: 5.12 },
+  });
+});
+
+test('tells about new deals and clearly cheaper ones, not the same price coming back', () => {
+  const told = new Map([
+    ['A|2026-11-13', 40000],
+    ['B|2026-11-13', 30000],
+  ]);
+  const news = newOrCheaper([deal('A', 39500), deal('B', 29000), deal('C', 50000)], told);
+  assert.deepEqual(news.map((item) => item.park.code), ['B', 'C']);
+});
+
+test('one message lists the best deals and links to the search', () => {
+  const alert = { label: '20%+ onder normaal · Max € 500', query: 'maxPriceEuros=500' };
+  const message = alertMessage(alert, [deal('A', 42900, 0.31)], 'https://weekend-deals.example.workers.dev');
+  assert.equal(message.title, 'Buitenkansje: Park A');
+  assert.match(message.message, /^Park A · vr 13 nov – ma 16 nov · €\s429 \(31% onder normaal\)/);
+  assert.match(message.message, /Alarm: 20%\+ onder normaal · Max € 500$/);
+  assert.equal(message.click, 'https://weekend-deals.example.workers.dev/?maxPriceEuros=500');
+
+  const many = alertMessage(alert, Array.from({ length: 7 }, (_, index) => deal(`P${index}`, 30000)), null);
+  assert.equal(many.title, '7 nieuwe buitenkansjes');
+  assert.match(many.message, /en nog 2 meer/);
+  assert.equal(many.click, undefined);
+});
+
+test('sends to the topic on ntfy and reports a refusal', async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, body: JSON.parse(options.body) });
+    return { ok: calls.length === 1, status: 429 };
+  };
+  await sendNotification('weekendjeweg-abcdefghijklmnop', { title: 'T', message: 'M' }, fetchImpl);
+  assert.deepEqual(calls[0], { url: NTFY_SERVER, body: { topic: 'weekendjeweg-abcdefghijklmnop', title: 'T', message: 'M' } });
+  await assert.rejects(sendNotification('weekendjeweg-abcdefghijklmnop', {}, fetchImpl), /429/);
+});

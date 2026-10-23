@@ -1,0 +1,49 @@
+# Price rounds without the Mac: every ten minutes GitHub makes the same check as the background job on the Mac
+# (npm run background:on), and runs a round when one is due or the app asked for one.
+# Needs these repository secrets (Settings → Secrets and variables → Actions), with the values from .env.local:
+# TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, GOOGLE_PLACES_API_KEY and WORKER_URL.
+name: Price rounds
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  # A check right away, from the Actions tab.
+  workflow_dispatch:
+
+# One at a time: a check that comes in during a round waits for it.
+concurrency:
+  group: price-rounds
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    # A full round of every party size takes about an hour.
+    timeout-minutes: 120
+    env:
+      # Without the database there is nowhere to keep prices, so nothing runs until the secrets are set.
+      READY: ${{ secrets.TURSO_DATABASE_URL != '' && secrets.TURSO_AUTH_TOKEN != '' }}
+    steps:
+      - if: env.READY != 'true'
+        run: echo "::warning::Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN under Settings → Secrets and variables → Actions."
+      - if: env.READY == 'true'
+        uses: actions/checkout@v4
+      - if: env.READY == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - if: env.READY == 'true'
+        run: npm ci --omit=dev
+      - if: env.READY == 'true'
+        run: node server/collect-cli.mjs --if-due
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          # The round times (06:45 and 18:00) are Dutch time.
+          TZ: Europe/Amsterdam
