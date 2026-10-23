@@ -1,7 +1,10 @@
 import { createApp } from 'vue';
-import AdminPage from './AdminPage.vue';
 import App from './App.vue';
 import './style.css';
 
-// One page more needs no router: the admin page has an address of its own.
-createApp(window.location.pathname.startsWith('/beheer') ? AdminPage : App).mount('#app');
+// The admin pages load separately, with their charts, so the deals page stays as light as it was.
+if (window.location.pathname.startsWith('/beheer')) {
+  import('./admin/main.js').then(({ mountAdmin }) => mountAdmin('#app'));
+} else {
+  createApp(App).mount('#app');
+}

@@ -103,7 +103,14 @@ const SCHEMA = `
   CREATE TABLE IF NOT EXISTS scan_changes (
     scan_id INTEGER PRIMARY KEY,
     previous_scan_id INTEGER,
-    summary TEXT NOT NULL
+    summary TEXT NOT NULL,
+    stats TEXT
+  );
+  CREATE INDEX IF NOT EXISTS prices_by_park ON prices (park_code, scan_id);
+  CREATE TABLE IF NOT EXISTS admin_stats (
+    group_key TEXT PRIMARY KEY,
+    computed_at TEXT NOT NULL,
+    data BLOB NOT NULL
   );
   CREATE TABLE IF NOT EXISTS overviews (
     group_key TEXT PRIMARY KEY,
@@ -315,11 +322,13 @@ async function upgradeFacilities(client) {
 async function addLaterColumns(client) {
   const columns = await columnNames(client, 'parks');
   const priceColumns = await columnNames(client, 'prices');
+  const scanChangeColumns = await columnNames(client, 'scan_changes');
   const changes = [];
   if (!columns.includes('lat')) changes.push('ALTER TABLE parks ADD COLUMN lat REAL', 'ALTER TABLE parks ADD COLUMN lng REAL');
   if (!columns.includes('provider')) changes.push(`ALTER TABLE parks ADD COLUMN provider TEXT NOT NULL DEFAULT 'landal'`);
   if (!columns.includes('brand_code')) changes.push('ALTER TABLE parks ADD COLUMN brand_code TEXT');
   if (!priceColumns.includes('booking_url')) changes.push('ALTER TABLE prices ADD COLUMN booking_url TEXT');
+  if (!scanChangeColumns.includes('stats')) changes.push('ALTER TABLE scan_changes ADD COLUMN stats TEXT');
   if (changes.length) await client.batch(changes, 'write');
 }
 
@@ -571,29 +580,144 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
     },
 
     /**
-     * Among the latest rounds, the successful ones without a summary of their changes yet, newest first, each with
-     * the successful round of the same party before it (null for a party's first round). Older rounds are never
-     * summarised: the admin page does not show them.
+     * Successful rounds since `since` without a summary of their changes and price levels yet, newest first, each
+     * with the successful round of the same party before it (null for a party's first round). Older rounds are
+     * never summarised: the admin page does not reach back further.
      */
-    scansWithoutChanges(latest) {
+    scansToSummarize({ since, limit }) {
       return all(
         `SELECT scans.id AS scanId,
           (SELECT MAX(earlier.id) FROM scans AS earlier
             WHERE earlier.group_key = scans.group_key AND earlier.id < scans.id
               AND earlier.finished_at IS NOT NULL AND earlier.error IS NULL) AS previousScanId
         FROM scans LEFT JOIN scan_changes ON scan_changes.scan_id = scans.id
-        WHERE scans.id IN (SELECT id FROM scans ORDER BY id DESC LIMIT ?)
-          AND scans.finished_at IS NOT NULL AND scans.error IS NULL AND scan_changes.scan_id IS NULL
-        ORDER BY scans.id DESC`,
-        latest,
+        WHERE scans.started_at >= ? AND scans.finished_at IS NOT NULL AND scans.error IS NULL
+          AND (scan_changes.scan_id IS NULL OR scan_changes.stats IS NULL)
+        ORDER BY scans.id DESC LIMIT ?`,
+        since,
+        limit,
       );
     },
 
-    async saveScanChanges(scanId, previousScanId, summary) {
+    async saveScanChanges(scanId, previousScanId, summary, stats = null) {
       await client.execute({
-        sql: `INSERT OR REPLACE INTO scan_changes (scan_id, previous_scan_id, summary) VALUES (?, ?, ?)`,
-        args: [scanId, previousScanId, JSON.stringify(summary)],
+        sql: `INSERT OR REPLACE INTO scan_changes (scan_id, previous_scan_id, summary, stats) VALUES (?, ?, ?, ?)`,
+        args: [scanId, previousScanId, JSON.stringify(summary), stats && JSON.stringify(stats)],
       });
+    },
+
+    /** One party size's summarised rounds since `since`, oldest first: { id, startedAt, changes, stats }. */
+    async roundStats(key, since) {
+      const rows = await all(
+        `SELECT scans.id, scans.started_at AS startedAt, scan_changes.summary, scan_changes.stats
+        FROM scans JOIN scan_changes ON scan_changes.scan_id = scans.id
+        WHERE scans.group_key = ? AND scans.started_at >= ? AND scan_changes.stats IS NOT NULL
+        ORDER BY scans.id`,
+        key,
+        since,
+      );
+      return rows.map(({ summary, stats, ...round }) => ({ ...round, changes: JSON.parse(summary), stats: JSON.parse(stats) }));
+    },
+
+    /** How many rounds ran and prices were kept, over all party sizes. */
+    async adminTotals() {
+      return first(
+        `SELECT COUNT(*) AS rounds, SUM(json_extract(scan_changes.summary, '$.prices')) AS prices,
+          MIN(scans.started_at) AS since
+        FROM scans LEFT JOIN scan_changes ON scan_changes.scan_id = scans.id`,
+      );
+    },
+
+    async saveAdminStats(key, { computedAt, data }) {
+      await client.execute({
+        sql: `INSERT OR REPLACE INTO admin_stats (group_key, computed_at, data) VALUES (?, ?, ?)`,
+        args: [key, computedAt, data],
+      });
+    },
+
+    /** @returns the gzipped admin charts of a party size as an ArrayBuffer, or null before they were computed */
+    async adminStats(key) {
+      return (await first(`SELECT data FROM admin_stats WHERE group_key = ?`, key))?.data ?? null;
+    },
+
+    async adminStatsComputedAt(key) {
+      return (await first(`SELECT computed_at AS computedAt FROM admin_stats WHERE group_key = ?`, key))?.computedAt ?? null;
+    },
+
+    /**
+     * One park's prices per round and weekend since `since`, for a party size. Turso puts the JSON together, so the
+     * cloud app passes it on without unpacking: it has little CPU time per request.
+     * @returns { park, accommodations, rows } as JSON texts; rows are [startedAt, arrival, priceCents, accommodationCode]
+     */
+    async parkHistory(code, key, since) {
+      const [park, accommodations, rows] = await client.batch(
+        [
+          {
+            sql: `SELECT json_object('code', parks.code, 'name', parks.name, 'provider', parks.provider, 'city', parks.city,
+                'region', parks.region, 'country', parks.country, 'url', parks.url, 'pricesUrl', parks.prices_url,
+                'imageUrl', parks.image_url, 'rating', google_ratings.rating, 'ratingCount', google_ratings.rating_count,
+                'mapsUrl', google_ratings.maps_url) AS json
+              FROM parks LEFT JOIN google_ratings ON google_ratings.park_code = parks.code WHERE parks.code = ?`,
+            args: [code],
+          },
+          {
+            sql: `SELECT json_group_object(code, json_object('name', name, 'url', url, 'photo', json_extract(photos, '$[0]')))
+                AS json FROM accommodations WHERE park_code = ?`,
+            args: [code],
+          },
+          {
+            sql: `SELECT json_group_array(json_array(startedAt, arrival, priceCents, accommodationCode)) AS json FROM (
+                SELECT scans.started_at AS startedAt, prices.arrival, prices.price_cents AS priceCents,
+                  prices.accommodation_code AS accommodationCode
+                FROM prices JOIN scans ON scans.id = prices.scan_id
+                WHERE prices.park_code = ? AND scans.group_key = ? AND scans.started_at >= ?
+                  AND scans.finished_at IS NOT NULL AND scans.error IS NULL
+                ORDER BY scans.id, prices.arrival)`,
+            args: [code, key, since],
+          },
+        ],
+        'read',
+      );
+      return { park: park.rows[0]?.json ?? null, accommodations: accommodations.rows[0].json, rows: rows.rows[0].json };
+    },
+
+    /**
+     * Per park, how one weekend's price went for a party size since `since`: the first and the latest price seen,
+     * the lowest and highest, and how often it was seen. Put together as JSON by Turso, like parkHistory.
+     * @returns { latestAt, parks } as JSON texts; parks are [parkCode, firstCents, firstAt, lastCents, lastAt,
+     *   lowCents, highCents, observations]
+     */
+    async weekendHistory(arrival, key, since) {
+      const [latest, parks] = await client.batch(
+        [
+          {
+            sql: `SELECT json_quote(MAX(started_at)) AS json FROM scans
+              WHERE group_key = ? AND finished_at IS NOT NULL AND error IS NULL`,
+            args: [key],
+          },
+          {
+            sql: `WITH seen AS (
+                SELECT prices.park_code AS park, scans.id AS scan, scans.started_at AS at, prices.price_cents AS price
+                FROM prices JOIN scans ON scans.id = prices.scan_id
+                WHERE prices.arrival = ? AND scans.group_key = ? AND scans.started_at >= ?
+                  AND scans.finished_at IS NOT NULL AND scans.error IS NULL
+              ), ranked AS (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY park ORDER BY scan) AS fromFirst,
+                  ROW_NUMBER() OVER (PARTITION BY park ORDER BY scan DESC) AS fromLast
+                FROM seen
+              )
+              SELECT json_group_array(json_array(park, firstCents, firstAt, lastCents, lastAt, low, high, n)) AS json FROM (
+                SELECT park,
+                  MAX(CASE WHEN fromFirst = 1 THEN price END) AS firstCents, MAX(CASE WHEN fromFirst = 1 THEN at END) AS firstAt,
+                  MAX(CASE WHEN fromLast = 1 THEN price END) AS lastCents, MAX(CASE WHEN fromLast = 1 THEN at END) AS lastAt,
+                  MIN(price) AS low, MAX(price) AS high, COUNT(*) AS n
+                FROM ranked GROUP BY park)`,
+            args: [arrival, key, since],
+          },
+        ],
+        'read',
+      );
+      return { latestAt: latest.rows[0].json, parks: parks.rows[0].json };
     },
 
     /** The latest rounds for the admin page, with what each changed when that is known. */

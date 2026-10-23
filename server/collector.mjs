@@ -1,4 +1,7 @@
-import { scanChanges, SHOWN_ROUNDS } from '../shared/scan-changes.mjs';
+import { gzipSync } from 'node:zlib';
+import { adminWindowStart, buildAdminStats } from '../shared/admin-stats.mjs';
+import { scanChanges } from '../shared/scan-changes.mjs';
+import { scanStats } from '../shared/scan-stats.mjs';
 import { lastScheduledRound } from '../shared/schedule.mjs';
 import { localToday, upcomingWeekends } from '../shared/weekends.mjs';
 import { checkAlerts } from './alert-check.mjs';
@@ -19,6 +22,8 @@ const FACILITY_PAGE_PAUSE_MS = 400;
 const RATING_MAX_AGE_MS = 30 * DAY_MS;
 // Other processes see the progress this often; every step would be a write over the network.
 const PROGRESS_WRITE_MS = 5000;
+// Rounds summarised per run; a backlog, like after an update, is worked off over the next runs.
+const SUMMARIES_PER_RUN = 60;
 // One search usually lists all of a park's accommodations; a second weekend catches most of the rest.
 const MAX_ACCOMMODATION_SEARCHES_PER_PARK = 2;
 
@@ -279,17 +284,43 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
     }
   }
 
-  /** What each recent round changed, for the admin page; extra, so a failure is only logged. Never rejects. */
+  /** The admin page's charts per party size, from the summarised rounds; all again after new rounds. */
+  async function refreshAdminStats({ rebuild }) {
+    const since = adminWindowStart();
+    let parks = null;
+    for (const { key } of await followedParties()) {
+      if (!rebuild && (await db.adminStatsComputedAt(key))) continue;
+      parks ??= await db.parks();
+      const stats = buildAdminStats({ groupKey: key, rounds: await db.roundStats(key, since), parks });
+      throwIfCancelled();
+      await db.saveAdminStats(key, { computedAt: stats.computedAt, data: gzipSync(JSON.stringify(stats)) });
+    }
+  }
+
+  /**
+   * What each recent round changed and its price levels, for the admin page; extra, so a failure is only logged.
+   * Never rejects.
+   */
   async function summarizeRounds() {
     if (cancelled) return;
     try {
-      for (const { scanId, previousScanId } of await db.scansWithoutChanges(SHOWN_ROUNDS)) {
-        const previous = previousScanId === null ? [] : await db.scanRows(previousScanId);
+      const pending = await db.scansToSummarize({ since: adminWindowStart(), limit: SUMMARIES_PER_RUN });
+      // Newest first, so a round's predecessor is usually the next one summarised: read each round once.
+      const read = new Map();
+      const rowsOf = async (scanId) => {
+        if (!read.has(scanId)) read.set(scanId, await db.scanRows(scanId));
+        return read.get(scanId);
+      };
+      for (const { scanId, previousScanId } of pending) {
+        const rows = await rowsOf(scanId);
+        const previous = previousScanId === null ? [] : await rowsOf(previousScanId);
         throwIfCancelled();
-        await db.saveScanChanges(scanId, previousScanId, scanChanges(await db.scanRows(scanId), previous));
+        await db.saveScanChanges(scanId, previousScanId, scanChanges(rows, previous), scanStats(rows));
+        read.delete(scanId);
       }
+      await refreshAdminStats({ rebuild: pending.length > 0 });
     } catch (error) {
-      if (!cancelled) log(`round changes failed: ${error.message}`);
+      if (!cancelled) log(`round summaries failed: ${error.message}`);
     }
   }
 

@@ -1,6 +1,7 @@
 import { groupKey as partyKey, PARTY_FIELDS, partyOf, seriesFor } from '../shared/party.mjs';
 import { cleanSearch, sendNotification, TOPIC_PATTERN } from './alerts.mjs';
 import { geocode } from './geocode.mjs';
+import { adminWindowStart } from '../shared/admin-stats.mjs';
 import { SHOWN_ROUNDS } from '../shared/scan-changes.mjs';
 import { MONTHLY_GOOGLE_BUDGET } from './google.mjs';
 import { clampSettings, groupKey } from './settings.mjs';
@@ -30,6 +31,8 @@ const seenDeals = (rows) =>
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': JSON_TYPE } });
+// JSON that Turso already put together, passed on as it is.
+const jsonText = (text) => new Response(text, { headers: { 'Content-Type': JSON_TYPE, 'Cache-Control': 'no-store' } });
 
 /**
  * The /api routes as a fetch handler, shared by the Mac (behind Vite) and the cloud app (a Cloudflare Worker).
@@ -46,6 +49,10 @@ export function createApiHandler(db, { live = () => null, onScanRequested = () =
     const key = new URL(request.url).searchParams.get('party');
     return [key && key.length <= MAX_KEY_LENGTH ? key : groupKey(seriesFor(await db.getSettings()))];
   }
+
+  /** Admin routes answer admins only. */
+  const forAdmins = (route) => async (request) =>
+    (await isAdmin(request)) ? route(request) : json({ error: 'Forbidden' }, 403);
 
   const status = async (request) => ({
     ...statusBody(await db.statusInputs(), { live: live(), parties: await partiesOf(request) }),
@@ -85,8 +92,7 @@ export function createApiHandler(db, { live = () => null, onScanRequested = () =
     },
 
     // When the rounds ran and what they changed; for admins only.
-    'GET /admin': async (request) => {
-      if (!(await isAdmin(request))) return json({ error: 'Forbidden' }, 403);
+    'GET /admin': forAdmins(async () => {
       const { settings, collector, scanRequestedAt } = await db.statusInputs();
       const month = new Date().toISOString().slice(0, 7);
       const history = await db.rounds(SHOWN_ROUNDS);
@@ -111,8 +117,38 @@ export function createApiHandler(db, { live = () => null, onScanRequested = () =
         google: { used: await db.googleRequests(month), budget: MONTHLY_GOOGLE_BUDGET, error: await db.googleError() },
         history,
         parks,
+        totals: await db.adminTotals(),
       });
-    },
+    }),
+
+    // The charts of a party size, computed after each round and passed on still gzipped, like the park list.
+    'GET /admin/stats': forAdmins(async (request) => {
+      const [key] = await partiesOf(request);
+      const data = await db.adminStats(key);
+      if (!data) return json({ error: 'Not computed yet' }, 404);
+      return new Response(data, {
+        headers: { 'Content-Type': JSON_TYPE, 'Content-Encoding': 'gzip', 'Cache-Control': 'no-store' },
+        encodeBody: 'manual',
+      });
+    }),
+
+    // One park's prices per round and weekend for a party size.
+    'GET /admin/park': forAdmins(async (request) => {
+      const [key] = await partiesOf(request);
+      const code = new URL(request.url).searchParams.get('code') ?? '';
+      const history = await db.parkHistory(code, key, adminWindowStart());
+      if (!history.park) return json({ error: 'Unknown park' }, 404);
+      return jsonText(`{"park":${history.park},"accommodations":${history.accommodations},"rows":${history.rows}}`);
+    }),
+
+    // Per park, how one weekend's price went for a party size.
+    'GET /admin/weekend': forAdmins(async (request) => {
+      const [key] = await partiesOf(request);
+      const arrival = new URL(request.url).searchParams.get('arrival') ?? '';
+      if (!ISO_DATE.test(arrival)) return json({ error: 'Invalid weekend' }, 400);
+      const history = await db.weekendHistory(arrival, key, adminWindowStart());
+      return jsonText(`{"arrival":"${arrival}","latestAt":${history.latestAt},"parks":${history.parks}}`);
+    }),
 
     // Every size, or the ones named: the admin page names those a stopped round did not finish.
     'POST /scan': async (request) => {

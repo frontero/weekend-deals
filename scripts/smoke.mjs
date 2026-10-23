@@ -1,8 +1,8 @@
 // Opens the built app the way a visitor would, before it goes online: the page must show parks, a park must open,
-// its live price must come back and the admin page must show the rounds, on a desktop and on a phone, without errors
-// in the page. Unit tests check the
+// its live price must come back, and the admin pages must show their charts and the rounds, on a desktop and on a phone,
+// without errors in the page. Unit tests check the
 // calculations; this checks that the screen works. Run after `vite build`; `npm run cloud:deploy` does both.
-// Uses the Chrome installed on this Mac, without a window. Usage: node scripts/smoke-test.mjs
+// Uses the Chrome installed on this Mac, without a window. Usage: node scripts/smoke.mjs
 import { chromium } from 'playwright-core';
 import { preview } from 'vite';
 
@@ -52,6 +52,10 @@ try {
         .waitFor({ timeout: TIMEOUT_MS }),
     );
     await page.goto(`http://localhost:${PORT}/beheer`);
+    await check('the admin dashboard shows its charts', () =>
+      page.locator('main canvas').first().waitFor({ timeout: TIMEOUT_MS }),
+    );
+    await page.goto(`http://localhost:${PORT}/beheer/rondes`);
     await check('the admin page shows the rounds', () =>
       page.getByRole('heading', { name: 'Prijsrondes' }).waitFor({ timeout: TIMEOUT_MS }),
     );

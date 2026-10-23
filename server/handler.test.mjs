@@ -188,3 +188,33 @@ test('a scan request may name the sizes to collect, only ones that are collected
   assert.deepEqual((await db.scanRequest()).parties, ['a2-c0']);
   db.close();
 });
+
+test('the admin charts and histories are for admins only, and come as Turso and the collector made them', async () => {
+  const db = await open('admin-charts.db');
+  const visitor = createApiHandler(db);
+  for (const path of ['/admin/stats', '/admin/park?code=HRK', '/admin/weekend?arrival=2026-11-13']) {
+    assert.equal((await call(visitor, 'GET', path)).status, 403);
+  }
+
+  const admin = createApiHandler(db, { isAdmin: () => true });
+  assert.equal((await call(admin, 'GET', '/admin/stats?party=a2-c0')).status, 404);
+  await db.saveAdminStats('a2-c0', { computedAt: 'x', data: gzipSync('{"groupKey":"a2-c0"}') });
+  const stats = await call(admin, 'GET', '/admin/stats?party=a2-c0');
+  assert.equal(stats.headers.get('Content-Encoding'), 'gzip');
+  assert.deepEqual(JSON.parse(gunzipSync(Buffer.from(await stats.arrayBuffer()))), { groupKey: 'a2-c0' });
+
+  const scanId = await db.startScan('a2-c0');
+  const offer = { park: { code: 'HRK', name: 'Park HRK' }, priceCents: 27000, accommodationCode: 'x', bookingUrl: null };
+  await db.savePrices(scanId, { arrival: '2026-11-13', departure: '2026-11-16' }, [offer]);
+  await db.finishScan(scanId);
+  const park = await (await call(admin, 'GET', '/admin/park?code=HRK&party=a2-c0')).json();
+  assert.equal(park.park.name, 'Park HRK');
+  assert.deepEqual(park.rows.map(([, arrival, cents]) => [arrival, cents]), [['2026-11-13', 27000]]);
+  assert.equal((await call(admin, 'GET', '/admin/park?code=NOPE&party=a2-c0')).status, 404);
+
+  const weekend = await (await call(admin, 'GET', '/admin/weekend?arrival=2026-11-13&party=a2-c0')).json();
+  assert.equal(weekend.arrival, '2026-11-13');
+  assert.deepEqual(weekend.parks.map(([code, firstCents]) => [code, firstCents]), [['HRK', 27000]]);
+  assert.equal((await call(admin, 'GET', '/admin/weekend?arrival=13-11&party=a2-c0')).status, 400);
+  db.close();
+});

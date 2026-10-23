@@ -14,7 +14,7 @@
     "background:now": "node scripts/background.mjs now",
     "background:status": "node scripts/background.mjs status",
     "storage:copy": "node --env-file-if-exists=.env.local scripts/copy-to-turso.mjs",
-    "smoke": "node --env-file-if-exists=.env.local scripts/smoke-test.mjs",
+    "smoke": "node --env-file-if-exists=.env.local scripts/smoke.mjs",
     "cloud:deploy": "vite build && npm run -s smoke && node --env-file-if-exists=.env.local node_modules/wrangler/bin/wrangler.js deploy",
     "test": "node --test"
   },
@@ -23,7 +23,10 @@
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
-    "vue": "^3.5.44"
+    "echarts": "^6.1.0",
+    "vue": "^3.5.44",
+    "vue-echarts": "^8.3.2",
+    "vue-router": "^5.4.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

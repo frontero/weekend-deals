@@ -262,8 +262,9 @@ test("keeps other providers' facility names per park, replacing only the parks r
   db.close();
 });
 
-test('keeps what a round changed, and knows which finished rounds still lack that', async () => {
+test('keeps what a round changed and its price levels, and knows which finished rounds still lack them', async () => {
   const db = await open('scan-changes.db');
+  const since = '2026-10-01T00:00:00Z';
   const weekend = { arrival: '2026-11-13', departure: '2026-11-16' };
   const first = await db.startScan('a2-c0', '2026-10-22T06:45:00Z');
   await db.savePrices(first, weekend, [offer('HRK', 52.9)]);
@@ -274,17 +275,62 @@ test('keeps what a round changed, and knows which finished rounds still lack tha
   // Still running: no summary until it finishes.
   await db.startScan('a2-c0', '2026-10-23T06:45:00Z');
 
-  assert.deepEqual(await db.scansWithoutChanges(10), [
+  assert.deepEqual(await db.scansToSummarize({ since, limit: 10 }), [
     { scanId: second, previousScanId: first },
     { scanId: first, previousScanId: null },
   ]);
   assert.deepEqual((await db.scanRows(second)).map((row) => [row.parkCode, row.priceCents, row.provider]), [['HRK', 18000, 'landal']]);
 
+  // A summary from before price levels were kept is made again.
   await db.saveScanChanges(second, first, { prices: 1, down: 1 });
-  assert.deepEqual((await db.scansWithoutChanges(10)).map((row) => row.scanId), [first]);
+  assert.deepEqual((await db.scansToSummarize({ since, limit: 10 })).map((row) => row.scanId), [second, first]);
+  const stats = { all: [1, 18000, 18000, 18000, 18000], weekends: {}, parks: {}, providers: { landal: 1 } };
+  await db.saveScanChanges(second, first, { prices: 1, down: 1 }, stats);
+  assert.deepEqual((await db.scansToSummarize({ since, limit: 10 })).map((row) => row.scanId), [first]);
+  // Rounds from before the admin page's window are left alone.
+  assert.deepEqual(await db.scansToSummarize({ since: '2026-10-22T12:00:00Z', limit: 10 }), []);
+
   const [running, latest] = await db.rounds(2);
   assert.equal(running.finishedAt, null);
   assert.deepEqual(latest.changes, { prices: 1, down: 1 });
+  assert.deepEqual((await db.roundStats('a2-c0', since)).map((round) => [round.id, round.changes.down, round.stats.all[0]]), [
+    [second, 1, 1],
+  ]);
+  db.close();
+});
+
+test("puts a park's and a weekend's price history together as JSON", async () => {
+  const db = await open('histories.db');
+  const since = '2026-10-01T00:00:00Z';
+  const november = { arrival: '2026-11-13', departure: '2026-11-16' };
+  const priced = (code, priceCents, accommodationCode = 'x') => ({ ...offer(code, 52.9), priceCents, accommodationCode });
+  const first = await db.startScan('a2-c0', '2026-10-22T06:45:00Z');
+  await db.savePrices(first, november, [priced('HRK', 30000), priced('KWW', 50000)]);
+  await db.finishScan(first);
+  const second = await db.startScan('a2-c0', '2026-10-22T18:00:00Z');
+  await db.savePrices(second, november, [priced('HRK', 27000, 'y')]);
+  await db.finishScan(second);
+  // Another size's prices stay out.
+  const other = await db.startScan('a4-c0', '2026-10-22T19:00:00Z');
+  await db.savePrices(other, november, [priced('HRK', 99000)]);
+  await db.finishScan(other);
+  await db.saveAccommodations('HRK', [{ code: 'y', name: 'Lariks 6', url: 'https://example.org/y', facts: [], photos: ['p.jpg'] }]);
+
+  const park = await db.parkHistory('HRK', 'a2-c0', since);
+  assert.equal(JSON.parse(park.park).name, 'HRK');
+  assert.deepEqual(JSON.parse(park.accommodations), { y: { name: 'Lariks 6', url: 'https://example.org/y', photo: 'p.jpg' } });
+  assert.deepEqual(JSON.parse(park.rows), [
+    ['2026-10-22T06:45:00Z', '2026-11-13', 30000, 'x'],
+    ['2026-10-22T18:00:00Z', '2026-11-13', 27000, 'y'],
+  ]);
+  assert.equal((await db.parkHistory('NOPE', 'a2-c0', since)).park, null);
+
+  const weekend = await db.weekendHistory('2026-11-13', 'a2-c0', since);
+  assert.equal(JSON.parse(weekend.latestAt), '2026-10-22T18:00:00Z');
+  const parks = Object.fromEntries(JSON.parse(weekend.parks).map(([code, ...rest]) => [code, rest]));
+  assert.deepEqual(parks.HRK, [30000, '2026-10-22T06:45:00Z', 27000, '2026-10-22T18:00:00Z', 27000, 30000, 2]);
+  // Last seen in the first round: no longer free.
+  assert.deepEqual(parks.KWW, [50000, '2026-10-22T06:45:00Z', 50000, '2026-10-22T06:45:00Z', 50000, 50000, 1]);
   db.close();
 });
 
