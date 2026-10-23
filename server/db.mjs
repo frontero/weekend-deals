@@ -238,6 +238,8 @@ const INSERT_PRICE = `
 const FOLLOWED_PARTIES = `
   SELECT group_key AS key, party, standard,
     (SELECT MAX(started_at) FROM scans WHERE scans.group_key = parties.group_key) AS lastStartedAt,
+    (SELECT MAX(started_at) FROM scans
+      WHERE scans.group_key = parties.group_key AND scans.finished_at IS NOT NULL AND scans.error IS NULL) AS lastSucceededAt,
     EXISTS (SELECT 1 FROM scans WHERE scans.group_key = parties.group_key AND scans.finished_at IS NOT NULL) AS collected
   FROM parties
   WHERE standard = 1
@@ -880,13 +882,20 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       );
     },
 
-    /** @returns [{ key, party, standard, lastStartedAt, collected }] for every party size rounds collect */
+    /** How many scans each party size started since `since`: { groupKey: count }. */
+    async scanStartsSince(since) {
+      const rows = await all(`SELECT group_key AS key, COUNT(*) AS count FROM scans WHERE started_at >= ? GROUP BY group_key`, since);
+      return Object.fromEntries(rows.map((row) => [row.key, Number(row.count)]));
+    },
+
+    /** @returns [{ key, party, standard, lastStartedAt, lastSucceededAt, collected }] for every party size rounds collect */
     async followedParties() {
       return (await all(FOLLOWED_PARTIES)).map((row) => ({
         key: row.key,
         party: JSON.parse(row.party),
         standard: Boolean(row.standard),
         lastStartedAt: row.lastStartedAt ?? null,
+        lastSucceededAt: row.lastSucceededAt ?? null,
         collected: Boolean(row.collected),
       }));
     },

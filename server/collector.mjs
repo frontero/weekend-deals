@@ -22,6 +22,10 @@ const FACILITY_PAGE_PAUSE_MS = 400;
 const RATING_MAX_AGE_MS = 30 * DAY_MS;
 // Other processes see the progress this often; every step would be a write over the network.
 const PROGRESS_WRITE_MS = 5000;
+// A size whose round failed or was interrupted is tried again, but at most every half hour and three times per
+// scheduled round, so a provider that is down is not asked over and over.
+const RETRY_AFTER_MS = 30 * 60 * 1000;
+const MAX_ATTEMPTS_PER_ROUND = 3;
 // Rounds summarised per run; a backlog, like after an update, is worked off over the next runs.
 const SUMMARIES_PER_RUN = 60;
 // One search usually lists all of a park's accommodations; a second weekend catches most of the rest.
@@ -63,16 +67,18 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
 
   /**
    * The party sizes a round collects: all of them when someone asked for a round, otherwise the ones someone named,
-   * the ones never collected and the ones not collected since the last scheduled round time. New sizes first: the
-   * screen has nothing to show for them yet.
+   * the ones never tried, and the ones without a successful round since the last scheduled round time (or ever, when
+   * rounds only run on request) that may be tried again. New sizes first: the screen has nothing to show for them yet.
    */
-  async function partiesToCollect({ everything, requested = [] }) {
-    const scheduled = lastScheduledRound((await db.getSettings()).rounds);
+  async function partiesToCollect({ everything, requested = [], now = Date.now() }) {
+    const scheduled = lastScheduledRound((await db.getSettings()).rounds, new Date(now));
+    const attempts = await db.scanStartsSince(new Date(scheduled?.getTime() ?? now - DAY_MS).toISOString());
+    const needsPrices = (party) =>
+      scheduled === null ? !party.lastSucceededAt : !(Date.parse(party.lastSucceededAt) >= scheduled.getTime());
+    const mayTryAgain = (party) =>
+      (attempts[party.key] ?? 0) < MAX_ATTEMPTS_PER_ROUND && now - Date.parse(party.lastStartedAt) >= RETRY_AFTER_MS;
     const due = (party) =>
-      everything ||
-      requested.includes(party.key) ||
-      !party.collected ||
-      (scheduled !== null && Date.parse(party.lastStartedAt) < scheduled.getTime());
+      everything || requested.includes(party.key) || !party.lastStartedAt || (needsPrices(party) && mayTryAgain(party));
     return (await followedParties()).filter(due).sort((a, b) => Number(a.collected) - Number(b.collected));
   }
 

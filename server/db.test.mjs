@@ -371,3 +371,18 @@ test('keeps price-watch runs with their changes, and the prices to compare the n
   assert.deepEqual(await db.watchChanges('2026-10-01'), [{ at: '2026-10-23T04:00:30Z', ...change }]);
   db.close();
 });
+
+test('knows per party size when it last succeeded and how often it was tried lately', async () => {
+  const db = await open('attempts.db');
+  const ok = await db.startScan('a2-c0', '2026-10-23T04:45:00Z');
+  await db.finishScan(ok);
+  const failed = await db.startScan('a2-c0', '2026-10-23T16:00:00Z');
+  await db.finishScan(failed, 'Server database capacity temporarily exceeded');
+  // Interrupted: never finished.
+  await db.startScan('a2-c0', '2026-10-23T16:30:00Z');
+
+  const a2 = (await db.followedParties()).find((party) => party.key === 'a2-c0');
+  assert.deepEqual([a2.lastStartedAt, a2.lastSucceededAt], ['2026-10-23T16:30:00Z', '2026-10-23T04:45:00Z']);
+  assert.deepEqual(await db.scanStartsSince('2026-10-23T16:00:00Z'), { 'a2-c0': 2 });
+  db.close();
+});

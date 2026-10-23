@@ -35,6 +35,10 @@ const { rounds, retry, retryState } = useRounds();
               {{ round.retry.label }}
             </button>
           </div>
+          <p v-if="round.retry?.note" class="flex items-start gap-2 px-4 pt-2 text-sm text-ink-secondary">
+            <Icon name="refresh" class="mt-px size-4" />
+            {{ round.retry.note }}
+          </p>
           <p v-if="round.retry?.parties && retryState === 'failed'" class="px-4 pt-2 text-sm text-warning-ink" role="status">
             Het verzoek lukte niet. Probeer het nog eens.
           </p>

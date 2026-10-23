@@ -81,7 +81,9 @@ export function useRounds() {
     const sizes = [...new Set(unfinished.map((item) => item.size))];
     return {
       parties: [...new Set(unfinished.map((item) => item.groupKey))],
-      label: `${sizes.join(', ')} opnieuw ophalen`,
+      label: `${sizes.join(', ')} nu opnieuw ophalen`,
+      // The collector tries failed sizes again on its own (server/collector.mjs).
+      note: 'Gaat binnen een half uur vanzelf opnieuw, hooguit drie keer per geplande ronde.',
     };
   }
 
