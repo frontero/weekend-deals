@@ -141,7 +141,8 @@ const PRICE_SUMMARIES = `
     SELECT prices.*, scans.started_at AS observed_at
     FROM prices
     JOIN scans ON scans.id = prices.scan_id
-    WHERE scans.group_key = ? AND prices.arrival >= ?
+    -- Through the size's scans, so only its own prices are read, not those of every size.
+    WHERE prices.scan_id IN (SELECT id FROM scans WHERE group_key = ?) AND prices.arrival >= ?
   ),
   -- The accommodation behind the latest price. Which accommodation is cheapest shifts with availability, at times
   -- back and forth between rounds; a price only counts as moving when that same accommodation changed price.
@@ -208,7 +209,7 @@ const AVAILABILITY = `
   FROM prices
   JOIN scans ON scans.id = prices.scan_id
   JOIN parks ON parks.code = prices.park_code
-  WHERE scans.group_key = ? AND prices.arrival >= ?
+  WHERE prices.scan_id IN (SELECT id FROM scans WHERE group_key = ?) AND prices.arrival >= ?
   GROUP BY parks.provider, prices.arrival, prices.scan_id
   ORDER BY prices.scan_id
 `;

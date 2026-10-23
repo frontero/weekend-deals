@@ -17,20 +17,28 @@ const collector = createCollector(db, {
   appUrl: process.env.WORKER_URL || null,
 });
 
-// The price watch first: it takes half a minute, a round can take an hour.
-await createWatcher(db, { log }).runIfDue();
+// A failure outside a round (the database out of reach, say) ends this check with a message instead of a crash; the
+// next check comes in ten minutes.
+try {
+  // The price watch first: it takes half a minute, a round can take an hour.
+  await createWatcher(db, { log }).runIfDue();
 
-if (onlyIfDue && !(await collector.isDue())) {
-  // Fills in accommodation details a stopped round missed, and keeps the advice current on days without a round.
-  await collector.collectAccommodations();
-  await collector.refreshOverviewIfStale();
-  await collector.summarizeRounds();
-  log(`no round due (${where})`);
-} else {
-  log(`round started (${where})`);
-  await collector.collect();
+  if (onlyIfDue && !(await collector.isDue())) {
+    // Fills in accommodation details a stopped round missed, and keeps the advice current on days without a round.
+    await collector.collectAccommodations();
+    await collector.refreshOverviewIfStale();
+    await collector.summarizeRounds();
+    log(`no round due (${where})`);
+  } else {
+    log(`round started (${where})`);
+    await collector.collect();
+  }
+} catch (error) {
+  log(`check failed: ${error.message}`);
+  process.exitCode = 1;
+} finally {
+  db.close();
 }
-db.close();
 
 if (collector.progress.error) {
   console.error(collector.progress.error);
