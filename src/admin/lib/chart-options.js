@@ -445,3 +445,68 @@ export function leadChart(palette, { points, curve, name, valueFormatter, refere
     ],
   };
 }
+
+/**
+ * Columns per category for a few series side by side, e.g. per hour of the day the share of prices that changed at
+ * each provider.
+ * @param series [{ name, color, values }]
+ */
+export function groupedColumns(palette, { labels, titles = labels, series, valueFormatter = percentLabel, tooltipNote }) {
+  return {
+    ...base(palette),
+    legend: legend(palette, series.map((item) => item.name)),
+    xAxis: categoryAxis(palette, labels),
+    yAxis: valueAxis(palette, { formatter: valueFormatter }),
+    tooltip: {
+      ...axisTooltip(palette, (params) => {
+        const index = params[0].dataIndex;
+        const rows = series.map((item) => tooltipRow(item.color, item.name, item.values[index] == null ? '–' : valueFormatter(item.values[index])));
+        const note = tooltipNote?.(index);
+        return tooltipTitle(titles[index]) + rows.join('') + (note ? `<div style="font-size:12px;opacity:.7;margin-top:4px">${escapeHtml(note)}</div>` : '');
+      }),
+      axisPointer: { type: 'shadow', shadowStyle: { color: palette.grid, opacity: 0.5 } },
+    },
+    series: series.map((item) => ({
+      name: item.name,
+      type: 'bar',
+      data: item.values,
+      barMaxWidth: 12,
+      barGap: '20%',
+      itemStyle: { color: item.color, borderRadius: [4, 4, 0, 0] },
+    })),
+  };
+}
+
+const clock = (hours) => `${String(Math.floor(hours)).padStart(2, '0')}:${String(Math.round((hours % 1) * 60)).padStart(2, '0')}`;
+
+/**
+ * Every moment something happened, laid out by time of day (x) and day (y), one colour per group: whether things
+ * happen at the same time each day shows as a column of dots.
+ * @param groups [{ name, color, points: [{ x (hours), y (day index), size, title, rows }] }]
+ */
+export function dayTimeline(palette, { days, groups }) {
+  return {
+    ...base(palette),
+    grid: { ...base(palette).grid, top: 40 },
+    legend: legend(palette, groups.map((group) => group.name)),
+    xAxis: {
+      ...valueAxis(palette, { formatter: (hours) => clock(hours), min: 0, max: 24 }),
+      interval: 3,
+      splitLine: { lineStyle: { color: palette.grid } },
+    },
+    yAxis: { ...categoryAxis(palette, days), inverse: true, splitLine: { show: true, lineStyle: { color: palette.grid } } },
+    tooltip: {
+      ...base(palette).tooltip,
+      trigger: 'item',
+      formatter: ({ data, color }) => tooltipTitle(data.title) + data.rows.map(([label, value]) => tooltipRow(color, label, value)).join(''),
+    },
+    series: groups.map((group) => ({
+      name: group.name,
+      type: 'scatter',
+      data: group.points.map((point) => ({ ...point, value: [point.x, point.y] })),
+      symbolSize: (value, params) => params.data.size,
+      itemStyle: { ...dot(palette, group.color), opacity: 0.85 },
+      emphasis: { scale: 1.3 },
+    })),
+  };
+}

@@ -192,12 +192,16 @@ test('a scan request may name the sizes to collect, only ones that are collected
 test('the admin charts and histories are for admins only, and come as Turso and the collector made them', async () => {
   const db = await open('admin-charts.db');
   const visitor = createApiHandler(db);
-  for (const path of ['/admin/stats', '/admin/park?code=HRK', '/admin/weekend?arrival=2026-11-13']) {
+  for (const path of ['/admin/stats', '/admin/park?code=HRK', '/admin/weekend?arrival=2026-11-13', '/admin/watch']) {
     assert.equal((await call(visitor, 'GET', path)).status, 403);
   }
 
   const admin = createApiHandler(db, { isAdmin: () => true });
   assert.equal((await call(admin, 'GET', '/admin/stats?party=a2-c0')).status, 404);
+  assert.equal((await call(admin, 'GET', '/admin/watch')).status, 404);
+  await db.saveAdminStats('watch', { computedAt: 'x', data: gzipSync('{"runs":1}') });
+  const watch = await call(admin, 'GET', '/admin/watch');
+  assert.deepEqual(JSON.parse(gunzipSync(Buffer.from(await watch.arrayBuffer()))), { runs: 1 });
   await db.saveAdminStats('a2-c0', { computedAt: 'x', data: gzipSync('{"groupKey":"a2-c0"}') });
   const stats = await call(admin, 'GET', '/admin/stats?party=a2-c0');
   assert.equal(stats.headers.get('Content-Encoding'), 'gzip');

@@ -4,6 +4,7 @@ import { geocode } from './geocode.mjs';
 import { adminWindowStart } from '../shared/admin-stats.mjs';
 import { SHOWN_ROUNDS } from '../shared/scan-changes.mjs';
 import { MONTHLY_GOOGLE_BUDGET } from './google.mjs';
+import { WATCH_STATS_KEY } from '../shared/watch.mjs';
 import { clampSettings, groupKey } from './settings.mjs';
 import { PROVIDERS } from './providers.mjs';
 import { scanStatus, statusBody } from './status.mjs';
@@ -125,6 +126,16 @@ export function createApiHandler(db, { live = () => null, onScanRequested = () =
     'GET /admin/stats': forAdmins(async (request) => {
       const [key] = await partiesOf(request);
       const data = await db.adminStats(key);
+      if (!data) return json({ error: 'Not computed yet' }, 404);
+      return new Response(data, {
+        headers: { 'Content-Type': JSON_TYPE, 'Content-Encoding': 'gzip', 'Cache-Control': 'no-store' },
+        encodeBody: 'manual',
+      });
+    }),
+
+    // When providers change their prices, from the price watch; computed after each watch run.
+    'GET /admin/watch': forAdmins(async () => {
+      const data = await db.adminStats(WATCH_STATS_KEY);
       if (!data) return json({ error: 'Not computed yet' }, 404);
       return new Response(data, {
         headers: { 'Content-Type': JSON_TYPE, 'Content-Encoding': 'gzip', 'Cache-Control': 'no-store' },

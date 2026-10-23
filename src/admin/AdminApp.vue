@@ -15,8 +15,8 @@ const menu = ref(null);
 const parent = computed(() =>
   ({ parks: { to: '/beheer/parken', label: 'Parken' }, weekends: { to: '/beheer/weekenden', label: 'Weekenden' } })[route.meta.parent] ?? null,
 );
-// The rounds list covers every size and its own period.
-const filtered = computed(() => route.name !== 'rounds');
+// Pages about the rounds and the price watch cover every size and their own period.
+const filtered = computed(() => route.meta.filters !== false);
 
 const openMenu = () => menu.value.showModal();
 const closeMenu = () => menu.value?.close();

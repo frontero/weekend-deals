@@ -1,6 +1,7 @@
 import { createCollector } from './collector.mjs';
 import { connect } from './connect.mjs';
 import { openDatabase } from './db.mjs';
+import { createWatcher } from './watch.mjs';
 
 // With --if-due a round only runs when the "refresh every … hours" setting or the cloud app asks for one, so the
 // background job can check often without fetching more than the app would.
@@ -15,6 +16,9 @@ const collector = createCollector(db, {
   // Price alert messages link to the cloud app, which a phone can open.
   appUrl: process.env.WORKER_URL || null,
 });
+
+// The price watch first: it takes half a minute, a round can take an hour.
+await createWatcher(db, { log }).runIfDue();
 
 if (onlyIfDue && !(await collector.isDue())) {
   // Fills in accommodation details a stopped round missed, and keeps the advice current on days without a round.

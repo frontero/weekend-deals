@@ -13,7 +13,13 @@ const routes = [
     meta: { title: 'Weekend', parent: 'weekends' },
   },
   { path: '/beheer/boekmoment', name: 'booking', component: () => import('./pages/BookingPage.vue'), meta: { title: 'Boekmoment' } },
-  { path: '/beheer/rondes', name: 'rounds', component: () => import('./pages/RoundsPage.vue'), meta: { title: 'Prijsrondes' } },
+  {
+    path: '/beheer/wijzigingen',
+    name: 'changes',
+    component: () => import('./pages/ChangesPage.vue'),
+    meta: { title: 'Prijswijzigingen', filters: false },
+  },
+  { path: '/beheer/rondes', name: 'rounds', component: () => import('./pages/RoundsPage.vue'), meta: { title: 'Prijsrondes', filters: false } },
   { path: '/beheer/:rest(.*)*', redirect: '/beheer' },
 ];
 

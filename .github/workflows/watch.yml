@@ -1,0 +1,42 @@
+# The price watch without the Mac: every ten minutes GitHub checks whether half an hour passed since the last watch
+# run, and if so samples the same few searches to see when providers change their prices (server/watch.mjs).
+# Runs apart from the price rounds, so a round of an hour leaves no gap. Needs the secrets TURSO_DATABASE_URL and
+# TURSO_AUTH_TOKEN (Settings → Secrets and variables → Actions).
+name: Price watch
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: price-watch
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      READY: ${{ secrets.TURSO_DATABASE_URL != '' && secrets.TURSO_AUTH_TOKEN != '' }}
+    steps:
+      - if: env.READY != 'true'
+        run: echo "::warning::Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN under Settings → Secrets and variables → Actions."
+      - if: env.READY == 'true'
+        uses: actions/checkout@v4
+      - if: env.READY == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - if: env.READY == 'true'
+        run: npm ci --omit=dev
+      - if: env.READY == 'true'
+        run: node server/watch-cli.mjs
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+          TZ: Europe/Amsterdam

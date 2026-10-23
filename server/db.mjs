@@ -107,6 +107,20 @@ const SCHEMA = `
     stats TEXT
   );
   CREATE INDEX IF NOT EXISTS prices_by_park ON prices (park_code, scan_id);
+  CREATE TABLE IF NOT EXISTS watch_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL UNIQUE,
+    summary TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS watch_changes (
+    run_id INTEGER NOT NULL REFERENCES watch_runs (id),
+    provider TEXT NOT NULL,
+    park TEXT NOT NULL,
+    accommodation TEXT NOT NULL,
+    arrival TEXT NOT NULL,
+    old_cents INTEGER NOT NULL,
+    new_cents INTEGER NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS admin_stats (
     group_key TEXT PRIMARY KEY,
     computed_at TEXT NOT NULL,
@@ -625,6 +639,58 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
         `SELECT COUNT(*) AS rounds, SUM(json_extract(scan_changes.summary, '$.prices')) AS prices,
           MIN(scans.started_at) AS since
         FROM scans LEFT JOIN scan_changes ON scan_changes.scan_id = scans.id`,
+      );
+    },
+
+    /** Where the price watch stands: its last run, a run another process started, and the prices to compare with. */
+    async watchState() {
+      const [last, settingRows] = await client.batch(
+        [
+          `SELECT MAX(at) AS lastAt FROM watch_runs`,
+          `SELECT key, value FROM settings WHERE key IN ('watchClaimedAt', 'watchSnapshot')`,
+        ],
+        'read',
+      );
+      const values = Object.fromEntries(settingRows.rows.map((row) => [row.key, row.value]));
+      return {
+        lastAt: last.rows[0].lastAt ?? null,
+        claimedAt: values.watchClaimedAt || null,
+        snapshot: parseJson(values.watchSnapshot, null),
+      };
+    },
+
+    async claimWatch(at) {
+      await writeSetting('watchClaimedAt', at);
+    },
+
+    /** A watch run with its price changes, and its prices for the next run to compare with. */
+    async saveWatchRun({ at, summary, changes, snapshot }) {
+      await client.batch(
+        [
+          { sql: `INSERT INTO watch_runs (at, summary) VALUES (?, ?)`, args: [at, JSON.stringify(summary)] },
+          ...changes.map((change) => ({
+            sql: `INSERT INTO watch_changes (run_id, provider, park, accommodation, arrival, old_cents, new_cents)
+              VALUES ((SELECT id FROM watch_runs WHERE at = ?), ?, ?, ?, ?, ?, ?)`,
+            args: [at, change.provider, change.park, change.accommodation, change.arrival, change.oldCents, change.newCents],
+          })),
+          ...(snapshot ? [settingStatement('watchSnapshot', JSON.stringify(snapshot))] : []),
+          settingStatement('watchClaimedAt', ''),
+        ],
+        'write',
+      );
+    },
+
+    async watchRuns(since) {
+      const rows = await all(`SELECT at, summary FROM watch_runs WHERE at >= ? ORDER BY at`, since);
+      return rows.map((row) => ({ at: row.at, summary: JSON.parse(row.summary) }));
+    },
+
+    watchChanges(since) {
+      return all(
+        `SELECT watch_runs.at, provider, park, accommodation, arrival, old_cents AS oldCents, new_cents AS newCents
+        FROM watch_changes JOIN watch_runs ON watch_runs.id = watch_changes.run_id
+        WHERE watch_runs.at >= ? ORDER BY watch_runs.at`,
+        since,
       );
     },
 

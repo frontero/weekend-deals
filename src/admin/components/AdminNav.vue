@@ -15,6 +15,7 @@ const ITEMS = [
   { name: 'parks', to: '/beheer/parken', label: 'Parken', icon: 'pin' },
   { name: 'weekends', to: '/beheer/weekenden', label: 'Weekenden', icon: 'calendar' },
   { name: 'booking', to: '/beheer/boekmoment', label: 'Boekmoment', icon: 'target' },
+  { name: 'changes', to: '/beheer/wijzigingen', label: 'Prijswijzigingen', icon: 'bolt' },
   { name: 'rounds', to: '/beheer/rondes', label: 'Prijsrondes', icon: 'refresh' },
 ];
 

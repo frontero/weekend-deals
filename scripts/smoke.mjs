@@ -55,6 +55,10 @@ try {
     await check('the admin dashboard shows its charts', () =>
       page.locator('main canvas').first().waitFor({ timeout: TIMEOUT_MS }),
     );
+    await page.goto(`http://localhost:${PORT}/beheer/wijzigingen`);
+    await check('the price watch shows when prices change', () =>
+      page.getByRole('heading', { name: 'Wanneer veranderen prijzen' }).waitFor({ timeout: TIMEOUT_MS }),
+    );
     await page.goto(`http://localhost:${PORT}/beheer/rondes`);
     await check('the admin page shows the rounds', () =>
       page.getByRole('heading', { name: 'Prijsrondes' }).waitFor({ timeout: TIMEOUT_MS }),

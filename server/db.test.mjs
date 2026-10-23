@@ -350,3 +350,24 @@ test('a scan request can name party sizes; one for all sizes covers the others',
   assert.deepEqual(await db.scanRequest(), { requestedAt: null, parties: [] });
   db.close();
 });
+
+test('keeps price-watch runs with their changes, and the prices to compare the next run with', async () => {
+  const db = await open('watch.db');
+  assert.deepEqual(await db.watchState(), { lastAt: null, claimedAt: null, snapshot: null });
+
+  await db.claimWatch('2026-10-23T04:00:00Z');
+  assert.equal((await db.watchState()).claimedAt, '2026-10-23T04:00:00Z');
+  const snapshot = { searches: [{ key: 'landal|HRK|2026-10-30', provider: 'landal', ok: true }], prices: { a: 1 } };
+  const change = { provider: 'landal', park: 'HRK', accommodation: '4A', arrival: '2026-10-30', oldCents: 30000, newCents: 28000 };
+  await db.saveWatchRun({ at: '2026-10-23T04:00:30Z', summary: { landal: { compared: 1, up: 0, down: 1 } }, changes: [change], snapshot });
+  await db.saveWatchRun({ at: '2026-10-23T04:30:30Z', summary: { landal: { compared: 1, up: 0, down: 0 } }, changes: [], snapshot: null });
+
+  const state = await db.watchState();
+  assert.deepEqual(state, { lastAt: '2026-10-23T04:30:30Z', claimedAt: null, snapshot });
+  assert.deepEqual((await db.watchRuns('2026-10-01')).map((run) => [run.at, run.summary.landal.down]), [
+    ['2026-10-23T04:00:30Z', 1],
+    ['2026-10-23T04:30:30Z', 0],
+  ]);
+  assert.deepEqual(await db.watchChanges('2026-10-01'), [{ at: '2026-10-23T04:00:30Z', ...change }]);
+  db.close();
+});
