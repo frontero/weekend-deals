@@ -182,11 +182,14 @@ export function useRounds() {
     ];
   });
 
+  // A provider that failed altogether is a warning; a few failed searches among many are only worth a note.
   const warnings = computed(() =>
     Object.entries(admin.value?.providerErrors ?? {}).map(([provider, { error, failed, total }]) => {
       const name = providerName(provider);
-      if (total == null || failed >= total) return `${name} lukte niet in de laatste ronde (${failureReason(error)}).`;
-      return `${name}: ${failed} van ${total} zoekopdrachten mislukten in de laatste ronde (${failureReason(error)}); de rest is opgehaald.`;
+      const reason = failureReason(error);
+      if (total == null || failed >= total) return { tone: 'warning', text: `${name} lukte niet in de laatste ronde (${reason}).` };
+      const verb = failed === 1 ? 'mislukte' : 'mislukten';
+      return { tone: 'note', text: `${name}: ${failed} van de ${total} zoekopdrachten ${verb} in de laatste ronde (${reason}); de rest is opgehaald.` };
     }),
   );
 

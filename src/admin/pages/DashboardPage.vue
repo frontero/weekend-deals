@@ -19,6 +19,10 @@ const palette = usePalette();
 // Rounds collect weekends from Friday to Monday.
 const WEEKEND_NIGHTS = 3;
 const MOVES_SHOWN = 8;
+const WARNING_TONES = {
+  warning: { icon: 'warning', classes: 'bg-warning-wash text-warning-ink' },
+  note: { icon: 'info', classes: 'bg-surface text-ink-secondary ring-1 ring-line' },
+};
 
 const rounds = computed(() => lastDays(stats.value?.rounds ?? [], range.value));
 const latest = computed(() => rounds.value.at(-1) ?? null);
@@ -178,12 +182,13 @@ const moves = computed(() => {
       </dl>
       <p
         v-for="warning in warnings"
-        :key="warning"
-        class="flex items-start gap-2 rounded-xl bg-warning-wash px-4 py-3 text-sm text-warning-ink"
+        :key="warning.text"
+        class="flex items-start gap-2 rounded-xl px-4 py-3 text-sm"
+        :class="WARNING_TONES[warning.tone].classes"
         role="status"
       >
-        <Icon name="warning" class="mt-px size-4" />
-        {{ warning }}
+        <Icon :name="WARNING_TONES[warning.tone].icon" class="mt-px size-4" />
+        {{ warning.text }}
       </p>
     </section>
 
