@@ -2,10 +2,11 @@ import { createClient } from '@libsql/client/web';
 import { openDatabase } from '../server/db.mjs';
 import { createApiHandler } from '../server/handler.mjs';
 import { isAdminEmail, verifyAccess } from './access.mjs';
+import { startWorkflows } from './clock.mjs';
 
 /**
- * The app in the cloud: the built screen from dist/, and the /api routes on Turso. The Mac still fetches the
- * prices; a refresh here leaves a request for it. Only visitors that Cloudflare Access let in reach the data; the
+ * The app in the cloud: the built screen from dist/, and the /api routes on Turso. GitHub fetches the prices, started
+ * by this Worker's clock; a refresh here leaves a request for the next run. Only visitors that Cloudflare Access let in reach the data; the
  * admin page only those whose email address is in ADMIN_EMAILS (comma-separated).
  */
 export default {
@@ -18,5 +19,10 @@ export default {
     const client = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
     const isAdmin = () => isAdminEmail(access.email, env.ADMIN_EMAILS);
     return createApiHandler(await openDatabase(client, { runMigrations: false }), { isAdmin })(request);
+  },
+
+  // Every ten minutes (the cron trigger in wrangler.jsonc): start the GitHub workflows that collect prices.
+  async scheduled(controller, env, context) {
+    context.waitUntil(startWorkflows(env));
   },
 };

@@ -5,8 +5,10 @@
 name: Price rounds
 
 on:
+  # Cloudflare starts this every ten minutes (worker/clock.mjs); GitHub's own schedule, which it delays by hours, is
+  # only the fallback.
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '23 * * * *'
   # A check right away, from the Actions tab.
   workflow_dispatch:
 
