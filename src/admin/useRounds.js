@@ -44,6 +44,14 @@ function formatChange(oldCents, newCents) {
   return `${euros > 0 ? '+' : '−'}${formatEuros(Math.abs(euros) * 100)}`;
 }
 
+/** The usual reasons in words; anything else as the provider or database said it. */
+function failureReason(error) {
+  if (/timeout|timed out/i.test(error)) return 'time-out';
+  if (/fetch failed|ECONNRESET|socket/i.test(error)) return 'verbinding verbroken';
+  if (/capacity/i.test(error)) return 'database even overbelast';
+  return error;
+}
+
 function roundNote(round) {
   if (!round.totals) return 'Wat deze ronde veranderde, is pas bekend als ze klaar is.';
   // The first round of a size has nothing to compare with.
@@ -175,9 +183,11 @@ export function useRounds() {
   });
 
   const warnings = computed(() =>
-    Object.entries(admin.value?.providerErrors ?? {}).map(
-      ([provider, error]) => `${providerName(provider)} lukte niet in de laatste ronde: ${error}`,
-    ),
+    Object.entries(admin.value?.providerErrors ?? {}).map(([provider, { error, failed, total }]) => {
+      const name = providerName(provider);
+      if (total == null || failed >= total) return `${name} lukte niet in de laatste ronde (${failureReason(error)}).`;
+      return `${name}: ${failed} van ${total} zoekopdrachten mislukten in de laatste ronde (${failureReason(error)}); de rest is opgehaald.`;
+    }),
   );
 
   return { rounds, cards, warnings, retry, retryState };

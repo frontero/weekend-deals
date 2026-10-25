@@ -133,13 +133,17 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
     log(`facility pages: ${namesByPark.size} of ${parks.length} parks read`);
   }
 
-  /** One scan for one party. A provider failing costs only its own prices; the scan fails only if all fail. */
-  async function collectParty({ key, party, providers }, weekends, failures) {
+  /**
+   * One scan for one party. A provider failing costs only its own prices; the scan fails only if all fail.
+   * @param tally per provider, the searches tried (`attempts`) and the ones that failed with the last error (`failures`)
+   */
+  async function collectParty({ key, party, providers }, weekends, { attempts, failures }) {
     const scanId = await db.startScan(key);
     const failed = new Set();
     try {
       for (const weekend of weekends) {
         for (const provider of providers) {
+          attempts.set(provider.id, (attempts.get(provider.id) ?? 0) + 1);
           try {
             const offers = await provider.fetchWeekendOffers({ ...party, ...weekend });
             throwIfCancelled();
@@ -147,14 +151,14 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
             log(`${key} ${weekend.arrival} ${provider.id}: ${offers.length} parks`);
           } catch (error) {
             if (cancelled) throw error;
-            failures.set(provider.id, error.message);
+            failures.set(provider.id, { error: error.message, failed: (failures.get(provider.id)?.failed ?? 0) + 1 });
             failed.add(provider.id);
             log(`${key} ${weekend.arrival} ${provider.id} failed: ${error.message}`);
           }
           await step();
         }
       }
-      if (failed.size === providers.length) throw new Error(failures.get(providers[0].id));
+      if (failed.size === providers.length) throw new Error(failures.get(providers[0].id).error);
       await db.finishScan(scanId);
       return scanId;
     } catch (error) {
@@ -169,13 +173,15 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
     const weekends = upcomingWeekends(localToday(), settings.weeksAhead);
     const plans = parties.map((followed) => ({ ...followed, providers: activeProviders(PROVIDERS, followed.party) }));
     await startPhase('prices', plans.reduce((total, plan) => total + weekends.length * plan.providers.length, 0));
-    const failures = new Map();
+    const tally = { attempts: new Map(), failures: new Map() };
     const scans = [];
     try {
-      for (const plan of plans) scans.push({ scanId: await collectParty(plan, weekends, failures), party: plan.party });
+      for (const plan of plans) scans.push({ scanId: await collectParty(plan, weekends, tally), party: plan.party });
       return scans;
     } finally {
-      if (!cancelled) await db.setProviderErrors(Object.fromEntries(failures));
+      // How many of each provider's searches failed, so one timeout among dozens does not read as a failed provider.
+      const errors = [...tally.failures].map(([id, { error, failed }]) => [id, { error, failed, total: tally.attempts.get(id) }]);
+      if (!cancelled) await db.setProviderErrors(Object.fromEntries(errors));
     }
   }
 

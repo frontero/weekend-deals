@@ -56,7 +56,12 @@ export async function buildOverview(db, { googleEnabled, party }) {
     key,
     meta: {
       google: { enabled: googleEnabled, error: await db.googleError() },
-      providers: PROVIDERS.map(({ id, name }) => ({ id, name, error: providerErrors[id] ?? null })),
+      // Visitors hear of a provider only when none of its searches worked; a few failures are for the admin page.
+      providers: PROVIDERS.map(({ id, name }) => {
+        const failure = providerErrors[id];
+        const complete = failure && (failure.total == null || failure.failed >= failure.total);
+        return { id, name, error: complete ? failure.error : null };
+      }),
       facilityGroups: facilityGroups(),
       accommodationGroups: accommodationGroups(await db.facilityGroups('accommodation')),
       lastScan: await db.lastScan(key),

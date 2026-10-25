@@ -386,3 +386,12 @@ test('knows per party size when it last succeeded and how often it was tried lat
   assert.deepEqual(await db.scanStartsSince('2026-10-23T16:00:00Z'), { 'a2-c0': 2 });
   db.close();
 });
+
+test('keeps per provider how many searches failed, and reads older plain messages too', async () => {
+  const db = await open('provider-errors.db');
+  await db.setProviderErrors({ landal: { error: 'The operation was aborted due to timeout', failed: 1, total: 96 } });
+  assert.deepEqual(await db.providerErrors(), { landal: { error: 'The operation was aborted due to timeout', failed: 1, total: 96 } });
+  await db.setProviderErrors({ molecaten: 'fetch failed' });
+  assert.deepEqual(await db.providerErrors(), { molecaten: { error: 'fetch failed', failed: null, total: null } });
+  db.close();
+});

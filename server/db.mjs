@@ -506,8 +506,12 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
     },
 
     /** @returns provider id → error message of the last round, for providers that failed */
+    /** Per provider that failed in the last round: { error, failed, total } (counts unknown for older rounds). */
     async providerErrors() {
-      return parseJson(await readSetting('providerErrors'), {});
+      const errors = parseJson(await readSetting('providerErrors'), {});
+      return Object.fromEntries(
+        Object.entries(errors).map(([id, value]) => [id, typeof value === 'string' ? { error: value, failed: null, total: null } : value]),
+      );
     },
 
     async setProviderErrors(errors) {
