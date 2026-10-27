@@ -11,6 +11,7 @@ import { describePartyShort } from '../lib/stay.js';
 import AdvicePanel from './AdvicePanel.vue';
 import BrandBadge from './BrandBadge.vue';
 import GoogleRating from './GoogleRating.vue';
+import GoogleReviews from './GoogleReviews.vue';
 import Icon from './Icon.vue';
 import ParkLocation from './ParkLocation.vue';
 import PhotoCarousel from './PhotoCarousel.vue';
@@ -32,6 +33,7 @@ const props = defineProps({
   partyKey: { type: String, default: '' },
 });
 const emit = defineEmits(['close', 'alert']);
+const reviews = ref(null);
 
 const dialog = ref(null);
 const focusArrival = ref('');
@@ -136,7 +138,7 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
           <BrandBadge :brand="park.brand" />
           <h2 id="park-title" class="text-xl font-semibold">{{ park.name }}</h2>
           <ParkLocation :park="park" />
-          <GoogleRating :rating="park.googleRating" />
+          <GoogleRating :rating="park.googleRating" as-button @select="reviews?.open()" />
         </header>
 
         <section v-if="focus" class="rounded-2xl p-4 ring-1 ring-line" aria-label="Gekozen weekend">
@@ -203,6 +205,8 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
         </section>
 
         <AdvicePanel v-if="focus?.advice" :park-code="park.code" :party-key="partyKey" :weekend="focus" />
+
+        <GoogleReviews v-if="park.googleRating" ref="reviews" :park-code="park.code" :maps-url="park.googleRating.mapsUrl ?? ''" />
 
         <section>
           <h3 class="font-semibold">Alle weekenden</h3>

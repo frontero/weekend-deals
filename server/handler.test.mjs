@@ -222,3 +222,16 @@ test('the admin charts and histories are for admins only, and come as Turso and 
   assert.equal((await call(admin, 'GET', '/admin/weekend?arrival=13-11&party=a2-c0')).status, 400);
   db.close();
 });
+
+test('Google reviews: only for parks with a Google place, and within the monthly budget', async () => {
+  const db = await open('reviews.db');
+  const handle = createApiHandler(db, { googleApiKey: 'key' });
+  assert.equal((await call(handle, 'GET', '/reviews?park=HRK')).status, 404);
+
+  await db.saveGoogleRating('HRK', { placeId: 'ChIJabc', placeName: 'Park', rating: 4.2, ratingCount: 10, mapsUrl: 'https://maps' });
+  const month = new Date().toISOString().slice(0, 7);
+  for (let index = 0; index < 200; index += 1) await db.countGoogleRequest(month, 'googleReviewRequests');
+  assert.equal((await call(handle, 'GET', '/reviews?park=HRK')).status, 429);
+  assert.equal((await call(createApiHandler(db), 'GET', '/reviews?park=HRK')).status, 503);
+  db.close();
+});

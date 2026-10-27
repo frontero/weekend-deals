@@ -3,7 +3,7 @@ import { cleanSearch, sendNotification, TOPIC_PATTERN } from './alerts.mjs';
 import { geocode } from './geocode.mjs';
 import { adminWindowStart } from '../shared/admin-stats.mjs';
 import { SHOWN_ROUNDS } from '../shared/scan-changes.mjs';
-import { MONTHLY_GOOGLE_BUDGET } from './google.mjs';
+import { fetchPlaceReviews, MONTHLY_GOOGLE_BUDGET, MONTHLY_REVIEW_BUDGET, REVIEW_COUNTER } from './google.mjs';
 import { WATCH_STATS_KEY } from '../shared/watch.mjs';
 import { clampSettings, groupKey } from './settings.mjs';
 import { PROVIDERS } from './providers.mjs';
@@ -43,8 +43,9 @@ const jsonText = (text) => new Response(text, { headers: { 'Content-Type': JSON_
  * @param live returns the progress of a round running in this process, if any
  * @param onScanRequested looks for a round to run right away, where that is possible
  * @param isAdmin whether the request comes from someone who may see the admin page
+ * @param googleApiKey for the Google reviews of a park; without it they link to Google Maps only
  */
-export function createApiHandler(db, { live = () => null, onScanRequested = () => {}, isAdmin = () => false } = {}) {
+export function createApiHandler(db, { live = () => null, onScanRequested = () => {}, isAdmin = () => false, googleApiKey = null } = {}) {
   /** The party size the screen shows, as `?party=` names it. */
   async function partiesOf(request) {
     const key = new URL(request.url).searchParams.get('party');
@@ -84,6 +85,17 @@ export function createApiHandler(db, { live = () => null, onScanRequested = () =
       const params = new URL(request.url).searchParams;
       const [key] = await partiesOf(request);
       return json(await db.priceHistory(key, params.get('park') ?? '', params.get('arrival') ?? ''));
+    },
+
+    // A park's Google reviews, asked for live: Google's terms do not allow keeping them.
+    'GET /reviews': async (request) => {
+      const placeId = await db.googlePlaceId(new URL(request.url).searchParams.get('park') ?? '');
+      if (!placeId) return json({ error: 'No Google place for this park' }, 404);
+      if (!googleApiKey) return json({ error: 'Google is not set up' }, 503);
+      const month = new Date().toISOString().slice(0, 7);
+      if ((await db.googleRequests(month, REVIEW_COUNTER)) >= MONTHLY_REVIEW_BUDGET) return json({ error: 'Monthly budget used' }, 429);
+      await db.countGoogleRequest(month, REVIEW_COUNTER);
+      return json(await fetchPlaceReviews(placeId, googleApiKey));
     },
 
     // POST keeps the home address out of URLs and request logs.

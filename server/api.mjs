@@ -36,6 +36,7 @@ export async function createApi({ client, googleApiKey = null, appUrl = null, au
   if (autoScan) runIfDue();
 
   const handle = createApiHandler(db, {
+    googleApiKey,
     live: () => collector.progress,
     // Right away, or after the round in progress here; while the background job is busy, it picks this up next.
     // Without auto scan this process fetches nothing: the request waits for the background job.

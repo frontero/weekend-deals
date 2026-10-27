@@ -489,12 +489,17 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
     },
 
     /** @param month "YYYY-MM" */
-    async countGoogleRequest(month) {
-      await writeSetting(`googleRequests:${month}`, String((await this.googleRequests(month)) + 1));
+    /** @param counter which monthly Google budget: the rating lookups, or the review lookups */
+    async countGoogleRequest(month, counter = 'googleRequests') {
+      await writeSetting(`${counter}:${month}`, String((await this.googleRequests(month, counter)) + 1));
     },
 
-    async googleRequests(month) {
-      return Number((await readSetting(`googleRequests:${month}`)) ?? 0);
+    async googleRequests(month, counter = 'googleRequests') {
+      return Number((await readSetting(`${counter}:${month}`)) ?? 0);
+    },
+
+    async googlePlaceId(code) {
+      return (await first(`SELECT place_id AS placeId FROM google_ratings WHERE park_code = ?`, code))?.placeId ?? null;
     },
 
     async googleError() {

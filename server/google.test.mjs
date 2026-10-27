@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { distanceMetres, pickPlace, ratingQueries, searchBody } from './google.mjs';
+import { distanceMetres, fetchPlaceReviews, pickPlace, ratingQueries, searchBody } from './google.mjs';
 
 const park = { code: 'NBD', name: 'Strand Resort Nieuwvliet-Bad', city: 'Nieuwvliet', lat: 51.3851, lng: 3.4497 };
 
@@ -74,5 +74,45 @@ test('biases the search to the park location', () => {
   assert.deepEqual(searchBody('Landal Zandvoort, Zandvoort', park), {
     textQuery: 'Landal Zandvoort, Zandvoort',
     locationBias: { circle: { center: { latitude: 51.3851, longitude: 3.4497 }, radius: 2000 } },
+  });
+});
+
+test("reads a place's reviews with what Google requires to show next to them", async () => {
+  let asked;
+  const fetchImpl = async (url, options) => {
+    asked = { url, options };
+    return Response.json({
+      googleMapsUri: 'https://maps.google.com/?cid=1',
+      reviews: [
+        {
+          rating: 4,
+          relativePublishTimeDescription: '2 weken geleden',
+          text: { text: 'Mooi park', languageCode: 'nl' },
+          originalText: { text: 'Schöner Park', languageCode: 'de' },
+          authorAttribution: { displayName: 'Anna', uri: 'https://maps.google.com/contrib/1', photoUri: 'https://lh3/a.jpg' },
+          googleMapsUri: 'https://maps.google.com/review/1',
+          visitDate: { year: 2026, month: 8 },
+        },
+      ],
+    });
+  };
+  const result = await fetchPlaceReviews('ChIJabc', 'key', fetchImpl);
+  assert.equal(asked.url, 'https://places.googleapis.com/v1/places/ChIJabc?languageCode=nl');
+  assert.equal(asked.options.headers['X-Goog-FieldMask'], 'reviews,googleMapsUri');
+  assert.deepEqual(result, {
+    mapsUrl: 'https://maps.google.com/?cid=1',
+    reviews: [
+      {
+        author: 'Anna',
+        authorUrl: 'https://maps.google.com/contrib/1',
+        photoUrl: 'https://lh3/a.jpg',
+        rating: 4,
+        when: '2 weken geleden',
+        visited: { year: 2026, month: 8 },
+        text: 'Mooi park',
+        translatedFrom: 'de',
+        url: 'https://maps.google.com/review/1',
+      },
+    ],
   });
 });

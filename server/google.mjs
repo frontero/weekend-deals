@@ -79,3 +79,40 @@ export async function fetchGoogleRating(park, apiKey, { onRequest = () => {}, br
   }
   return null;
 }
+
+const DETAILS_URL = 'https://places.googleapis.com/v1/places/';
+// Asking for reviews bills the call as "Place Details Enterprise + Atmosphere". Google's terms do not allow keeping
+// reviews, so they are asked for when someone opens them, within this monthly limit.
+export const MONTHLY_REVIEW_BUDGET = 200;
+export const REVIEW_COUNTER = 'googleReviewRequests';
+
+/**
+ * A place's reviews in Dutch where Google translates them: at most five, ordered by relevance, with what Google
+ * requires to show next to them (the author with a link to their profile, and a link to each review on Google Maps).
+ */
+export async function fetchPlaceReviews(placeId, apiKey, fetchImpl = fetch) {
+  const response = await fetchImpl(`${DETAILS_URL}${encodeURIComponent(placeId)}?languageCode=nl`, {
+    headers: { 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': 'reviews,googleMapsUri' },
+    signal: AbortSignal.timeout(20_000),
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(json.error?.message ?? `Google answered ${response.status}`);
+  return {
+    mapsUrl: json.googleMapsUri ?? null,
+    reviews: (json.reviews ?? []).map((review) => ({
+      author: review.authorAttribution?.displayName ?? 'Google-gebruiker',
+      authorUrl: review.authorAttribution?.uri ?? null,
+      photoUrl: review.authorAttribution?.photoUri ?? null,
+      rating: review.rating ?? null,
+      when: review.relativePublishTimeDescription ?? '',
+      // Google asks for the visit date with reviews of places in France; shown wherever it comes along.
+      visited: review.visitDate?.year ? { year: review.visitDate.year, month: review.visitDate.month ?? null } : null,
+      text: review.text?.text ?? review.originalText?.text ?? '',
+      translatedFrom:
+        review.originalText && review.text && review.originalText.languageCode !== review.text.languageCode
+          ? review.originalText.languageCode
+          : null,
+      url: review.googleMapsUri ?? null,
+    })),
+  };
+}

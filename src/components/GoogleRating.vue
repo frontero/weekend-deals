@@ -5,7 +5,10 @@ import { starFills } from '../lib/rating.js';
 const props = defineProps({
   // { rating, ratingCount, mapsUrl } or null
   rating: { type: Object, default: null },
+  // A button that shows the reviews here, instead of a link to Google Maps.
+  asButton: { type: Boolean, default: false },
 });
+const emit = defineEmits(['select']);
 
 const STAR = 'M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L10 14.9l-5.2 2.7 1-5.8L1.5 7.7l5.9-.9z';
 const id = useId();
@@ -20,14 +23,13 @@ const count = computed(() => props.rating?.ratingCount?.toLocaleString('nl-NL'))
 </script>
 
 <template>
-  <a
+  <component
+    :is="asButton ? 'button' : 'a'"
     v-if="rating"
-    :href="rating.mapsUrl"
-    target="_blank"
-    rel="noopener"
+    v-bind="asButton ? { type: 'button' } : { href: rating.mapsUrl, target: '_blank', rel: 'noopener' }"
     class="inline-flex items-center gap-1.5 text-sm hover:underline"
-    :aria-label="`Google-score ${score} van 5, ${count} reviews`"
-    @click.stop
+    :aria-label="`Google-score ${score} van 5, ${count} reviews${asButton ? ', recensies tonen' : ''}`"
+    @click.stop="emit('select')"
   >
     <span class="font-semibold">{{ score }}</span>
     <span class="flex" aria-hidden="true">
@@ -38,5 +40,5 @@ const count = computed(() => props.rating?.ratingCount?.toLocaleString('nl-NL'))
       </svg>
     </span>
     <span class="text-ink-secondary">({{ count }}) · Google</span>
-  </a>
+  </component>
 </template>

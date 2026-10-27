@@ -18,7 +18,8 @@ export default {
 
     const client = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
     const isAdmin = () => isAdminEmail(access.email, env.ADMIN_EMAILS);
-    return createApiHandler(await openDatabase(client, { runMigrations: false }), { isAdmin })(request);
+    const options = { isAdmin, googleApiKey: env.GOOGLE_PLACES_API_KEY ?? null };
+    return createApiHandler(await openDatabase(client, { runMigrations: false }), options)(request);
   },
 
   // Every ten minutes (the cron trigger in wrangler.jsonc): start the GitHub workflows that collect prices.
