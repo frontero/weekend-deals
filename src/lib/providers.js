@@ -1,3 +1,4 @@
+import { groupKey } from '../../shared/party.mjs';
 import { accommodationFor } from './accommodations.js';
 import { nights } from './format.js';
 import { accommodationUrl as landalAccommodationUrl, weekendUrl as landalWeekendUrl } from './landal.js';
@@ -59,4 +60,14 @@ export function bookingUrl(park, weekend, settings) {
   const accommodation = accommodationFor(park, weekend);
   if (accommodation?.url && provider?.accommodationUrl) return provider.accommodationUrl(accommodation, weekend, settings);
   return provider?.weekendUrl ? provider.weekendUrl(park, weekend, settings) : park.url;
+}
+
+/**
+ * The booking link as the site hands it out: through /api/go, which counts the click and adds the affiliate link.
+ * @param source where on the page it was clicked, for the admin page's click counts
+ */
+export function trackedBookingUrl(park, weekend, settings, source) {
+  const params = new URLSearchParams({ url: bookingUrl(park, weekend, settings), park: park.code, arrival: weekend.arrival, from: source });
+  if (settings) params.set('party', groupKey(settings));
+  return `/api/go?${params}`;
 }

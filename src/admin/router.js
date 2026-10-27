@@ -19,6 +19,7 @@ const routes = [
     component: () => import('./pages/ChangesPage.vue'),
     meta: { title: 'Prijswijzigingen', filters: false },
   },
+  { path: '/beheer/klikken', name: 'clicks', component: () => import('./pages/ClicksPage.vue'), meta: { title: 'Klikken', filters: false } },
   { path: '/beheer/rondes', name: 'rounds', component: () => import('./pages/RoundsPage.vue'), meta: { title: 'Prijsrondes', filters: false } },
   { path: '/beheer/:rest(.*)*', redirect: '/beheer' },
 ];

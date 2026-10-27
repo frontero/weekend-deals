@@ -121,6 +121,15 @@ const SCHEMA = `
     old_cents INTEGER NOT NULL,
     new_cents INTEGER NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS clicks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    park_code TEXT,
+    arrival TEXT,
+    source TEXT,
+    party_key TEXT
+  );
   CREATE TABLE IF NOT EXISTS admin_stats (
     group_key TEXT PRIMARY KEY,
     computed_at TEXT NOT NULL,
@@ -704,6 +713,35 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
         WHERE watch_runs.at >= ? ORDER BY watch_runs.at`,
         since,
       );
+    },
+
+    /** A visitor going to a provider through a tracked link. */
+    async saveClick({ provider, parkCode = null, arrival = null, source = null, partyKey = null }, at = new Date().toISOString()) {
+      await client.execute({
+        sql: `INSERT INTO clicks (at, provider, park_code, arrival, source, party_key) VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [at, provider, parkCode, arrival, source, partyKey],
+      });
+    },
+
+    /** Clicks since `since` per day (UTC), provider, place on the page and park, and the total ever. */
+    async clickStats(since) {
+      const [days, providers, sources, parks, total] = await client.batch(
+        [
+          { sql: `SELECT substr(at, 1, 10) AS day, COUNT(*) AS clicks FROM clicks WHERE at >= ? GROUP BY day ORDER BY day`, args: [since] },
+          { sql: `SELECT provider, COUNT(*) AS clicks FROM clicks WHERE at >= ? GROUP BY provider ORDER BY clicks DESC`, args: [since] },
+          { sql: `SELECT source, COUNT(*) AS clicks FROM clicks WHERE at >= ? GROUP BY source ORDER BY clicks DESC`, args: [since] },
+          {
+            sql: `SELECT clicks.park_code AS parkCode, parks.name, parks.provider, COUNT(*) AS clicks
+              FROM clicks LEFT JOIN parks ON parks.code = clicks.park_code
+              WHERE clicks.at >= ? AND clicks.park_code IS NOT NULL
+              GROUP BY clicks.park_code ORDER BY clicks DESC LIMIT 20`,
+            args: [since],
+          },
+          `SELECT COUNT(*) AS clicks, MIN(at) AS since FROM clicks`,
+        ],
+        'read',
+      );
+      return { days: plain(days), providers: plain(providers), sources: plain(sources), parks: plain(parks), total: plain(total)[0] };
     },
 
     async saveAdminStats(key, { computedAt, data }) {

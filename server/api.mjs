@@ -8,7 +8,7 @@ const AUTO_SCAN_CHECK_MS = 15 * 60 * 1000;
  * The API on the Mac: the shared routes, plus a collector that fetches prices while the server runs.
  * @param autoScan false serves the routes only, without fetching anything (the smoke test before a deploy)
  */
-export async function createApi({ client, googleApiKey = null, appUrl = null, autoScan = true, log = () => {} }) {
+export async function createApi({ client, googleApiKey = null, appUrl = null, affiliateLinks = {}, autoScan = true, log = () => {} }) {
   const db = await openDatabase(client);
   const collector = createCollector(db, { log, googleApiKey, appUrl });
 
@@ -37,6 +37,7 @@ export async function createApi({ client, googleApiKey = null, appUrl = null, au
 
   const handle = createApiHandler(db, {
     googleApiKey,
+    affiliateLinks,
     live: () => collector.progress,
     // Right away, or after the round in progress here; while the background job is busy, it picks this up next.
     // Without auto scan this process fetches nothing: the request waits for the background job.

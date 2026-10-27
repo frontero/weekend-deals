@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { bookingUrl, providerName } from './providers.js';
+import { bookingUrl, providerName, trackedBookingUrl } from './providers.js';
 
 const weekend = { arrival: '2026-11-06', departure: '2026-11-09' };
 const settings = { adults: 2, children: 1, pets: 1, accommodationFeatures: [] };
@@ -64,4 +64,15 @@ test('names providers for the screen', () => {
   assert.equal(providerName(undefined), 'Landal');
   assert.equal(providerName('molecaten'), 'Molecaten');
   assert.equal(providerName('something'), 'something');
+});
+
+test('hands out booking links through the tracked link, with where it was clicked', () => {
+  const park = { code: 'HRK', provider: 'landal', pricesUrl: 'https://www.landal.nl/parken/x/prijzen-en-beschikbaarheid' };
+  const tracked = new URL(trackedBookingUrl(park, weekend, settings, 'kaartje'), 'https://site.example');
+  assert.equal(tracked.pathname, '/api/go');
+  assert.equal(tracked.searchParams.get('url'), bookingUrl(park, weekend, settings));
+  assert.deepEqual(
+    ['park', 'arrival', 'from', 'party'].map((name) => tracked.searchParams.get(name)),
+    ['HRK', weekend.arrival, 'kaartje', 'a2-c1-p1'],
+  );
 });

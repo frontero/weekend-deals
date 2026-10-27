@@ -235,3 +235,24 @@ test('Google reviews: only for parks with a Google place, and within the monthly
   assert.equal((await call(createApiHandler(db), 'GET', '/reviews?park=HRK')).status, 503);
   db.close();
 });
+
+test('a tracked link counts the click and goes on to the provider, through its affiliate link when set', async () => {
+  const db = await open('clicks.db');
+  const page = 'https://www.landal.nl/parken/hof-van-saksen?adults=2';
+  const handle = createApiHandler(db, { affiliateLinks: { landal: 'https://network.example/c/?dl={url}' } });
+  const query = new URLSearchParams({ url: page, park: 'HVS', arrival: '2026-11-13', from: 'kaartje', party: 'a2-c0' });
+  const response = await call(handle, 'GET', `/go?${query}`);
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get('Location'), `https://network.example/c/?dl=${encodeURIComponent(page)}`);
+
+  // Never to any other site.
+  assert.equal((await call(handle, 'GET', `/go?${new URLSearchParams({ url: 'https://evil.example/' })}`)).status, 400);
+
+  const stats = await db.clickStats('2000-01-01');
+  assert.deepEqual(stats.providers, [{ provider: 'landal', clicks: 1 }]);
+  assert.deepEqual(stats.sources, [{ source: 'kaartje', clicks: 1 }]);
+  assert.equal(stats.parks[0].parkCode, 'HVS');
+  assert.equal(stats.total.clicks, 1);
+  assert.equal((await call(handle, 'GET', '/admin/clicks')).status, 403);
+  db.close();
+});

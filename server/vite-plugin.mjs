@@ -21,13 +21,13 @@ async function send(res, response) {
  * @param appUrl the cloud app, where price alert messages lead (a phone cannot open this Mac's localhost)
  * @param collect false serves the API without fetching prices, e.g. for the smoke test before a deploy
  */
-export function weekendDealsApi({ env, googleApiKey, appUrl = null, collect = true }) {
+export function weekendDealsApi({ env, googleApiKey, appUrl = null, affiliateLinks = {}, collect = true }) {
   const log = (line) => console.log(`[weekend-deals] ${line}`);
 
   const mount = async (server) => {
     const { client, where } = connect(env);
     log(`prices in ${where}`);
-    const api = await createApi({ client, googleApiKey, appUrl, autoScan: collect, log });
+    const api = await createApi({ client, googleApiKey, appUrl, affiliateLinks, autoScan: collect, log });
     server.middlewares.use('/api', async (req, res) => send(res, await api.handle(await toRequest(req))));
     server.httpServer?.once('close', api.close);
   };

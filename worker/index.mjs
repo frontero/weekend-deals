@@ -1,6 +1,7 @@
 import { createClient } from '@libsql/client/web';
 import { openDatabase } from '../server/db.mjs';
 import { createApiHandler } from '../server/handler.mjs';
+import { parseAffiliateLinks } from '../server/affiliate.mjs';
 import { isAdminEmail, verifyAccess } from './access.mjs';
 import { startWorkflows } from './clock.mjs';
 
@@ -18,7 +19,7 @@ export default {
 
     const client = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
     const isAdmin = () => isAdminEmail(access.email, env.ADMIN_EMAILS);
-    const options = { isAdmin, googleApiKey: env.GOOGLE_PLACES_API_KEY ?? null };
+    const options = { isAdmin, googleApiKey: env.GOOGLE_PLACES_API_KEY ?? null, affiliateLinks: parseAffiliateLinks(env.AFFILIATE_LINKS) };
     return createApiHandler(await openDatabase(client, { runMigrations: false }), options)(request);
   },
 

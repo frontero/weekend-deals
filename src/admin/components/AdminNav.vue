@@ -12,6 +12,7 @@ const { admin } = useAdmin();
 
 const ITEMS = [
   { name: 'dashboard', to: '/beheer', label: 'Dashboard', icon: 'dashboard' },
+  { name: 'clicks', to: '/beheer/klikken', label: 'Klikken', icon: 'external' },
   { name: 'parks', to: '/beheer/parken', label: 'Parken', icon: 'pin' },
   { name: 'weekends', to: '/beheer/weekenden', label: 'Weekenden', icon: 'calendar' },
   { name: 'booking', to: '/beheer/boekmoment', label: 'Boekmoment', icon: 'target' },

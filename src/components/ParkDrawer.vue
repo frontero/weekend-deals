@@ -6,7 +6,7 @@ import { accommodationFor, accommodationSummary, photosFor } from '../lib/accomm
 import { bestWeekend } from '../lib/deals.js';
 import { formatEuros, formatPercent, formatShortDate, formatWeekend, nights } from '../lib/format.js';
 import { priceInsight } from '../lib/insights.js';
-import { bookingUrl, providerName } from '../lib/providers.js';
+import { providerName, trackedBookingUrl } from '../lib/providers.js';
 import { describePartyShort } from '../lib/stay.js';
 import AdvicePanel from './AdvicePanel.vue';
 import BrandBadge from './BrandBadge.vue';
@@ -82,7 +82,9 @@ const saving = computed(() =>
   props.park?.baselineCents && focus.value ? props.park.baselineCents - focus.value.priceCents : 0,
 );
 const provider = computed(() => providerName(props.park?.provider));
-const bookUrl = computed(() => (focus.value ? bookingUrl(quotedPark.value, quotedWeekend.value, props.settings) : ''));
+const bookUrl = computed(() =>
+  focus.value ? trackedBookingUrl(quotedPark.value, quotedWeekend.value, props.settings, 'parkvenster') : '',
+);
 
 const rows = computed(() =>
   (props.park?.weekends ?? []).map((weekend) => ({
@@ -188,14 +190,15 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
           <a
             :href="bookUrl"
             target="_blank"
-            rel="noopener"
+            rel="sponsored noopener"
             class="mt-4 flex items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 font-semibold text-on-accent hover:bg-accent-hover"
           >
             Bekijk dit weekend op {{ provider }}
             <Icon name="external" class="size-4" />
           </a>
           <p class="mt-2 text-center text-xs text-ink-muted">
-            Totaalprijs incl. toeslagen. De link neemt je datums en je gezelschap mee.
+            Totaalprijs incl. toeslagen. De link neemt je datums en je gezelschap mee. Boek je via deze link, dan
+            krijgen wij een kleine vergoeding van {{ provider }}; jij betaalt niets extra.
           </p>
           <button
             type="button"

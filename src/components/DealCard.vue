@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { partyLabel, persons } from '../../shared/party.mjs';
 import { accommodationFor, accommodationSummary, photosFor } from '../lib/accommodations.js';
 import { formatEuros, formatPercent, formatWeekend, nights } from '../lib/format.js';
-import { bookingUrl, providerName } from '../lib/providers.js';
+import { providerName, trackedBookingUrl } from '../lib/providers.js';
 import AdviceBadge from './AdviceBadge.vue';
 import BrandBadge from './BrandBadge.vue';
 import GoogleRating from './GoogleRating.vue';
@@ -23,7 +23,7 @@ const emit = defineEmits(['open']);
 const park = computed(() => props.deal.park);
 const weekend = computed(() => props.deal.weekend);
 const provider = computed(() => providerName(park.value.provider));
-const bookUrl = computed(() => bookingUrl(park.value, weekend.value, props.settings));
+const bookUrl = computed(() => trackedBookingUrl(park.value, weekend.value, props.settings, 'kaartje'));
 const saving = computed(() => formatEuros(park.value.baselineCents - weekend.value.priceCents));
 // With the discount filter off, cards also show weekends at or above the park's normal price.
 const belowNormal = computed(() => Math.round((weekend.value.discount ?? 0) * 100) > 0);
@@ -110,7 +110,7 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
         <a
           :href="bookUrl"
           target="_blank"
-          rel="noopener"
+          rel="sponsored noopener"
           class="relative z-10 inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-2 text-sm font-semibold whitespace-nowrap text-on-accent hover:bg-accent-hover"
           :aria-label="`Bekijk op ${provider}`"
           :title="`Boek via ${provider}`"

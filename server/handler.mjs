@@ -2,6 +2,7 @@ import { groupKey as partyKey, PARTY_FIELDS, partyOf, seriesFor } from '../share
 import { cleanSearch, sendNotification, TOPIC_PATTERN } from './alerts.mjs';
 import { geocode } from './geocode.mjs';
 import { adminWindowStart } from '../shared/admin-stats.mjs';
+import { affiliateUrl, providerOfUrl } from './affiliate.mjs';
 import { SHOWN_ROUNDS } from '../shared/scan-changes.mjs';
 import { fetchPlaceReviews, MONTHLY_GOOGLE_BUDGET, MONTHLY_REVIEW_BUDGET, REVIEW_COUNTER } from './google.mjs';
 import { WATCH_STATS_KEY } from '../shared/watch.mjs';
@@ -44,8 +45,12 @@ const jsonText = (text) => new Response(text, { headers: { 'Content-Type': JSON_
  * @param onScanRequested looks for a round to run right away, where that is possible
  * @param isAdmin whether the request comes from someone who may see the admin page
  * @param googleApiKey for the Google reviews of a park; without it they link to Google Maps only
+ * @param affiliateLinks per provider the affiliate deep-link template, see server/affiliate.mjs
  */
-export function createApiHandler(db, { live = () => null, onScanRequested = () => {}, isAdmin = () => false, googleApiKey = null } = {}) {
+export function createApiHandler(
+  db,
+  { live = () => null, onScanRequested = () => {}, isAdmin = () => false, googleApiKey = null, affiliateLinks = {} } = {},
+) {
   /** The party size the screen shows, as `?party=` names it. */
   async function partiesOf(request) {
     const key = new URL(request.url).searchParams.get('party');
@@ -85,6 +90,26 @@ export function createApiHandler(db, { live = () => null, onScanRequested = () =
       const params = new URL(request.url).searchParams;
       const [key] = await partiesOf(request);
       return json(await db.priceHistory(key, params.get('park') ?? '', params.get('arrival') ?? ''));
+    },
+
+    // A visitor going to a provider: the click is counted, then they go on through the affiliate link. Only to the
+    // providers' own sites, and a failed count never holds anyone up.
+    'GET /go': async (request) => {
+      const params = new URL(request.url).searchParams;
+      const url = params.get('url') ?? '';
+      const provider = providerOfUrl(url);
+      if (!provider) return json({ error: 'Not a provider link' }, 400);
+      const text = (name, length) => params.get(name)?.slice(0, length) || null;
+      await db
+        .saveClick({
+          provider,
+          parkCode: text('park', 64),
+          arrival: ISO_DATE.test(params.get('arrival') ?? '') ? params.get('arrival') : null,
+          source: text('from', 32),
+          partyKey: text('party', MAX_KEY_LENGTH),
+        })
+        .catch(() => {});
+      return Response.redirect(affiliateUrl(provider, url, affiliateLinks), 302);
     },
 
     // A park's Google reviews, asked for live: Google's terms do not allow keeping them.
@@ -153,6 +178,12 @@ export function createApiHandler(db, { live = () => null, onScanRequested = () =
         headers: { 'Content-Type': JSON_TYPE, 'Content-Encoding': 'gzip', 'Cache-Control': 'no-store' },
         encodeBody: 'manual',
       });
+    }),
+
+    // The clicks to providers: what earns the site its fees.
+    'GET /admin/clicks': forAdmins(async (request) => {
+      const days = Math.min(365, Math.max(1, Number(new URL(request.url).searchParams.get('days')) || 30));
+      return json(await db.clickStats(new Date(Date.now() - days * DAY_MS).toISOString()));
     }),
 
     // One park's prices per round and weekend for a party size.
