@@ -43,6 +43,12 @@ test('filters on country, maximum price and park name', () => {
   assert.equal(findDeals(parks, { minDiscount: 0.2, search: 'b' })[0].park.code, 'B');
 });
 
+test("an alert on one park's weekend finds it only at or below its price", () => {
+  const watch = { parks: ['A'], from: '2026-11-13', to: '2026-11-13', minDiscountPercent: 0 };
+  assert.deepEqual(searchDeals(parks, { ...watch, maxPriceEuros: 270 }).map((deal) => deal.park.code), ['A']);
+  assert.deepEqual(searchDeals(parks, { ...watch, maxPriceEuros: 260 }), []);
+});
+
 test('only keeps parks that have every selected facility', () => {
   const withFacilities = [
     { ...park('P', 'NL', []), facilities: ['overdekt-zwembad', 'sauna'] },

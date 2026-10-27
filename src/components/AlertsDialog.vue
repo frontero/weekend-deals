@@ -2,16 +2,21 @@
 import { computed, ref, watch } from 'vue';
 import { groupKey, partyLabel, seriesFor } from '../../shared/party.mjs';
 import { isTopic, useAlerts } from '../composables/useAlerts.js';
-import { formatShortDate } from '../lib/format.js';
+import { formatEuros, formatShortDate } from '../lib/format.js';
 import { describeTravelParty } from '../lib/stay.js';
 import Icon from './Icon.vue';
 
 /** Price alerts on the current search, sent to a phone through the free ntfy app. */
 const open = defineModel('open', { type: Boolean, required: true });
 const props = defineProps({
-  // The alert this search would set: { party, search, query, label, seen, primed }, see POST /api/alerts.
+  // The alert this search would set: { party, search, query, label, seen, primed }, see POST /api/alerts. An alert on
+  // one park's weekend also has `watch`: { parkCode, arrival, priceCents }, and asks below which price to tell.
   draft: { type: Object, required: true },
 });
+
+// The suggested limit for a park alert: about 5% below the price now, in round tens of euros.
+const SUGGESTED_DROP = 0.95;
+const suggestedEuros = (cents) => Math.floor(((cents / 100) * SUGGESTED_DROP) / 10) * 10;
 
 const NTFY_PHONE_DOCS = 'https://docs.ntfy.sh/subscribe/phone/';
 
@@ -23,9 +28,11 @@ const copied = ref(false);
 const testState = ref('idle');
 const otherTopic = ref('');
 const topicError = ref('');
+const maxEuros = ref(null);
 
 watch(open, (isOpen) => {
   if (isOpen) {
+    maxEuros.value = props.draft.watch ? suggestedEuros(props.draft.watch.priceCents) : null;
     createError.value = '';
     testState.value = 'idle';
     load().catch(() => {
@@ -37,15 +44,34 @@ watch(open, (isOpen) => {
   }
 });
 
+// A park alert finds its weekend at or below the chosen price; the price now, when already that low, is no news.
+const finalDraft = computed(() => {
+  const { watch: watched, ...draft } = props.draft;
+  if (!watched) return draft;
+  return {
+    ...draft,
+    search: { ...draft.search, maxPriceEuros: maxEuros.value },
+    label: `${draft.label} · onder € ${maxEuros.value}`,
+    seen: maxEuros.value * 100 >= watched.priceCents ? [watched] : [],
+  };
+});
+const validLimit = computed(() => !props.draft.watch || (Number.isFinite(maxEuros.value) && maxEuros.value > 0));
+
 // An alert watches the list's prices: those of the party's size.
 const draftKey = computed(() => groupKey(seriesFor(props.draft.party)));
 const exists = computed(() =>
-  alerts.value.some((alert) => alert.label === props.draft.label && alert.partyKey === draftKey.value),
+  alerts.value.some((alert) => alert.label === finalDraft.value.label && alert.partyKey === draftKey.value),
 );
 const draftParty = computed(
   () => `${describeTravelParty(props.draft.party)} · let op de prijzen voor ${partyLabel(seriesFor(props.draft.party))}`,
 );
 const draftNote = computed(() => {
+  if (props.draft.watch) {
+    const now = formatEuros(props.draft.watch.priceCents);
+    return maxEuros.value * 100 >= props.draft.watch.priceCents
+      ? `Nu ${now}: dat is al onder je grens, daar krijg je geen melding van. Wel als hij daarna nog goedkoper wordt.`
+      : `Nu ${now}. Je krijgt een melding zodra de prijs op of onder je grens komt.`;
+  }
   if (!props.draft.primed) return 'De prijzen voor deze groepsgrootte komen nog binnen; wat er dan bij past, geldt als beginpunt.';
   const count = props.draft.seen.length;
   return count ? `Nu ${count} ${count === 1 ? 'kansje' : 'kansjes'}; die zie je al, dus daar krijg je geen melding van.` : 'Nu nog geen kansjes.';
@@ -71,7 +97,7 @@ async function setAlert() {
   creating.value = true;
   createError.value = '';
   try {
-    await create(props.draft);
+    await create(finalDraft.value);
   } catch {
     createError.value = 'Het alarm kon niet worden bewaard. Probeer het zo nog eens.';
   } finally {
@@ -123,7 +149,7 @@ async function switchTopic() {
 
       <div class="flex-1 divide-y divide-line overflow-y-auto px-5">
         <section class="py-5" aria-labelledby="alert-new-title">
-          <h3 id="alert-new-title" class="font-semibold">Alarm op deze zoekopdracht</h3>
+          <h3 id="alert-new-title" class="font-semibold">{{ draft.watch ? 'Alarm op dit park en weekend' : 'Alarm op deze zoekopdracht' }}</h3>
           <p class="mt-0.5 text-sm text-ink-secondary">
             Na elke ophaalronde kijkt de app of er een nieuw buitenkansje bij komt, of een gemeld kansje duidelijk goedkoper
             wordt. Dan krijg je een melding op je telefoon.
@@ -133,11 +159,26 @@ async function switchTopic() {
             <p class="text-ink-secondary">{{ draftParty }}</p>
             <p class="mt-1 text-xs text-ink-secondary">{{ draftNote }}</p>
           </div>
+          <label v-if="draft.watch" class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span class="font-medium">Melding als de prijs onder</span>
+            <span class="flex items-center rounded-lg bg-surface ring-1 ring-field focus-within:ring-2 focus-within:ring-accent">
+              <span class="pl-3 text-ink-secondary" aria-hidden="true">€</span>
+              <input
+                v-model.number="maxEuros"
+                type="number"
+                min="1"
+                step="10"
+                inputmode="numeric"
+                class="w-24 bg-transparent px-2 py-2 tabular-nums focus:outline-none"
+              />
+            </span>
+            <span class="font-medium">komt</span>
+          </label>
           <div class="mt-3 flex flex-wrap items-center gap-3">
             <button
               type="button"
               class="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-50"
-              :disabled="exists || creating"
+              :disabled="exists || creating || !validLimit"
               @click="setAlert"
             >
               <Icon name="bell" class="size-4" />

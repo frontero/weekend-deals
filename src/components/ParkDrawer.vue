@@ -31,7 +31,7 @@ const props = defineProps({
   // Group key of the party whose prices are shown, for the price history.
   partyKey: { type: String, default: '' },
 });
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'alert']);
 
 const dialog = ref(null);
 const focusArrival = ref('');
@@ -192,6 +192,14 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
           <p class="mt-2 text-center text-xs text-ink-muted">
             Totaalprijs incl. toeslagen. De link neemt je datums en je gezelschap mee.
           </p>
+          <button
+            type="button"
+            class="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium ring-1 ring-line hover:bg-hover"
+            @click="emit('alert', { park, weekend: focus })"
+          >
+            <Icon name="bell" class="size-4" />
+            Prijsalarm voor dit weekend
+          </button>
         </section>
 
         <AdvicePanel v-if="focus?.advice" :park-code="park.code" :party-key="partyKey" :weekend="focus" />

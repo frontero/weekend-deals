@@ -6,13 +6,14 @@ const MIN_DROP_SHARE = 0.05;
 
 export function filterParks(
   parks,
-  { country = '', search = '', facilities: chosen = [], minRating = 0, providers = [], brands = [], maxDistanceKm = null },
+  { country = '', search = '', facilities: chosen = [], minRating = 0, providers = [], brands = [], maxDistanceKm = null, parks: codes = [] },
 ) {
   const needle = search.trim().toLowerCase();
   // Links and price alerts from before the app's own filter list name Landal's ids.
   const facilities = chosen.map(toFacilityId).filter(Boolean);
   return parks.filter(
     (park) =>
+      (!codes.length || codes.includes(park.code)) &&
       (!maxDistanceKm || (park.distanceKm != null && park.distanceKm <= maxDistanceKm)) &&
       (!brands.length || brands.includes(park.brand)) &&
       (!providers.length || providers.includes(park.provider)) &&

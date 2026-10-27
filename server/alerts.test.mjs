@@ -11,6 +11,7 @@ test('keeps only the known filters, and the home only roughly', () => {
   const search = cleanSearch({
     minDiscountPercent: 20,
     brands: ['landal', 3],
+    parks: ['HRK', { $ne: 1 }],
     search: 'veluwe',
     origin: { lat: 52.09073, lng: 5.12142, label: 'Domplein 1, Utrecht' },
     maxDistanceKm: 50,
@@ -22,6 +23,7 @@ test('keeps only the known filters, and the home only roughly', () => {
     search: 'veluwe',
     brands: ['landal'],
     maxDistanceKm: 50,
+    parks: ['HRK'],
     origin: { lat: 52.09, lng: 5.12 },
   });
 });

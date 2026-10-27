@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { marketByWeekend } from '../shared/analysis.mjs';
 import { toFacilityId } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
@@ -9,6 +9,8 @@ import AlertsDialog from './components/AlertsDialog.vue';
 import AppBar from './components/AppBar.vue';
 import DatePicker from './components/DatePicker.vue';
 import DealCard from './components/DealCard.vue';
+// The map and its library load only when the map is shown.
+const ParkMap = defineAsyncComponent(() => import('./components/ParkMap.vue'));
 import FilterPanel from './components/FilterPanel.vue';
 import FilterSheet from './components/FilterSheet.vue';
 import Icon from './components/Icon.vue';
@@ -61,6 +63,13 @@ const sortOptions = computed(() => (home.origin ? [...SORT_OPTIONS, DISTANCE_SOR
 
 const settingsOpen = ref(false);
 const alertsOpen = ref(false);
+// The results as cards or on a map.
+const view = ref('cards');
+// An alert on one park's weekend, from the park panel; otherwise the dialog offers one on the whole search.
+const parkAlert = ref(null);
+watch(alertsOpen, (isOpen) => {
+  if (!isOpen) parkAlert.value = null;
+});
 const filtersOpen = ref(false);
 const calendarOpen = ref(false);
 const opened = ref(null);
@@ -175,6 +184,20 @@ const alertDraft = computed(() => {
     primed: overview.value.partyPending === false,
   };
 });
+
+function openParkAlert({ park, weekend }) {
+  parkAlert.value = {
+    party: partyOf(overview.value.settings),
+    search: { parks: [park.code], from: weekend.arrival, to: weekend.arrival, minDiscountPercent: 0 },
+    query: writeQuery({ ...DEFAULTS, from: weekend.arrival, to: weekend.arrival, search: park.name, minDiscountPercent: 0 }, DEFAULTS),
+    label: `${park.name} · ${formatWeekend(weekend)}`,
+    // The dialog asks below which price to send a message.
+    watch: { parkCode: park.code, arrival: weekend.arrival, priceCents: weekend.priceCents },
+    seen: [],
+    primed: overview.value.partyPending === false,
+  };
+  alertsOpen.value = true;
+}
 
 function removeChip(key) {
   if (key.startsWith('facility:')) {
@@ -292,7 +315,21 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
             <template v-if="filters.minDiscountPercent">met een buitenkansje</template>
             <span v-if="periodLabel" class="font-normal text-ink-secondary">· {{ periodLabel }}</span>
           </h2>
-          <div class="ml-auto flex items-center gap-2">
+          <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <div class="flex rounded-lg bg-surface p-0.5 text-sm font-medium ring-1 ring-line" role="group" aria-label="Weergave">
+              <button
+                v-for="option in [{ value: 'cards', label: 'Lijst', icon: 'dashboard' }, { value: 'map', label: 'Kaart', icon: 'pin' }]"
+                :key="option.value"
+                type="button"
+                class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5"
+                :class="view === option.value ? 'bg-accent-wash text-accent' : 'text-ink-secondary hover:text-ink'"
+                :aria-pressed="view === option.value"
+                @click="view = option.value"
+              >
+                <Icon :name="option.icon" class="size-4" />
+                <span class="sr-only sm:not-sr-only">{{ option.label }}</span>
+              </button>
+            </div>
             <button
               type="button"
               class="inline-flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-sm font-medium ring-1 ring-line hover:ring-field"
@@ -335,7 +372,13 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
         </div>
 
         <template v-else-if="hasPrices">
-          <div v-if="cards.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <ParkMap
+            v-if="cards.length && view === 'map'"
+            :deals="cards"
+            :origin="home.origin"
+            @open="openPark($event.park, $event.weekend.arrival)"
+          />
+          <div v-else-if="cards.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <DealCard
               v-for="deal in shownDeals"
               :key="`${deal.park.code}-${deal.weekend.arrival}`"
@@ -377,7 +420,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
           </div>
 
           <button
-            v-if="cards.length > shownDeals.length"
+            v-if="view === 'cards' && cards.length > shownDeals.length"
             type="button"
             class="self-center rounded-lg bg-surface px-5 py-2.5 text-sm font-medium ring-1 ring-line hover:ring-field"
             @click="visibleCount += PAGE_SIZE"
@@ -457,7 +500,8 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
     :priced-for="overview.pricedFor"
     :party-key="overview.shownParty ?? ''"
     @close="opened = null"
+    @alert="openParkAlert"
   />
 
-  <AlertsDialog v-if="overview" v-model:open="alertsOpen" :draft="alertDraft" />
+  <AlertsDialog v-if="overview" v-model:open="alertsOpen" :draft="parkAlert ?? alertDraft" />
 </template>

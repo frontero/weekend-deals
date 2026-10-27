@@ -23,6 +23,8 @@ const SEARCH_FILTERS = {
   facilities: 'array',
   brands: 'array',
   maxDistanceKm: 'number',
+  // An alert on one park's weekend, set from the park panel.
+  parks: 'array',
 };
 
 // About a kilometre: enough for a radius, and the stored alert does not pinpoint a home.
