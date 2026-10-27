@@ -82,7 +82,7 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
         </button>
       </h3>
       <ParkLocation :park="park" class="relative z-10 self-start" />
-      <GoogleRating :rating="park.googleRating" class="relative z-10 self-start" />
+      <GoogleRating :rating="park.googleRating" as-button class="relative z-10 self-start" @select="emit('open', { reviews: true })" />
       <p class="mt-1 flex items-center gap-1.5 text-sm font-medium">
         <Icon name="calendar" class="size-4 text-ink-secondary" />
         {{ formatWeekend(weekend) }}

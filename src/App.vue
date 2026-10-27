@@ -218,8 +218,9 @@ function clearFilters() {
 }
 
 const openedPark = computed(() => parks.value.find((park) => park.code === opened.value?.code) ?? null);
-const openPark = (park, arrival = '') => {
-  opened.value = { code: park.code, arrival };
+/** @param reviews open the park panel at its Google reviews, as the rating on a card does */
+const openPark = (park, arrival = '', reviews = false) => {
+  opened.value = { code: park.code, arrival, reviews };
 };
 
 const isLoading = computed(() => !overview.value && !failed.value);
@@ -385,7 +386,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
               :deal="deal"
               :settings="overview.settings"
               :priced-for="overview.pricedFor"
-              @open="openPark(deal.park, deal.weekend.arrival)"
+              @open="openPark(deal.park, deal.weekend.arrival, $event?.reviews)"
             />
           </div>
           <div v-else class="flex flex-col items-center gap-3 rounded-2xl bg-surface px-6 py-12 text-center ring-1 ring-line">
@@ -494,6 +495,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
     v-if="overview"
     :park="openedPark"
     :arrival="opened?.arrival ?? ''"
+    :reviews="opened?.reviews ?? false"
     :min-discount="minDiscount"
     :facility-groups="facilityGroups"
     :settings="overview.settings"

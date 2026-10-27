@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { partyLabel } from '../../shared/party.mjs';
 import { useQuote } from '../composables/useQuote.js';
 import { accommodationFor, accommodationSummary, photosFor } from '../lib/accommodations.js';
@@ -23,6 +23,8 @@ const props = defineProps({
   park: { type: Object, default: null },
   // Arrival date of the weekend to show first; falls back to the park's best weekend.
   arrival: { type: String, default: '' },
+  // Open at the Google reviews.
+  reviews: { type: Boolean, default: false },
   minDiscount: { type: Number, required: true },
   facilityGroups: { type: Array, required: true },
   // The travel party and accommodation requirements: their exact price is asked live, and goes in the booking link.
@@ -33,7 +35,7 @@ const props = defineProps({
   partyKey: { type: String, default: '' },
 });
 const emit = defineEmits(['close', 'alert']);
-const reviews = ref(null);
+const reviewsSection = ref(null);
 
 const dialog = ref(null);
 const focusArrival = ref('');
@@ -44,6 +46,7 @@ watch(
     if (park) {
       focusArrival.value = props.arrival || bestWeekend(park).arrival;
       if (!dialog.value.open) dialog.value.showModal();
+      if (props.reviews) nextTick(() => reviewsSection.value?.open());
     } else if (dialog.value?.open) {
       dialog.value.close();
     }
@@ -138,7 +141,7 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
           <BrandBadge :brand="park.brand" />
           <h2 id="park-title" class="text-xl font-semibold">{{ park.name }}</h2>
           <ParkLocation :park="park" />
-          <GoogleRating :rating="park.googleRating" as-button @select="reviews?.open()" />
+          <GoogleRating :rating="park.googleRating" as-button @select="reviewsSection?.open()" />
         </header>
 
         <section v-if="focus" class="rounded-2xl p-4 ring-1 ring-line" aria-label="Gekozen weekend">
@@ -206,7 +209,7 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
 
         <AdvicePanel v-if="focus?.advice" :park-code="park.code" :party-key="partyKey" :weekend="focus" />
 
-        <GoogleReviews v-if="park.googleRating" ref="reviews" :park-code="park.code" :maps-url="park.googleRating.mapsUrl ?? ''" />
+        <GoogleReviews v-if="park.googleRating" ref="reviewsSection" :park-code="park.code" :maps-url="park.googleRating.mapsUrl ?? ''" />
 
         <section>
           <h3 class="font-semibold">Alle weekenden</h3>
