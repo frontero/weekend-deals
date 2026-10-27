@@ -4,7 +4,7 @@
 
 export const PARTY_FIELDS = ['adults', 'children', 'pets', 'accommodationFeatures'];
 
-export const PARTY_SIZES = [2, 3, 4, 5, 6, 8];
+export const PARTY_SIZES = [2, 3, 4, 5, 6, 8, 10, 12];
 export const STANDARD_PARTIES = PARTY_SIZES.map((adults) => ({ adults, children: 0, pets: 0, accommodationFeatures: [] }));
 
 export const partyOf = (settings) => Object.fromEntries(PARTY_FIELDS.map((field) => [field, settings[field]]));

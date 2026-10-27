@@ -107,7 +107,7 @@ function save() {
 
       <footer class="flex flex-wrap items-center gap-3 border-t border-line px-5 py-4">
         <p class="min-w-0 basis-full text-xs text-ink-secondary sm:basis-0 sm:flex-1">
-          De lijst toont de prijzen voor 2, 3, 4, 5, 6 of 8 personen, de kleinste groep waar jullie in passen. Open een
+          De lijst toont de prijzen voor 2, 3, 4, 5, 6, 8, 10 of 12 personen, de kleinste groep waar jullie in passen. Open een
           park voor je exacte prijs, met kinderen, huisdieren en eisen. Dit gezelschap geldt alleen in deze browser.
         </p>
         <button type="button" class="ml-auto rounded-lg px-4 py-2 font-medium hover:bg-hover sm:ml-0" @click="open = false">

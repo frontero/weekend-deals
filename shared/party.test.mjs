@@ -4,8 +4,8 @@ import { groupKey, parseGroupKey, partyLabel, partyOf, seriesFor, STANDARD_PARTI
 
 const party = (adults, children, extra = {}) => ({ adults, children, pets: 0, accommodationFeatures: [], ...extra });
 
-test('follows 2, 3, 4, 5, 6 and 8 people ahead of time', () => {
-  assert.deepEqual(STANDARD_PARTIES.map(groupKey), ['a2-c0', 'a3-c0', 'a4-c0', 'a5-c0', 'a6-c0', 'a8-c0']);
+test('follows 2, 3, 4, 5, 6, 8, 10 and 12 people ahead of time', () => {
+  assert.deepEqual(STANDARD_PARTIES.map(groupKey), ['a2-c0', 'a3-c0', 'a4-c0', 'a5-c0', 'a6-c0', 'a8-c0', 'a10-c0', 'a12-c0']);
 });
 
 test('lists the prices of the smallest size that fits everyone, children counted as people', () => {
@@ -13,8 +13,9 @@ test('lists the prices of the smallest size that fits everyone, children counted
   assert.equal(groupKey(seriesFor(party(2, 2, { pets: 1 }))), 'a4-c0');
   assert.equal(groupKey(seriesFor(party(1, 0))), 'a2-c0');
   assert.equal(groupKey(seriesFor(party(5, 2))), 'a8-c0');
+  assert.equal(groupKey(seriesFor(party(6, 4))), 'a10-c0');
   // Larger parties than the largest size get its prices; their own price comes live per park.
-  assert.equal(partyLabel(seriesFor(party(10, 2))), '8 personen');
+  assert.equal(partyLabel(seriesFor(party(10, 4))), '12 personen');
 });
 
 test('reads a party back from its group key', () => {

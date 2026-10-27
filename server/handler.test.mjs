@@ -43,7 +43,7 @@ test('a scan request is left for the Mac and shown as running', async () => {
 test('only the fixed party sizes are collected, so every size has prices ready', async () => {
   const db = await open('parties.db');
   const keys = (await db.followedParties()).map((party) => party.key);
-  assert.deepEqual(keys, ['a2-c0', 'a3-c0', 'a4-c0', 'a5-c0', 'a6-c0', 'a8-c0']);
+  assert.deepEqual(keys, ['a10-c0', 'a12-c0', 'a2-c0', 'a3-c0', 'a4-c0', 'a5-c0', 'a6-c0', 'a8-c0']);
   db.close();
 });
 
