@@ -61,3 +61,21 @@ test('sends to the topic on ntfy and reports a refusal', async () => {
   assert.deepEqual(calls[0], { url: NTFY_SERVER, body: { topic: 'weekendjeweg-abcdefghijklmnop', title: 'T', message: 'M' } });
   await assert.rejects(sendNotification('weekendjeweg-abcdefghijklmnop', {}, fetchImpl), /429/);
 });
+
+test('a message opens the best deal at the provider through the tracked link', () => {
+  const app = 'https://weekend-deals.example.workers.dev';
+  const park = { code: 'HRK', name: 'Park HRK', provider: 'landal', pricesUrl: 'https://www.landal.nl/parken/hrk/prijzen-en-beschikbaarheid' };
+  const best = { park, weekend: { arrival: '2026-11-13', departure: '2026-11-16', priceCents: 30000, discount: 0.3 } };
+  const alert = { label: 'Park HRK', query: '', partyKey: 'a2-c0', party: null };
+
+  const one = alertMessage(alert, [best], app);
+  const book = new URL(one.click);
+  assert.equal(book.pathname, '/api/go');
+  assert.equal(new URL(book.searchParams.get('url')).host, 'www.landal.nl');
+  assert.deepEqual([book.searchParams.get('park'), book.searchParams.get('from')], ['HRK', 'alarm']);
+  assert.deepEqual(one.actions.map((action) => action.label), ['Boek Park HRK bij Landal']);
+
+  const two = alertMessage(alert, [best, deal('B', 40000)], app);
+  assert.equal(two.click, `${app}/`);
+  assert.deepEqual(two.actions.map((action) => action.label), ['Boek Park HRK bij Landal', 'Alle kansjes bekijken']);
+});

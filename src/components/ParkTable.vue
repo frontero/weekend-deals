@@ -2,12 +2,15 @@
 import { computed, ref } from 'vue';
 import { bestWeekend } from '../lib/deals.js';
 import { formatEuros, formatPercent, formatWeekend } from '../lib/format.js';
+import { providerName, trackedBookingUrl } from '../lib/providers.js';
 import GoogleRating from './GoogleRating.vue';
 import Icon from './Icon.vue';
 
 const props = defineProps({
   parks: { type: Array, required: true },
   minDiscount: { type: Number, required: true },
+  // The travel party, for the booking links.
+  settings: { type: Object, required: true },
 });
 defineEmits(['show-park']);
 
@@ -65,6 +68,8 @@ const rows = computed(() => {
       best,
       isDeal: best.discount !== null && best.discount >= props.minDiscount,
       normal: park.baselineCents ? formatEuros(park.baselineCents) : '–',
+      bookUrl: trackedBookingUrl(park, best, props.settings, 'tabel'),
+      provider: providerName(park.provider),
       difference: differenceLabel(best.discount),
     }));
 });
@@ -94,6 +99,7 @@ const visibleRows = computed(() => (showAll.value ? rows.value : rows.value.slic
               <Icon :name="sortIcon(column)" class="size-3.5" :class="sort.key !== column.key && 'text-ink-muted'" />
             </button>
           </th>
+          <th scope="col" class="px-4 py-2"><span class="sr-only">Boeken</span></th>
         </tr>
       </thead>
       <tbody class="divide-y divide-line">
@@ -108,7 +114,7 @@ const visibleRows = computed(() => (showAll.value ? rows.value : rows.value.slic
               {{ row.park.name }}
             </button>
             <p class="text-xs text-ink-secondary">{{ row.park.region }}</p>
-            <GoogleRating :rating="row.park.googleRating" />
+            <GoogleRating :rating="row.park.googleRating" as-button @select="$emit('show-park', row.park)" />
           </td>
           <td class="hidden px-4 py-2.5 text-right text-ink-secondary tabular-nums sm:table-cell">
             {{ row.normal }}
@@ -117,6 +123,19 @@ const visibleRows = computed(() => (showAll.value ? rows.value : rows.value.slic
           <td class="px-4 py-2.5 text-right font-semibold tabular-nums">{{ formatEuros(row.best.priceCents) }}</td>
           <td class="px-4 py-2.5 text-right tabular-nums" :class="row.isDeal ? 'font-semibold text-good-ink' : 'text-ink-secondary'">
             {{ row.difference }}
+          </td>
+          <td class="px-4 py-2.5 text-right">
+            <a
+              :href="row.bookUrl"
+              target="_blank"
+              rel="sponsored noopener"
+              class="inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-on-accent hover:bg-accent-hover"
+              @click.stop
+            >
+              Boek
+              <span class="sr-only">{{ row.park.name }} bij {{ row.provider }} (opent in een nieuw tabblad)</span>
+              <Icon name="external" class="size-3.5" />
+            </a>
           </td>
         </tr>
       </tbody>

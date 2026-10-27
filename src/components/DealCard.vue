@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { partyLabel, persons } from '../../shared/party.mjs';
 import { accommodationFor, accommodationSummary, photosFor } from '../lib/accommodations.js';
+import { reasonText } from '../lib/advice.js';
 import { formatEuros, formatPercent, formatWeekend, nights } from '../lib/format.js';
 import { providerName, trackedBookingUrl } from '../lib/providers.js';
 import AdviceBadge from './AdviceBadge.vue';
@@ -38,6 +39,10 @@ const stay = computed(
 );
 const otherWeekends = computed(() => props.deal.otherWeekends?.length ?? 0);
 const hasAdvice = computed(() => ['book', 'wait'].includes(weekend.value.advice?.verdict));
+// Why booking now pays off, from what was measured (filling up, rising, lowest yet): the reason to click.
+const bookReason = computed(() =>
+  weekend.value.advice?.verdict === 'book' ? reasonText(weekend.value.advice.reasons[0] ?? {}) : '',
+);
 const photos = computed(() => photosFor(park.value, weekend.value));
 const accommodation = computed(() => accommodationSummary(accommodationFor(park.value, weekend.value)));
 </script>
@@ -95,7 +100,7 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
         <span class="truncate">{{ accommodation }}</span>
       </p>
 
-      <div class="mt-auto flex items-end justify-between gap-3 pt-3">
+      <div class="mt-auto pt-3">
         <div>
           <p v-if="belowNormal" class="text-sm text-ink-muted tabular-nums">
             <span class="sr-only">Normaal </span><span class="line-through">{{ formatEuros(park.baselineCents) }}</span>
@@ -111,13 +116,16 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
           :href="bookUrl"
           target="_blank"
           rel="sponsored noopener"
-          class="relative z-10 inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-2 text-sm font-semibold whitespace-nowrap text-on-accent hover:bg-accent-hover"
-          :aria-label="`Bekijk op ${provider}`"
-          :title="`Boek via ${provider}`"
+          class="relative z-10 mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 font-semibold text-on-accent shadow-sm transition hover:bg-accent-hover hover:shadow-md"
         >
-          {{ provider }}
+          Boek bij {{ provider }}
           <Icon name="external" class="size-4" />
+          <span class="sr-only">(opent {{ provider }} in een nieuw tabblad)</span>
         </a>
+        <p v-if="bookReason" class="mt-2 flex items-start gap-1.5 text-xs text-good-ink">
+          <Icon name="bolt" class="mt-px size-3.5 shrink-0" />
+          {{ bookReason }}
+        </p>
       </div>
     </div>
   </article>

@@ -187,18 +187,9 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
             </p>
           </div>
           <PriceInsight v-if="insight" :insight="insight" :price-cents="focus.priceCents" class="mt-4" />
-          <a
-            :href="bookUrl"
-            target="_blank"
-            rel="sponsored noopener"
-            class="mt-4 flex items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 font-semibold text-on-accent hover:bg-accent-hover"
-          >
-            Bekijk dit weekend op {{ provider }}
-            <Icon name="external" class="size-4" />
-          </a>
-          <p class="mt-2 text-center text-xs text-ink-muted">
-            Totaalprijs incl. toeslagen. De link neemt je datums en je gezelschap mee. Boek je via deze link, dan
-            krijgen wij een kleine vergoeding van {{ provider }}; jij betaalt niets extra.
+          <p class="mt-3 text-xs text-ink-muted">
+            Totaalprijs incl. toeslagen. De boekknop onderaan neemt je datums en je gezelschap mee. Boek je via die
+            knop, dan krijgen wij een kleine vergoeding van {{ provider }}; jij betaalt niets extra.
           </p>
           <button
             type="button"
@@ -253,6 +244,24 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
             </template>
           </dl>
         </section>
+      </div>
+
+      <!-- The booking button stays in view while reading reviews, prices and facilities. -->
+      <div v-if="focus" class="sticky bottom-0 z-20 flex items-center gap-3 border-t border-line bg-surface/95 px-5 py-3 backdrop-blur">
+        <div class="min-w-0 flex-1">
+          <p class="text-lg leading-tight font-bold tabular-nums">{{ formatEuros((quote ?? focus).priceCents) }}</p>
+          <p class="truncate text-xs text-ink-secondary">{{ formatWeekend(focus) }} · incl. toeslagen</p>
+        </div>
+        <a
+          :href="bookUrl"
+          target="_blank"
+          rel="sponsored noopener"
+          class="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-5 py-3 font-semibold text-on-accent shadow-sm transition hover:bg-accent-hover hover:shadow-md"
+        >
+          Boek bij {{ provider }}
+          <Icon name="external" class="size-4" />
+          <span class="sr-only">(opent {{ provider }} in een nieuw tabblad)</span>
+        </a>
       </div>
     </template>
   </dialog>

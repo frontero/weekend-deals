@@ -1,7 +1,9 @@
 // Price alerts: a saved search that sends a push message to a phone when a new deal matches it. Messages go
 // through ntfy (https://ntfy.sh): free, no account, a phone app subscribes to a secret topic.
 // No Node imports: the cloud app sends the test message from here too.
+import { parseGroupKey } from '../shared/party.mjs';
 import { formatEuros, formatPercent, formatWeekend } from '../src/lib/format.js';
+import { providerName, trackedBookingUrl } from '../src/lib/providers.js';
 
 export const NTFY_SERVER = 'https://ntfy.sh';
 // The topic is the only secret: whoever knows it can read the messages. Long and random, made by the browser.
@@ -63,18 +65,34 @@ export function newOrCheaper(deals, told) {
   });
 }
 
-/** One message per alert and round, best deals first. */
+/**
+ * One message per alert and round, best deals first. Tapping it, or its booking button, opens the best deal at the
+ * provider through the site's tracked link: someone who set an alert is ready to book.
+ */
 export function alertMessage(alert, deals, appUrl) {
   const lines = deals.slice(0, MAX_LISTED).map(({ park, weekend }) => {
     const discount = weekend.discount > 0 ? ` (${formatPercent(weekend.discount)} onder normaal)` : '';
     return `${park.name} · ${formatWeekend(weekend)} · ${formatEuros(weekend.priceCents)}${discount}`;
   });
   if (deals.length > MAX_LISTED) lines.push(`en nog ${deals.length - MAX_LISTED} meer`);
-  return {
+  const message = {
     title: deals.length === 1 ? `Buitenkansje: ${deals[0].park.name}` : `${deals.length} nieuwe buitenkansjes`,
     message: `${lines.join('\n')}\n\nAlarm: ${alert.label}`,
-    ...(appUrl ? { click: `${appUrl}/${alert.query ? `?${alert.query}` : ''}` } : {}),
     tags: ['house'],
+  };
+  if (!appUrl) return message;
+  const site = `${appUrl}/${alert.query ? `?${alert.query}` : ''}`;
+  const best = deals[0];
+  const party = alert.party ?? parseGroupKey(alert.partyKey ?? '');
+  if (!party) return { ...message, click: site };
+  const book = `${appUrl}${trackedBookingUrl(best.park, best.weekend, party, 'alarm')}`;
+  return {
+    ...message,
+    click: deals.length === 1 ? book : site,
+    actions: [
+      { action: 'view', label: `Boek ${best.park.name} bij ${providerName(best.park.provider)}`.slice(0, 60), url: book, clear: true },
+      ...(deals.length > 1 ? [{ action: 'view', label: 'Alle kansjes bekijken', url: site }] : []),
+    ],
   };
 }
 

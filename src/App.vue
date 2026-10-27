@@ -437,7 +437,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
                 Per park het weekend dat het verst onder de normale prijs zit. Klik op een kolomkop om te sorteren.
               </p>
             </div>
-            <ParkTable :parks="visibleParks" :min-discount="minDiscount" @show-park="openPark($event)" />
+            <ParkTable :parks="visibleParks" :min-discount="minDiscount" :settings="overview.settings" @show-park="openPark($event)" />
           </section>
         </template>
 
