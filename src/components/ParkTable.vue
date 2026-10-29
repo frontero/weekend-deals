@@ -77,7 +77,8 @@ const visibleRows = computed(() => (showAll.value ? rows.value : rows.value.slic
 </script>
 
 <template>
-  <div class="overflow-x-auto rounded-xl bg-surface ring-1 ring-line">
+  <!-- Positioned, so the screen-reader-only texts in the cells scroll with the table instead of widening the page. -->
+  <div class="relative overflow-x-auto rounded-xl bg-surface ring-1 ring-line">
     <table class="w-full text-left text-sm">
       <thead class="border-b border-line text-xs text-ink-secondary">
         <tr>

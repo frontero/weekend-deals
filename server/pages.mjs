@@ -489,21 +489,26 @@ const banner = (emoji, title, intro, tint = 'bg-accent-wash') =>
     ${intro}
   </div>`;
 
-/** An outing near a park, with its photo (or its picture when it has none) and the photo's credit. */
-function placeCard(spot, { showDistance = true } = {}) {
+// Wikimedia's thumbnails come in fixed widths: a small one is enough for a photo shown at 5 rem.
+const smallPhoto = (url) => url.replace('/500px-', '/250px-');
+
+/** An outing near a park as a compact row: a small photo (or its picture when it has none), what and how far, the credit. */
+function placeRow(spot, { showDistance = true } = {}) {
   const credit = spot.image && [spot.image.author, spot.image.license].filter(Boolean).join(', ');
   // Wikidata often describes a place by its kind alone ("pretpark"): then the kind says it already.
   const description = spot.description && spot.description.toLowerCase() !== spot.kind.toLowerCase() ? spot.description : null;
   const emoji = PLACE_ICONS[spot.kind] ?? '📍';
-  return html`<li class="${card}">
-    <div class="relative">
-      ${spot.image ? photo(spot.image.url, spot.name) : html`<div aria-hidden="true" class="grid aspect-[3/2] place-items-center bg-accent-wash text-5xl">${emoji}</div>`}
-      <span class="absolute top-3 left-3 rounded-full bg-surface/95 px-3 py-1 text-xs font-extrabold shadow-sm"><span aria-hidden="true">${emoji}</span> ${spot.kind}${showDistance && ` · ${spot.km.toLocaleString('nl-NL')} km`}</span>
-    </div>
-    <div class="p-4">
-      <h3 class="text-lg font-extrabold">${spot.name}</h3>
-      ${description && html`<p class="text-sm text-ink-secondary">${description}</p>`}
-      ${credit && html`<p class="mt-1 text-xs text-ink-muted">Foto: <a href="${spot.image.page}" class="hover:underline" rel="nofollow">${credit}</a></p>`}
+  return html`<li class="flex gap-3 rounded-2xl bg-surface p-2 pr-3 ring-1 ring-line">
+    ${
+      spot.image
+        ? html`<img src="${smallPhoto(spot.image.url)}" alt="${spot.name}" loading="lazy" decoding="async" class="size-20 shrink-0 rounded-xl bg-line object-cover" />`
+        : html`<div aria-hidden="true" class="grid size-20 shrink-0 place-items-center rounded-xl bg-accent-wash text-3xl">${emoji}</div>`
+    }
+    <div class="min-w-0 flex-1 py-0.5">
+      <p class="text-xs font-extrabold text-ink-secondary"><span aria-hidden="true">${emoji}</span> ${spot.kind}${showDistance && ` · ${spot.km.toLocaleString('nl-NL')} km`}</p>
+      <h3 class="leading-snug font-extrabold">${spot.name}</h3>
+      ${description && html`<p class="line-clamp-1 text-sm text-ink-secondary">${description}</p>`}
+      ${credit && html`<p class="truncate text-[11px] text-ink-muted">Foto: <a href="${spot.image.page}" class="hover:underline" rel="nofollow">${credit}</a></p>`}
     </div>
   </li>`;
 }
@@ -717,7 +722,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
       html`<section aria-labelledby="around" class="mt-10">
         ${sectionTitle('around', '🗺️', 'Uitjes in de buurt')}
         <p class="mt-1 text-sm text-ink-secondary">Binnen 15 kilometer, hemelsbreed gemeten vanaf het park.</p>
-        <ul class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${places.map((spot) => placeCard(spot))}</ul>
+        <ul class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">${places.map((spot) => placeRow(spot))}</ul>
       </section>`
     }
     ${
@@ -911,7 +916,7 @@ function placePage(name, parks, { path, place, emoji, pathOf, surroundings, link
       html`<section aria-labelledby="todo" class="mt-10">
         ${sectionTitle('todo', '🎡', `Uitjes ${place}`)}
         <p class="mt-1 text-sm text-ink-secondary">Wat de meeste parken hier in de buurt hebben.</p>
-        <ul class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${places.map((spot) => placeCard(spot, { showDistance: false }))}</ul>
+        <ul class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">${places.map((spot) => placeRow(spot, { showDistance: false }))}</ul>
       </section>`
     }
     ${bestBar(parks, { source: 'regiobalk' })}`;
