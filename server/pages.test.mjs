@@ -313,3 +313,24 @@ test('the dog page shows the pet series for two people and a pet, and books for 
   assert.match(page.body, /vr 6 nov – ma 9 nov · 2 personen en 1 huisdier/);
   assert.match(page.body, /party=a2-c0-p1/);
 });
+
+test('list pages put the biggest deal first, and show that weekend on the card', () => {
+  const at = (code, name, weekends) => ({ code, provider: 'landal', name, city: 'Ergens', region: 'Drenthe (NL)', country: 'NL', lat: 52.8, lng: 6.5, brand: 'landal', baselineCents: 40000, facilities: ['bos'], accommodations: {}, weekends });
+  const cheap = at('C1', 'Goedkoop Park', [weekend('2026-11-06', '2026-11-09', 20000, 0.04)]);
+  const deal = at('C2', 'Kansjespark', [weekend('2026-11-06', '2026-11-09', 26000, 0.05), weekend('2026-11-13', '2026-11-16', 28000, 0.3)]);
+  const full = at('C3', 'Vol Park', []);
+  const built = buildPages({
+    parks: [cheap, deal],
+    allParks: new Map([cheap, deal, full].map(({ weekends, ...info }) => [info.code, info])),
+    computedAt: '2026-10-29T06:39:10.572Z',
+    details: { facilitiesOf: () => ['bos'] },
+  });
+  const body = built.find((page) => page.path === '/regio/drenthe').body;
+  assert.match(body, /Grootste korting eerst/);
+  assert.ok(body.indexOf('Kansjespark') < body.indexOf('Goedkoop Park') && body.indexOf('Goedkoop Park') < body.indexOf('Vol Park'));
+  const dealCard = body.slice(body.indexOf('Kansjespark'), body.indexOf('Goedkoop Park'));
+  // The sticker sits on the photo, above the name.
+  assert.ok(body.indexOf('30% voordeliger') < body.indexOf('Kansjespark'));
+  assert.match(dealCard, /€\s280/);
+  assert.match(dealCard, /vr 13 nov – ma 16 nov/);
+});
