@@ -7,6 +7,11 @@ export const PARTY_FIELDS = ['adults', 'children', 'pets', 'accommodationFeature
 export const PARTY_SIZES = [2, 3, 4, 5, 6, 8, 10, 12];
 export const STANDARD_PARTIES = PARTY_SIZES.map((adults) => ({ adults, children: 0, pets: 0, accommodationFeatures: [] }));
 
+// Landal's accommodation filter "Hottub of luxe bubbelbad (buiten)": what people search as "huisje met jacuzzi".
+export const HOT_TUB = '9266.16402';
+/** Series with a requirement for the public pages: two people, collected once a day (see roundFor). */
+export const FEATURE_PARTIES = [{ adults: 2, children: 0, pets: 0, accommodationFeatures: [HOT_TUB] }];
+
 export const partyOf = (settings) => Object.fromEntries(PARTY_FIELDS.map((field) => [field, settings[field]]));
 
 export const persons = (party) => party.adults + party.children;

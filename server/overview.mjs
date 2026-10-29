@@ -4,7 +4,7 @@ import { analysePrices } from '../shared/analysis.mjs';
 import { parkBrand } from '../shared/brands.mjs';
 import { accommodationGroups, facilityGroups, parkFacilities } from '../shared/facilities.mjs';
 import { weekendOccasions } from '../shared/occasions.mjs';
-import { groupKey } from '../shared/party.mjs';
+import { FEATURE_PARTIES, groupKey } from '../shared/party.mjs';
 import { localToday, shiftDays } from '../shared/weekends.mjs';
 import { buildPages, PAGE_PARTY } from './pages.mjs';
 import { PROVIDERS } from './providers.mjs';
@@ -107,20 +107,21 @@ export async function buildOverview(db, { googleEnabled, party }) {
 
 /** What the public pages tell about every park beyond its prices, also of parks without a free weekend. */
 async function pageDetails(db) {
-  const [landal, names, accommodations, surroundings, ratings, { holidays }, families] = await Promise.all([
+  // Themes with prices of their own party, from that party's latest overview: four people, and the hot tub series.
+  const themeKeys = [FAMILY_KEY, ...FEATURE_PARTIES.map(groupKey)];
+  const [landal, names, accommodations, surroundings, ratings, { holidays }, ...themeOverviews] = await Promise.all([
     db.facilitiesByPark(),
     db.facilityNamesByPark(),
     db.accommodations(),
     db.surroundings(),
     db.googleRatings(),
     db.schoolHolidays(),
-    // The family theme shows four people's prices, from that size's latest overview.
-    db.overviewParks(FAMILY_KEY),
+    ...themeKeys.map((key) => db.overviewParks(key)),
   ]);
   const facilitiesOf = (code) => parkFacilities({ landal: landal.get(code) ?? [], names: names.get(code) ?? [] });
   const occasionsOf = (weekend) => weekendOccasions(weekend, holidays);
-  const familyParks = families ? JSON.parse(gunzipSync(families)) : null;
-  const parksOf = (key) => (key === FAMILY_KEY ? familyParks : null);
+  const themeParks = new Map(themeKeys.map((key, index) => [key, themeOverviews[index] ? JSON.parse(gunzipSync(themeOverviews[index])) : null]));
+  const parksOf = (key) => themeParks.get(key) ?? null;
   return { facilitiesOf, accommodations, surroundings, ratings, occasionsOf, parksOf };
 }
 

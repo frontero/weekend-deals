@@ -1,4 +1,4 @@
-import { groupKey, STANDARD_PARTIES } from '../shared/party.mjs';
+import { FEATURE_PARTIES, groupKey, STANDARD_PARTIES } from '../shared/party.mjs';
 import { clampSettings, DEFAULT_SETTINGS } from './settings.mjs';
 
 const SCHEMA = `
@@ -379,7 +379,7 @@ async function addLaterColumns(client) {
 /** The party sizes rounds collect; a size added later is collected by the next round. */
 async function seedParties(client) {
   const now = new Date().toISOString();
-  const rows = STANDARD_PARTIES.map((party) => [groupKey(party), JSON.stringify(party), 1, now]);
+  const rows = [...STANDARD_PARTIES, ...FEATURE_PARTIES].map((party) => [groupKey(party), JSON.stringify(party), 1, now]);
   await client.batch(insertRows('INSERT OR IGNORE', 'parties', ['group_key', 'party', 'standard', 'used_at'], rows), 'write');
 }
 

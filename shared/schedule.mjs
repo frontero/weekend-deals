@@ -24,6 +24,15 @@ export function lastScheduledRound(schedule, now = new Date()) {
   return latest;
 }
 
+/**
+ * The scheduled round a party's prices should be from. A series with a requirement costs extra requests and serves
+ * the public pages only: its prices come with the morning round alone.
+ */
+export function roundFor(party, schedule, now = new Date()) {
+  if (!party.accommodationFeatures?.length) return lastScheduledRound(schedule, now);
+  return schedule === 'manual' ? null : lastScheduledRound('daily', now);
+}
+
 /** The next scheduled round after `now`, today or tomorrow; null when rounds only run on request. */
 export function nextScheduledRound(schedule, now = new Date()) {
   let next = null;

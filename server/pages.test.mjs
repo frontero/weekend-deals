@@ -273,3 +273,28 @@ test("the family theme shows four people's prices and books for four", () => {
   assert.match(page.body, /party=a4-c0/);
   assert.doesNotMatch(page.body, /Rustpark/, 'one children\'s facility is not enough');
 });
+
+test('the hot tub page shows the hot tub series: its accommodation, price and booking link, and nothing without it', () => {
+  const spa = (code, name) => ({ code, provider: 'landal', name, city: 'Ergens', country: 'NL', lat: 52, lng: 5 });
+  const parks = [spa('H1', 'Wellnesspark Een'), spa('H2', 'Wellnesspark Twee'), spa('H3', 'Wellnesspark Drie'), spa('H4', 'Gewoon Park')];
+  const withTub = parks.slice(0, 3).map((park) => ({
+    ...park,
+    brand: 'landal',
+    accommodations: { tub4: { name: 'Wellness Lodge 4', facts: [], photos: ['https://landal.test/tub.jpg'] } },
+    weekends: [weekend('2026-11-06', '2026-11-09', 61000, null, { accommodationCode: 'tub4' })],
+  }));
+  const build = (parksOf) =>
+    buildPages({
+      parks: [],
+      allParks: new Map(parks.map((park) => [park.code, park])),
+      computedAt: '2026-10-29T06:39:10.572Z',
+      details: { facilitiesOf: () => ['bos'], parksOf },
+    });
+  const page = build((key) => (key === 'a2-c0-f9266.16402' ? withTub : null)).find((entry) => entry.path === '/thema/huisje-met-hottub');
+  assert.equal(page.title, 'Huisje met hottub of jacuzzi: weekendje weg met de laagste prijzen');
+  assert.match(page.body, /Wellness Lodge 4/);
+  assert.match(page.body, /src="https:\/\/landal.test\/tub.jpg"/);
+  assert.match(page.body, /party=a2-c0-f9266.16402/);
+  assert.doesNotMatch(page.body, /Gewoon Park/);
+  assert.ok(!build(() => null).some((entry) => entry.path === '/thema/huisje-met-hottub'), 'no series, no page');
+});

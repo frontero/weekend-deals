@@ -12,7 +12,7 @@ import { providerName, trackedBookingUrl } from '../src/lib/providers.js';
 import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
-import { groupKey, partyLabel, STANDARD_PARTIES } from '../shared/party.mjs';
+import { FEATURE_PARTIES, groupKey, parseGroupKey, partyLabel, STANDARD_PARTIES } from '../shared/party.mjs';
 
 // Two adults, the app's own default: the most searched-for weekend away.
 export const PAGE_PARTY = STANDARD_PARTIES[0];
@@ -71,6 +71,18 @@ const THEMES = [
     label: 'Binnenzwembad',
     name: 'Vakantiepark met binnenzwembad',
     intro: 'Zwemmen bij elk weer, zonder eerst de auto in te hoeven: deze parken hebben een overdekt zwembad.',
+  },
+  {
+    // Its own price series (FEATURE_PARTIES): the cheapest accommodation with a hot tub, not the park's cheapest.
+    slug: 'huisje-met-hottub',
+    facilities: [],
+    minimum: 0,
+    party: groupKey(FEATURE_PARTIES[0]),
+    showStay: true,
+    icon: '🛁',
+    label: 'Huisje met hottub',
+    name: 'Huisje met hottub of jacuzzi',
+    intro: 'Na een dag buiten opwarmen in je eigen hottub of buitenbubbelbad, onder de sterren. De prijs is die van het goedkoopste huisje mét hottub op het park, voor 2 personen.',
   },
   {
     slug: 'vakantiepark-met-kinderen',
@@ -447,14 +459,20 @@ function placeCard(spot, { showDistance = true } = {}) {
   </li>`;
 }
 
-/** A park as a card on the region and theme pages: photo, place, its cheapest weekend and a way to book it. */
-function parkCard(park, { pathOf, source, party = PAGE_PARTY }) {
+/**
+ * A park as a card on the region and theme pages: photo, place, its cheapest weekend and a way to book it.
+ * @param showStay the accommodation behind the price instead of the park: for a series with a requirement
+ */
+function parkCard(park, { pathOf, source, party = PAGE_PARTY, showStay = false }) {
   const cheapest = cheapestOf(park.weekends);
+  const stay = showStay && cheapest && park.accommodations?.[cheapest.accommodationCode];
+  const image = stay?.photos?.[0] ?? park.imageUrl;
   return html`<li class="${card} flex flex-col transition hover:-translate-y-0.5 hover:shadow-lg">
-    <div class="relative">${park.imageUrl && photo(park.imageUrl, fullName(park))}${photoSticker(cheapest)}</div>
+    <div class="relative">${image && photo(image, stay ? `${stay.name} bij ${fullName(park)}` : fullName(park))}${photoSticker(cheapest)}</div>
     <div class="flex flex-1 flex-col gap-1 p-4">
       <a href="${pathOf(park)}" class="text-lg font-extrabold hover:underline">${fullName(park)}</a>
       <p class="flex flex-wrap gap-x-2 text-sm text-ink-secondary"><span><span aria-hidden="true">📍</span> ${placeOf(park)}</span>${rating(park)}</p>
+      ${stay?.name && html`<p class="text-sm font-bold"><span aria-hidden="true">🏡</span> ${stay.name}</p>`}
       ${
         cheapest
           ? html`<p class="mt-auto pt-3 text-3xl font-black tabular-nums">${formatEuros(cheapest.priceCents)}</p>
@@ -484,13 +502,13 @@ const offerCard = ({ park, weekend: offer }, { pathOf, source }) =>
   </li>`;
 
 /** The cheapest parks as cards, the others as a list: a page with a hundred cards weighs too much. */
-function parkList(parks, { pathOf, source, party = PAGE_PARTY }) {
+function parkList(parks, { pathOf, source, party = PAGE_PARTY, showStay = false }) {
   const sorted = byPrice(parks);
   const row = (park) => {
     const from = cheapestOf(park.weekends);
     return html`<li class="break-inside-avoid py-1.5"><a href="${pathOf(park)}" class="${link}">${fullName(park)}</a> <span class="text-sm text-ink-secondary">· ${placeOf(park)} · ${from ? `vanaf ${formatEuros(from.priceCents)}` : 'geen plek'}</span></li>`;
   };
-  return html`<ul class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${sorted.slice(0, PARK_CARDS).map((park) => parkCard(park, { pathOf, source, party }))}</ul>
+  return html`<ul class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${sorted.slice(0, PARK_CARDS).map((park) => parkCard(park, { pathOf, source, party, showStay }))}</ul>
     ${sorted.length > PARK_CARDS && html`<section aria-labelledby="more" class="mt-10">${sectionTitle('more', '🏕️', 'Meer parken')}<ul class="mt-3 columns-1 gap-8 sm:columns-2">${sorted.slice(PARK_CARDS).map(row)}</ul></section>`}`;
 }
 
@@ -547,7 +565,7 @@ function parkIntro(park, { accommodations, weekendCount }) {
 /** @param themes the themes that have a page, by facility */
 /**
  * @param regionPages the regions the park belongs to that have a page, the most specific first
- * @param themes the themes that have a page; `themeOf` those of a single facility, by that facility
+ * @param themes the themes with a page that list this park; `themeOf` those of a single facility, by that facility
  */
 function parkPage(park, { pathOf, nearby, updated, accommodations, places, weekendCount, regionPages, themes: themePages, themeOf, occasionsOf }) {
   const name = fullName(park);
@@ -559,7 +577,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
   const general = groups.find((group) => group.name === GENERAL_GROUP)?.options ?? [];
   // A fireworks-free park is also one with little; saying both is saying it twice.
   const goodToKnow = general.filter((option) => !(option.id === 'vuurwerkluw' && park.facilities.includes('vuurwerkvrij')));
-  const themes = themePages.filter((theme) => fitsTheme(theme, park));
+  const themes = themePages;
   const shownAccommodations = [...accommodations].sort((a, b) => (sleeps(a) ?? 99) - (sleeps(b) ?? 99)).slice(0, SHOWN_ACCOMMODATIONS);
   const intro = parkIntro(park, { accommodations, weekendCount });
   const appLink = `/?${new URLSearchParams({ search: park.name, minDiscountPercent: '0' })}`;
@@ -854,7 +872,7 @@ function themePage(theme, parks, { pathOf, themes, party }) {
   const body = html`
     ${breadcrumb(['/parken', 'Alle parken'])}
     <div class="mt-3">${banner(themeIcon(theme), theme.name, html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${theme.intro}</p><p class="mt-2 max-w-3xl leading-relaxed text-ink-secondary">${intro.join(' ')}</p>`, 'bg-sun-wash')}</div>
-    ${parkList(parks, { pathOf, source: 'themapagina', party })}
+    ${parkList(parks, { pathOf, source: 'themapagina', party, showStay: theme.showStay })}
     <nav aria-labelledby="other-themes" class="mt-10">${sectionTitle('other-themes', '✨', "Andere thema's")}<ul class="mt-4 flex flex-wrap gap-2">${themes.filter((other) => other !== theme).map(
       (other) => html`<li><a href="${themePath(other)}" class="${chip}"><span aria-hidden="true">${themeIcon(other)}</span> ${other.label}</a></li>`,
     )}</ul></nav>`;
@@ -1038,18 +1056,22 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
   const regionsWithPage = new Set(regions.map(([region]) => region));
   const countries = [...Map.groupBy(everyPark.filter((park) => park.country), (park) => park.country)].filter(enough).sort(bySize);
 
-  // A theme with another party size's prices lists that overview's parks, where they have a page.
+  // A theme with a party of its own lists that party's overview, where its parks have a page; none before it has one.
+  const facilitiesOf = new Map(everyPark.map((park) => [park.code, park.facilities]));
   const themeParks = (theme) => {
-    const other = theme.party && details.parksOf(theme.party);
-    const facilitiesOf = new Map(everyPark.map((park) => [park.code, park.facilities]));
-    const candidates = other ? other.filter((park) => pathOf(park)).map((park) => ({ ...park, facilities: facilitiesOf.get(park.code) ?? [] })) : everyPark;
-    return candidates.filter((park) => fitsTheme(theme, park));
+    if (!theme.party) return everyPark.filter((park) => fitsTheme(theme, park));
+    const own = details.parksOf(theme.party) ?? [];
+    return own
+      .filter((park) => pathOf(park))
+      .map((park) => ({ ...park, facilities: facilitiesOf.get(park.code) ?? [] }))
+      .filter((park) => fitsTheme(theme, park));
   };
   const themes = THEMES.map((theme) => [theme, themeParks(theme)]).filter(enough);
   const themePages = themes.map(([theme]) => theme);
+  const themeCodes = new Map(themes.map(([theme, list]) => [theme, new Set(list.map((park) => park.code))]));
   // A facility's own theme, for linking the facility where a park lists it.
   const themeOf = new Map(themePages.filter((theme) => theme.facilities.length === 1).map((theme) => [theme.facilities[0], theme]));
-  const partyOf = (key) => STANDARD_PARTIES.find((party) => groupKey(party) === key) ?? PAGE_PARTY;
+  const partyOf = (key) => (key && parseGroupKey(key)) || PAGE_PARTY;
 
   return [
     parksIndex(everyPark, { pathOf, regions, themes, countries }),
@@ -1064,7 +1086,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
         places: details.surroundings.get(park.code) ?? [],
         weekendCount: weekends.length,
         regionPages: regionsOf(park).filter((region) => regionsWithPage.has(region)),
-        themes: themePages,
+        themes: themePages.filter((theme) => themeCodes.get(theme).has(park.code)),
         themeOf,
         occasionsOf: details.occasionsOf,
       }),

@@ -2,7 +2,7 @@ import { gzipSync } from 'node:zlib';
 import { adminWindowStart, buildAdminStats } from '../shared/admin-stats.mjs';
 import { scanChanges } from '../shared/scan-changes.mjs';
 import { scanStats } from '../shared/scan-stats.mjs';
-import { lastScheduledRound } from '../shared/schedule.mjs';
+import { lastScheduledRound, roundFor } from '../shared/schedule.mjs';
 import { localToday, upcomingWeekends } from '../shared/weekends.mjs';
 import { checkAlerts } from './alert-check.mjs';
 import { fetchFilterGroups } from './facilities.mjs';
@@ -80,10 +80,13 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
    * rounds only run on request) that may be tried again. New sizes first: the screen has nothing to show for them yet.
    */
   async function partiesToCollect({ everything, requested = [], now = Date.now() }) {
-    const scheduled = lastScheduledRound((await db.getSettings()).rounds, new Date(now));
+    const { rounds } = await db.getSettings();
+    const scheduled = lastScheduledRound(rounds, new Date(now));
     const attempts = await db.scanStartsSince(new Date(scheduled?.getTime() ?? now - DAY_MS).toISOString());
-    const needsPrices = (party) =>
-      scheduled === null ? !party.lastSucceededAt : !(Date.parse(party.lastSucceededAt) >= scheduled.getTime());
+    const needsPrices = (followed) => {
+      const round = roundFor(followed.party, rounds, new Date(now));
+      return round === null ? !followed.lastSucceededAt : !(Date.parse(followed.lastSucceededAt) >= round.getTime());
+    };
     const mayTryAgain = (party) =>
       (attempts[party.key] ?? 0) < MAX_ATTEMPTS_PER_ROUND && now - Date.parse(party.lastStartedAt) >= RETRY_AFTER_MS;
     const due = (party) =>
