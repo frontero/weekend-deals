@@ -430,6 +430,34 @@ function bookButton(park, weekend, source, party = PAGE_PARTY) {
   return html`<a href="${trackedBookingUrl(park, weekend, party, source)}" target="_blank" rel="sponsored noopener" class="inline-flex shrink-0 items-center justify-center rounded-full bg-cta px-5 py-2.5 font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover hover:shadow-md">Boek bij ${provider}<span class="sr-only"> (opent ${provider} in een nieuw tabblad)</span></a>`;
 }
 
+/** The provider's own page of a park through the tracked link, for a park without a free weekend to book. */
+const trackedParkUrl = (park, source) =>
+  (park.url ?? park.pricesUrl) && `/api/go?${new URLSearchParams({ url: park.url ?? park.pricesUrl, park: park.code, from: source })}`;
+const ctaLink = (href, label, provider) =>
+  html`<a href="${href}" target="_blank" rel="sponsored noopener" class="inline-flex shrink-0 items-center justify-center rounded-full bg-cta px-5 py-2.5 font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover hover:shadow-md">${label}<span class="sr-only"> (opent ${provider} in een nieuw tabblad)</span></a>`;
+
+/**
+ * A booking bar that stays in view at the bottom of the screen while reading a park's page, and settles at its end:
+ * the cheapest weekend with its booking link, or the provider's page of a park without a free weekend.
+ */
+function bookingBar(park, weekend) {
+  const provider = providerName(park.provider);
+  const parkUrl = trackedParkUrl(park, 'parkbalk');
+  if (!weekend && !parkUrl) return '';
+  const bar = 'sticky bottom-3 z-20 mt-10 flex items-center gap-3 rounded-full bg-surface/95 py-2 pr-2 pl-5 shadow-lg ring-1 ring-line backdrop-blur';
+  if (!weekend) {
+    return html`<div class="${bar}"><p class="min-w-0 flex-1 text-sm font-bold">Andere datums of meer personen?</p>${ctaLink(parkUrl, `Bekijk bij ${provider}`, provider)}</div>`;
+  }
+  const percent = discountPercent(weekend);
+  return html`<div class="${bar}">
+    <div class="min-w-0 flex-1 leading-tight">
+      <p class="flex flex-wrap items-center gap-x-2"><span class="text-xl font-black tabular-nums">${formatEuros(weekend.priceCents)}</span>${percent >= NOTEWORTHY_PERCENT && html`<span class="rounded-full bg-sun px-2 py-0.5 text-xs font-black whitespace-nowrap text-on-sun">${percent}% voordeliger</span>`}</p>
+      <p class="truncate text-xs font-semibold text-ink-secondary">${formatWeekend(weekend)} · ${partyLabel(PAGE_PARTY)}</p>
+    </div>
+    ${bookButton(park, weekend, 'parkbalk')}
+  </div>`;
+}
+
 /** @param trail [href, label] pairs leading up to the page */
 const breadcrumb = (...trail) =>
   html`<nav aria-label="Kruimelpad" class="text-sm font-semibold text-ink-secondary">${trail.map(([href, label]) => html`<a href="${href}" class="${link}">${label}</a> › `)}</nav>`;
@@ -662,7 +690,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
             </div>
             ${bookButton(park, cheapest, 'parkpagina')}
           </section>`
-        : html`<p class="mt-6 rounded-[2rem] bg-sun-wash p-6 font-semibold">Voor ${partyLabel(PAGE_PARTY)} vonden we bij ${name} geen vrij weekend in de komende maanden. Bekijk de parken in de buurt, of <a href="/" class="${link}">zoek een ander weekend</a>.</p>`
+        : html`<div class="mt-6 flex flex-col gap-4 rounded-[2rem] bg-sun-wash p-6 sm:flex-row sm:items-center"><p class="flex-1 font-semibold">Voor ${partyLabel(PAGE_PARTY)} vonden we bij ${name} geen vrij weekend in de komende maanden. Kijk bij ${providerName(park.provider)} voor andere datums, bekijk de parken in de buurt, of <a href="/" class="${link}">zoek een ander weekend</a>.</p>${trackedParkUrl(park, 'parkpagina') && ctaLink(trackedParkUrl(park, 'parkpagina'), `Bekijk bij ${providerName(park.provider)}`, providerName(park.provider))}</div>`
     }
     ${intro.length > 0 && html`<p class="mt-8 max-w-3xl text-lg leading-relaxed">${intro.join(' ')}</p>`}
     ${
@@ -714,7 +742,8 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
         ${regionPages.map((name) => html`<li><a href="${regionPath(name)}" class="${chip}"><span aria-hidden="true">🗺️</span> Alle parken ${inPlace(name)}</a></li>`)}
         ${themes.map((theme) => html`<li><a href="${themePath(theme)}" class="${chip}"><span aria-hidden="true">${themeIcon(theme)}</span> ${theme.name}</a></li>`)}
       </ul></nav>`
-    }`;
+    }
+    ${bookingBar(park, cheapest)}`;
 
   return {
     path: pathOf(park),

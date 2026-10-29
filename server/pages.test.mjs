@@ -49,7 +49,7 @@ const hoogduin = {
   accommodations: {},
   weekends: [{ ...weekend('2026-11-06', '2026-11-09', 25000, null), bookingUrl: null }],
 };
-const soldOut = { code: 'SDT', provider: 'landal', name: 'Vakantiepark Søhøjlandet', city: 'Gjern', country: 'DK', lat: 56.2, lng: 9.7 };
+const soldOut = { code: 'SDT', provider: 'landal', name: 'Vakantiepark Søhøjlandet', city: 'Gjern', country: 'DK', lat: 56.2, lng: 9.7, url: 'https://www.landal.nl/parken/sohojlandet' };
 // Nothing known about it but its name: no page.
 const bare = { code: 'BAR', provider: 'landal', name: 'Kaal Park', city: 'Ergens', country: 'NL', lat: 52, lng: 5 };
 const limburg = (code, name) => ({ code, provider: 'landal', name, city: 'Valkenburg', region: 'Limburg', country: 'NL', lat: 50.86, lng: 5.83 });
@@ -333,4 +333,15 @@ test('list pages put the biggest deal first, and show that weekend on the card',
   assert.ok(body.indexOf('30% voordeliger') < body.indexOf('Kansjespark'));
   assert.match(dealCard, /€\s280/);
   assert.match(dealCard, /vr 13 nov – ma 16 nov/);
+});
+
+test('a park page always has a booking link in view: the bar with the cheapest weekend, or the park at its provider', () => {
+  const priced = pageAt('/park/vakantiepark-gulpen').body;
+  const bar = priced.slice(priced.lastIndexOf('sticky bottom-3'));
+  assert.match(bar, /€\s300/);
+  assert.match(bar, /25% voordeliger/);
+  assert.match(bar, /href="\/api\/go\?url=[^"]+from=parkbalk[^"]*" target="_blank" rel="sponsored noopener"/);
+  const full = pageAt('/park/vakantiepark-sohojlandet').body;
+  assert.match(full, /href="\/api\/go\?url=https%3A%2F%2Fwww\.landal\.nl%2Fparken%2Fsohojlandet&#38;park=SDT&#38;from=parkbalk"/);
+  assert.match(full, /Bekijk bij Landal/);
 });
