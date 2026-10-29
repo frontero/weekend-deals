@@ -205,7 +205,7 @@ export function createApiHandler(
     }),
 
     // Every size, or the ones named: the admin page names those a stopped round did not finish.
-    'POST /scan': async (request) => {
+    'POST /admin/scan': forAdmins(async (request) => {
       const { parties } = await readJson(request);
       const named = Array.isArray(parties) ? parties : [];
       const followed = new Set((await db.followedParties()).map((party) => party.key));
@@ -213,7 +213,7 @@ export function createApiHandler(
       if (named.length && !keys.length) return json({ error: 'Unknown party size' }, 400);
       await requestScan(keys);
       return json(await status(request), 202);
-    },
+    }),
 
     // The price of one park and stay for a viewer's exact party, asked from the provider right now.
     'POST /quote': async (request) => {
@@ -279,7 +279,7 @@ export function createApiHandler(
     },
 
     // Settings shared by everyone: how far ahead and how often. Parties are per viewer.
-    'PUT /settings': async (request) => {
+    'PUT /admin/settings': forAdmins(async (request) => {
       const input = Object.fromEntries(
         Object.entries(await readJson(request)).filter(([field]) => !PARTY_FIELDS.includes(field)),
       );
@@ -287,7 +287,7 @@ export function createApiHandler(
       const settings = await db.saveSettings(input);
       if (before.weeksAhead < settings.weeksAhead) await requestScan();
       return json(settings);
-    },
+    }),
   };
 
   return async function handle(request) {

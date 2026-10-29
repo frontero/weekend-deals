@@ -10,12 +10,14 @@ const props = defineProps({
   providers: { type: Array, default: () => [] },
   // The party size the list shows has no prices yet: only right after a size was added.
   partyPending: { type: Boolean, default: false },
+  // What went wrong behind the scenes is for the admin; visitors see the last prices that did come in.
+  admin: { type: Boolean, default: false },
 });
 
 const notices = computed(() => {
   const list = [];
   if (props.failed) {
-    list.push({ tone: 'warning', text: 'De app-server is niet bereikbaar. Draait npm run dev nog?' });
+    list.push({ tone: 'warning', text: 'De prijzen zijn nu niet bereikbaar. Probeer het zo opnieuw.' });
   }
   if (props.partyPending) {
     list.push({
@@ -23,6 +25,7 @@ const notices = computed(() => {
       text: 'De prijzen voor deze groepsgrootte worden voor het eerst opgehaald. Open een park voor je prijs van dit moment.',
     });
   }
+  if (!props.admin) return list;
   const scanError = props.scan?.running ? null : (props.scan?.error ?? props.scan?.lastScan?.error);
   if (scanError) list.push({ tone: 'warning', text: `Laatste ophaalronde mislukt: ${scanError}` });
   for (const provider of props.providers.filter((item) => item.error)) {

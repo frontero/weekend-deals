@@ -64,7 +64,7 @@ export function useRounds() {
   async function retry(parties) {
     retryState.value = 'sending';
     try {
-      await request('/scan', { method: 'POST', body: JSON.stringify({ parties }) });
+      await request('/admin/scan', { method: 'POST', body: JSON.stringify({ parties }) });
       retryState.value = 'idle';
       await reload();
     } catch {

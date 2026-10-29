@@ -8,6 +8,8 @@ const open = defineModel('open', { type: Boolean, required: true });
 const props = defineProps({
   settings: { type: Object, required: true },
   accommodationGroups: { type: Array, required: true },
+  // How far ahead and how often apply to everyone, so only admins change them.
+  admin: { type: Boolean, default: false },
 });
 const emit = defineEmits(['save']);
 
@@ -87,7 +89,7 @@ function save() {
           </div>
         </section>
 
-        <section class="grid gap-4 py-5 sm:grid-cols-2">
+        <section v-if="admin" class="grid gap-4 py-5 sm:grid-cols-2">
           <label class="flex flex-col gap-1 text-sm">
             <span class="font-semibold">Weken vooruit kijken</span>
             <select v-model.number="draft.weeksAhead" class="rounded-lg bg-plane px-3 py-2 ring-1 ring-field">

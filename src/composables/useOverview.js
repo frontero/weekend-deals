@@ -66,7 +66,7 @@ export function useOverview() {
   }
 
   async function startScan() {
-    await request(`/scan${sizeQuery(party)}`, { method: 'POST' });
+    await request(`/admin/scan${sizeQuery(party)}`, { method: 'POST' });
     await load();
   }
 
@@ -77,7 +77,7 @@ export function useOverview() {
     const shared = overview.value?.settings;
     if (settings.weeksAhead !== shared?.weeksAhead || settings.rounds !== shared?.rounds) {
       const { weeksAhead, rounds } = settings;
-      await request('/settings', { method: 'PUT', body: JSON.stringify({ weeksAhead, rounds }) });
+      await request('/admin/settings', { method: 'PUT', body: JSON.stringify({ weeksAhead, rounds }) });
     }
     await load();
   }

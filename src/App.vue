@@ -269,6 +269,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
       :google="overview?.google ?? null"
       :providers="overview?.providers ?? []"
       :party-pending="overview?.partyPending ?? false"
+      :admin="overview?.admin ?? false"
     />
 
     <div class="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-8">
@@ -450,6 +451,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
           <template v-else>
             <p class="font-semibold">Nog geen prijzen voor dit gezelschap</p>
             <button
+              v-if="overview.admin"
               type="button"
               class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover"
               @click="startScan"
@@ -468,9 +470,10 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
       affiliate-links: boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra,
       en het bepaalt niet welke parken je hier ziet.
     </p>
-    <nav aria-label="Overzichten" class="mx-auto flex max-w-7xl gap-4 px-4 pb-6 text-sm sm:px-6">
+    <nav aria-label="Meer op de site" class="mx-auto flex max-w-7xl gap-4 px-4 pb-6 text-sm sm:px-6">
       <a href="/weekenden" class="font-medium text-accent hover:underline">Alle weekenden</a>
       <a href="/parken" class="font-medium text-accent hover:underline">Alle parken</a>
+      <a href="/privacy" class="font-medium text-accent hover:underline">Privacy</a>
     </nav>
   </footer>
 
@@ -500,6 +503,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
     v-model:open="settingsOpen"
     :settings="overview.settings"
     :accommodation-groups="overview.accommodationGroups"
+    :admin="overview.admin"
     @save="saveSettings"
   />
 

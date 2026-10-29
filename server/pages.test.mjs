@@ -95,7 +95,7 @@ test("providers' names are escaped", () => {
 });
 
 test('only page paths go to the pages', () => {
-  for (const path of ['/parken', '/weekenden', '/park/vakantiepark-gulpen', '/weekend/2026-11-06', '/sitemap.xml', '/robots.txt']) {
+  for (const path of ['/parken', '/weekenden', '/park/vakantiepark-gulpen', '/weekend/2026-11-06', '/privacy', '/sitemap.xml', '/robots.txt']) {
     assert.ok(isPagePath(path), path);
   }
   for (const path of ['/', '/beheer', '/park/', '/park/Gulpen', '/weekend/6-november', '/api/go', '/parken/x']) {
@@ -120,6 +120,9 @@ test('serves a stored page in the site frame, a 404 page, the sitemap and robots
   assert.doesNotMatch(text, /<script type="module"/);
 
   assert.equal((await serve('/park/weg')).status, 404);
+  const privacy = await (await serve('/privacy')).text();
+  assert.match(privacy, /niet je IP-adres/);
+  assert.match(privacy, /mailto:contact@weekendjeweg.test/);
   assert.match(await (await serve('/sitemap.xml')).text(), /<loc>https:\/\/weekendjeweg.test\/parken<\/loc><lastmod>2026-10-29<\/lastmod>/);
   assert.match(await (await serve('/robots.txt')).text(), /Disallow: \/api\//);
 });

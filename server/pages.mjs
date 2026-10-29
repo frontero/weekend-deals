@@ -22,7 +22,7 @@ const LISTED_OFFERS = 50;
 const DEAL_SHARE = 0.2;
 const SITE_NAME = 'Weekendje weg';
 
-const PAGE_PATH = /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|sitemap\.xml|robots\.txt)$/;
+const PAGE_PATH = /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|privacy|sitemap\.xml|robots\.txt)$/;
 /** Whether a path is one of these pages (or their sitemap and robots.txt) rather than the app. */
 export const isPagePath = (pathname) => PAGE_PATH.test(pathname);
 
@@ -351,6 +351,37 @@ const NOT_FOUND = {
     <p class="mt-3 text-ink-secondary">Misschien is het weekend al voorbij. Bekijk <a href="/weekenden" class="${link}">de komende weekenden</a> of <a href="/parken" class="${link}">alle parken</a>.</p>`.text,
 };
 
+const heading = 'mt-8 text-lg font-semibold';
+const listing = 'mt-2 list-disc space-y-1 pl-5';
+
+/** What the site keeps and who else sees something. Questions go to contact@ the site's own domain (Email Routing). */
+const privacyPage = (hostname) => ({
+  title: 'Privacy',
+  description: `Wat ${SITE_NAME} bewaart en wie er verder iets ziet: geen account, geen trackingcookies, geen persoonsgegevens bij klikken.`,
+  image: null,
+  body: html`<h1 class="text-3xl font-bold tracking-tight">Privacy</h1>
+    <div class="mt-3 max-w-2xl text-ink-secondary">
+      <p>${SITE_NAME} is een website van een particulier. Je hebt geen account nodig. We gebruiken geen trackingcookies en geen bezoekersstatistieken.</p>
+      <h2 class="${heading} text-ink">Wat we bewaren</h2>
+      <ul class="${listing}">
+        <li>Klik je door naar een aanbieder, dan bewaren we welk park, welk weekend, vanaf welke pagina, voor hoeveel personen en wanneer. Niet wie je bent en niet je IP-adres.</li>
+        <li>Zet je een prijsalarm aan, dan bewaren we je zoekopdracht, je gezelschap en de willekeurige code van je meldingen. Zoek je op afstand, dan ook je plek, afgerond op ongeveer een kilometer. Verwijder je het alarm, dan is het weg.</li>
+      </ul>
+      <h2 class="${heading} text-ink">Wat in je browser blijft</h2>
+      <p class="mt-2">Je gezelschap, je thuisadres, de code van je prijsalarm en licht of donker staan alleen in je eigen browser. Wis je de websitegegevens, dan zijn ze weg.</p>
+      <h2 class="${heading} text-ink">Wie er verder iets ziet</h2>
+      <ul class="${listing}">
+        <li>Een adres dat je intypt, zoeken we via onze server op bij PDOK (de overheid) of OpenStreetMap. Wij bewaren het niet.</li>
+        <li>De kaart komt van OpenStreetMap, foto's van de aanbieders en recensies van Google. Zoals bij elke website zien zij je IP-adres.</li>
+        <li>Prijsalarmen gaan via ntfy.sh naar de ntfy-app op je telefoon.</li>
+        <li>Klik je door naar een aanbieder, dan kan die aanbieder of een affiliate-netwerk zoals TradeTracker of Awin een cookie plaatsen. Daarmee zien zij dat je boeking via ons kwam. Daarvoor geldt hun privacybeleid.</li>
+        <li>De site draait bij Cloudflare. Cloudflare verwerkt technische gegevens zoals je IP-adres om de site te leveren en te beveiligen.</li>
+      </ul>
+      <h2 class="${heading} text-ink">Vragen</h2>
+      <p class="mt-2">Mail naar <a href="mailto:contact@${hostname}" class="${link}">contact@${hostname}</a>.</p>
+    </div>`.text,
+});
+
 /** A stored page as a whole document, with the site's header and footer around it. */
 export function pageDocument({ title, description, image, body }, { url, stylesheet }) {
   return html`<!doctype html>
@@ -398,6 +429,7 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
         boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra, en het bepaalt
         niet welke parken je hier ziet.
       </p>
+      <nav aria-label="Over de site" class="mx-auto max-w-4xl px-4 pb-6 text-sm sm:px-6"><a href="/privacy" class="${link}">Privacy</a></nav>
     </footer>
   </body>
 </html>
@@ -428,10 +460,10 @@ const headers = (type) => ({ 'Content-Type': `${type}; charset=utf-8`, 'Cache-Co
  * @param stylesheet the app's built stylesheet, so the pages look like the app
  */
 export async function servePage(db, request, { stylesheet }) {
-  const { origin, pathname } = new URL(request.url);
+  const { origin, hostname, pathname } = new URL(request.url);
   if (pathname === '/robots.txt') return new Response(robots(origin), { headers: headers('text/plain') });
   if (pathname === '/sitemap.xml') return new Response(sitemap(origin, await db.pagePaths()), { headers: headers('application/xml') });
-  const page = await db.page(pathname);
+  const page = pathname === '/privacy' ? privacyPage(hostname) : await db.page(pathname);
   return new Response(pageDocument(page ?? NOT_FOUND, { url: `${origin}${pathname}`, stylesheet }), {
     status: page ? 200 : 404,
     headers: headers('text/html'),

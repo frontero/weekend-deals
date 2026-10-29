@@ -1,5 +1,5 @@
-// Cloudflare Access signs every request it lets through. Checking that signature here keeps the data closed even
-// when Access is switched off or missing, e.g. on a new address of the app.
+// Cloudflare Access signs every request it lets through. Checking that signature here keeps the admin routes closed
+// even when Access is switched off or missing, e.g. on a new address of the app.
 const KEYS_MAX_AGE_MS = 60 * 60 * 1000;
 // Keys rotate, so an unknown key id fetches them again, but not more often than this.
 const KEYS_REFRESH_MS = 60 * 1000;
@@ -29,11 +29,15 @@ async function signingKeys(team, refresh = false) {
 }
 
 /**
+ * Access adds its token as a header on the paths it guards. Elsewhere (the public site) a logged-in browser still
+ * sends it as the CF_Authorization cookie, which tells the screen to show the admin's buttons.
  * @param env ACCESS_TEAM_DOMAIN and ACCESS_AUD (the Access application's audience tag)
  * @returns the token's claims, among them the visitor's `email`, or null when Access did not let the request in
  */
 export async function verifyAccess(request, env, now = Date.now()) {
-  const token = request.headers.get('Cf-Access-Jwt-Assertion');
+  const token =
+    request.headers.get('Cf-Access-Jwt-Assertion') ??
+    request.headers.get('Cookie')?.match(/(?:^|;\s*)CF_Authorization=([^;]+)/)?.[1];
   if (!token || !env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD) return null;
   const team = teamHost(env.ACCESS_TEAM_DOMAIN);
   const [headerPart, payloadPart, signaturePart] = token.split('.');

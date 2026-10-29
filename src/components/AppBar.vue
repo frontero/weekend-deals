@@ -9,7 +9,7 @@ const props = defineProps({
   settings: { type: Object, required: true },
   scan: { type: Object, required: true },
   accommodationGroups: { type: Array, required: true },
-  // Admins get a link to the admin page.
+  // Admins get a link to the admin page, and can start a round.
   admin: { type: Boolean, default: false },
 });
 const emit = defineEmits(['open-settings', 'refresh']);
@@ -76,6 +76,7 @@ const progressLabel = computed(() =>
           <Icon name="clock" class="size-4" />
         </a>
         <button
+          v-if="admin"
           type="button"
           class="grid size-9 place-items-center rounded-full ring-1 ring-line transition hover:bg-hover disabled:opacity-60"
           :disabled="scan.running"

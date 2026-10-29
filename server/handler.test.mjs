@@ -30,9 +30,9 @@ test('serves the precomputed park list as stored, and an empty one before the fi
 test('a scan request is left for the Mac and shown as running', async () => {
   const db = await open('scan.db');
   let started = 0;
-  const handle = createApiHandler(db, { onScanRequested: () => (started += 1) });
+  const handle = createApiHandler(db, { isAdmin: () => true, onScanRequested: () => (started += 1) });
 
-  const response = await call(handle, 'POST', '/scan');
+  const response = await call(handle, 'POST', '/admin/scan');
   assert.equal(response.status, 202);
   assert.equal((await response.json()).scan.phase, 'requested');
   assert.ok(await db.scanRequestedAt());
@@ -49,14 +49,14 @@ test('only the fixed party sizes are collected, so every size has prices ready',
 
 test('shared settings leave the party of every viewer alone', async () => {
   const db = await open('settings.db');
-  const handle = createApiHandler(db);
+  const handle = createApiHandler(db, { isAdmin: () => true });
 
-  const settings = await (await call(handle, 'PUT', '/settings', { rounds: 'daily', children: 2 })).json();
+  const settings = await (await call(handle, 'PUT', '/admin/settings', { rounds: 'daily', children: 2 })).json();
   assert.equal(settings.rounds, 'daily');
   assert.equal(settings.children, 0);
   assert.equal(await db.scanRequestedAt(), null);
 
-  await call(handle, 'PUT', '/settings', { weeksAhead: 26 });
+  await call(handle, 'PUT', '/admin/settings', { weeksAhead: 26 });
   assert.ok(await db.scanRequestedAt());
   db.close();
 });
@@ -143,6 +143,10 @@ test('the admin overview of rounds is only for admins, and the status tells the 
   const db = await open('admin.db');
   const visitor = createApiHandler(db);
   assert.equal((await call(visitor, 'GET', '/admin')).status, 403);
+  // Visitors cannot start rounds or change what everyone sees.
+  assert.equal((await call(visitor, 'POST', '/admin/scan')).status, 403);
+  assert.equal((await call(visitor, 'PUT', '/admin/settings', { weeksAhead: 26 })).status, 403);
+  assert.equal(await db.scanRequestedAt(), null);
   assert.equal((await (await call(visitor, 'GET', '/status')).json()).admin, false);
 
   const scanId = await db.startScan('a2-c0');
@@ -180,11 +184,11 @@ test('the admin overview brings what it takes to link each changed park', async 
 
 test('a scan request may name the sizes to collect, only ones that are collected', async () => {
   const db = await open('scan-sizes.db');
-  const handle = createApiHandler(db);
-  assert.equal((await call(handle, 'POST', '/scan', { parties: ['a7-c9'] })).status, 400);
+  const handle = createApiHandler(db, { isAdmin: () => true });
+  assert.equal((await call(handle, 'POST', '/admin/scan', { parties: ['a7-c9'] })).status, 400);
   assert.equal(await db.scanRequestedAt(), null);
 
-  assert.equal((await call(handle, 'POST', '/scan', { parties: ['a2-c0', 'a7-c9'] })).status, 202);
+  assert.equal((await call(handle, 'POST', '/admin/scan', { parties: ['a2-c0', 'a7-c9'] })).status, 202);
   assert.deepEqual((await db.scanRequest()).parties, ['a2-c0']);
   db.close();
 });

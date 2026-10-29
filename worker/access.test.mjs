@@ -36,6 +36,14 @@ test('lets in a request that Access signed for this app, and tells who it is', a
   assert.equal(access.email, 'robert@example.com');
 });
 
+test('outside the paths Access guards, a logged-in browser is known by its Access cookie', async () => {
+  const jwt = await token(claims({ email: 'robert@example.com' }));
+  const withCookie = new Request('https://weekendjeweg.test/api/status', { headers: { Cookie: `theme=dark; CF_Authorization=${jwt}` } });
+  assert.equal((await verifyAccess(withCookie, env)).email, 'robert@example.com');
+  const forged = new Request('https://weekendjeweg.test/api/status', { headers: { Cookie: `CF_Authorization=${jwt.slice(0, -4)}AAAA` } });
+  assert.equal(await verifyAccess(forged, env), null);
+});
+
 test('only the listed email addresses are admin', () => {
   assert.equal(isAdminEmail('Robert@Example.com', 'robert@example.com, other@example.com'), true);
   assert.equal(isAdminEmail('guest@example.com', 'robert@example.com'), false);
