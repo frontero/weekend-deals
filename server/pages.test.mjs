@@ -118,7 +118,9 @@ test("a park page tells where it lies, what to sleep in and when it is cheapest,
   assert.match(body, /Goed om te weten: gratis wifi\./);
   assert.match(body, /alt="Timber Lodge 4 bij Landal Vakantiepark Gulpen"/);
   assert.match(body, /Pretpark · 7,9 km/);
-  assert.match(body, /Foto: <a href="https:\/\/commons.wikimedia.org\/wiki\/File:Valkenier.jpg"[^>]*>Kleon3, CC BY-SA 3.0<\/a>/);
+  // The credit the photo's license asks for, at the end of the page rather than under the photo.
+  assert.match(body, /<summary[^>]*>Fotobronnen<\/summary>[^]*De Valkenier: <a href="https:\/\/commons.wikimedia.org\/wiki\/File:Valkenier.jpg"[^>]*>Kleon3, CC BY-SA 3.0<\/a>/);
+  assert.doesNotMatch(body, /Foto: /);
   assert.match(body, /href="\/regio\/limburg"/);
   // Where it lies is said in its text, not again as something to do.
   assert.doesNotMatch(body, /In het heuvelland/);
@@ -139,7 +141,11 @@ test('a weekend shows good weather and what makes it special, on the park and on
 test('a region page lists its parks with photos and booking, and the outings most of them have nearby', () => {
   const page = pageAt('/regio/limburg');
   assert.equal(page.title, 'Vakantiepark Limburg: alle parken met weekendprijzen');
-  assert.match(page.body, /In Limburg liggen 3 vakantieparken van Landal\. Daarvan liggen er 2 in het heuvelland en 1 in een bosrijke omgeving\. Bij 2 parken is er een overdekt zwembad\./);
+  assert.match(page.body, /Heuvels, vakwerkhuizen en het Bourgondische leven/);
+  // Its figures as tiles: parks, from what price, deals, where they lie, pools.
+  for (const [value, label] of [['3', 'parken'], ['1', 'park minstens 20% onder normaal'], ['2', 'in het heuvelland'], ['2', 'met binnenzwembad']]) {
+    assert.match(page.body, new RegExp(`>${value}</span><span[^>]*>${label}<`), label);
+  }
   assert.match(page.body, /from=regiopagina/);
   assert.match(page.body, /Uitjes in Limburg/);
   assert.ok(page.body.indexOf('Vakantiepark Gulpen') < page.body.indexOf('Mheerbos'), 'parks with a free weekend first');
@@ -242,7 +248,8 @@ test('areas people search for get a page: Texel by its villages, the Veluwe by w
   assert.ok(paths.includes('/regio/texel') && paths.includes('/regio/veluwe') && paths.includes('/regio/waddeneilanden'));
   assert.ok(!paths.includes('/regio/ameland'), 'one park is no page');
   const texel = built.find((page) => page.path === '/regio/texel');
-  assert.match(texel.body, /Op Texel liggen 3 vakantieparken/);
+  assert.match(texel.body, /Het grootste Waddeneiland/);
+  assert.match(texel.body, />3<\/span><span[^>]*>parken</);
   assert.equal(texel.title, 'Vakantiepark Texel: alle parken met weekendprijzen');
   const veluwePage = built.find((page) => page.path === '/regio/veluwe').body;
   assert.match(veluwePage, /Miggelenberg/);

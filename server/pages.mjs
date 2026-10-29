@@ -289,6 +289,51 @@ const AREAS = [
   { name: 'Ardennen', test: (park) => park.country === 'BE' && park.lat < 50.45 && park.lng > 4.7 },
 ];
 const PREPOSITIONS = { Texel: 'op', Ameland: 'op', Waddeneilanden: 'op de' };
+
+/** What makes a region or country worth a weekend, in its own words; its figures follow as tiles. */
+const PLACE_INTROS = {
+  Zeeland:
+    'Strand, duinen en de Deltawerken: Zeeland is dé provincie voor een weekend aan zee. De parken liggen aan de Noordzeekust van Walcheren, Schouwen-Duiveland en Zeeuws-Vlaanderen, of aan de Oosterschelde en het Grevelingenmeer.',
+  Veluwe:
+    'Het grootste aaneengesloten natuurgebied van Nederland: bossen, heide en stuifzanden, met herten en wilde zwijnen. Ideaal om te wandelen en te fietsen, met Paleis Het Loo en het Kröller-Müller Museum op de Veluwe zelf.',
+  Gelderland:
+    'De bossen en heide van de Veluwe, de rivieren en boomgaarden van de Betuwe en het coulissenlandschap van de Achterhoek: Gelderland is groot en afwisselend.',
+  Drenthe:
+    'Rust, ruimte en hunebedden: Drenthe is de provincie van bossen, heidevelden en brinkdorpen. Veel parken liggen op of rond de Hondsrug, met fietspaden vanaf de voordeur.',
+  Limburg:
+    'Heuvels, vakwerkhuizen en het Bourgondische leven: Zuid-Limburg voelt bijna als buitenland. In Noord- en Midden-Limburg wachten bossen, vennen en de Maas.',
+  'Noord-Brabant':
+    'Bossen, vennen en heide in de Kempen, de Peel en rond de Loonse en Drunense Duinen, en gezelligheid in de Brabantse dorpen en steden.',
+  'Noord-Holland':
+    'Duinen, brede stranden en polders: veel parken liggen vlak bij de Noordzeekust, andere aan het IJsselmeer of het Markermeer. Amsterdam en Alkmaar zijn nooit ver.',
+  'Zuid-Holland':
+    'Strand en duinen aan de kust en veel water op de Zuid-Hollandse eilanden, met steden als Den Haag, Leiden en Rotterdam binnen bereik.',
+  Friesland: 'Water, weidse luchten en elf steden: Friesland is het land van meren, zeilen en fietsen langs terpdorpen.',
+  Groningen: 'Wierdendorpen, het wad en de stad Groningen: rustig, weids en verrassend gevarieerd.',
+  Overijssel:
+    'Het glooiende Twente, het Vechtdal en de Sallandse Heuvelrug: Overijssel is bos, heide en kleine rivieren, met Giethoorn als bekendste dorp.',
+  Utrecht: 'De Utrechtse Heuvelrug met bossen, landgoederen en kastelen, midden in het land en vanuit heel Nederland goed bereikbaar.',
+  Waddeneilanden:
+    'Eilandgevoel: na de bootoversteek wachten brede stranden, duinen en vogels. Elk Waddeneiland heeft een eigen karakter, van levendig Texel tot rustig Schiermonnikoog.',
+  Texel: 'Het grootste Waddeneiland: strand, duinen, schapen en zeehonden. De boot vanuit Den Helder doet er ongeveer twintig minuten over.',
+  Ameland: 'Duinen, brede stranden en vier karakteristieke dorpen. De boot vanuit Holwerd brengt je er in zo’n drie kwartier.',
+  Ardennen:
+    'Diepe dalen, rivieren en uitgestrekte bossen: de Belgische Ardennen zijn ideaal om te wandelen en te kajakken, met stadjes als Durbuy en La Roche-en-Ardenne.',
+  Moezel: 'Wijnranken op steile hellingen, kastelen en het slingerende Moezeldal: een weekend voor wandelaars en wijnliefhebbers.',
+  Vorarlberg: 'Het westelijkste deel van Oostenrijk, tussen de Bodensee en de Alpen: in de zomer om te wandelen, in de winter om te skiën.',
+  Jutland: 'Het Deense vasteland: lange Noordzeestranden, duinen en veel rust. Met de auto goed te bereiken.',
+  Cornwall: 'Ruige kliffen, kleine vissersdorpjes en surfstranden in het zuidwesten van Engeland.',
+  'Lake District': 'Meren, bergen en wandelpaden in het noordwesten van Engeland, in een van de mooiste nationale parken van het land.',
+  Yorkshire: 'De heidevelden van de Moors, de groene Dales en historische stadjes als York en Whitby in het noorden van Engeland.',
+  Nederland:
+    'Van de Waddeneilanden tot Zuid-Limburg: in Nederland ben je nooit ver van een vakantiepark. Ideaal voor een weekend zonder lange reis.',
+  Duitsland: 'Net over de grens: van de Moezel en de Eifel tot het Beierse Woud. Veel Duitse parken liggen op een paar uur rijden.',
+  België: 'Dichtbij en toch echt weg: de Belgische parken liggen vooral in de Ardennen, met bossen, rivieren en heuvels.',
+  Oostenrijk: 'Bergen, meren en frisse lucht: in de winter om te skiën, in de zomer om te wandelen en te fietsen.',
+  Denemarken: 'Lange stranden, duinen en hygge: Denemarken is rustig, ruim en kindvriendelijk.',
+  'Verenigd Koninkrijk':
+    'Van de kliffen van Cornwall tot de meren van het Lake District en de Schotse Hooglanden: verder weg, maar op bijzondere plekken.',
+};
 /** "op Texel", "op de Waddeneilanden", "in Zeeland" */
 const inPlace = (place) => `${PREPOSITIONS[place] ?? 'in'} ${place}`;
 const capitalised = (text) => text.charAt(0).toUpperCase() + text.slice(1);
@@ -505,12 +550,26 @@ const banner = (emoji, title, intro, tint = 'bg-accent-wash') =>
     ${intro}
   </div>`;
 
+/**
+ * Who took the outings' photos and under which license, as their CC BY-SA licenses ask: together at the end of the
+ * page, folded away, rather than under every photo.
+ */
+function photoCredits(places) {
+  const credited = places.filter((spot) => spot.image);
+  if (!credited.length) return '';
+  return html`<details class="mt-10 text-xs text-ink-muted">
+    <summary class="cursor-pointer font-semibold">Fotobronnen</summary>
+    <ul class="mt-2 space-y-1">${credited.map(
+      (spot) => html`<li>${spot.name}: <a href="${spot.image.page}" class="hover:underline" rel="nofollow">${[spot.image.author, spot.image.license].filter(Boolean).join(', ')}</a></li>`,
+    )}</ul>
+  </details>`;
+}
+
 // Wikimedia's thumbnails come in fixed widths: a small one is enough for a photo shown at 5 rem.
 const smallPhoto = (url) => url.replace('/500px-', '/250px-');
 
-/** An outing near a park as a compact row: a small photo (or its picture when it has none), what and how far, the credit. */
+/** An outing near a park as a compact row: a small photo (or its picture when it has none), what and how far. */
 function placeRow(spot, { showDistance = true } = {}) {
-  const credit = spot.image && [spot.image.author, spot.image.license].filter(Boolean).join(', ');
   // Wikidata often describes a place by its kind alone ("pretpark"): then the kind says it already.
   const description = spot.description && spot.description.toLowerCase() !== spot.kind.toLowerCase() ? spot.description : null;
   const emoji = PLACE_ICONS[spot.kind] ?? '📍';
@@ -524,7 +583,6 @@ function placeRow(spot, { showDistance = true } = {}) {
       <p class="text-xs font-extrabold text-ink-secondary"><span aria-hidden="true">${emoji}</span> ${spot.kind}${showDistance && ` · ${spot.km.toLocaleString('nl-NL')} km`}</p>
       <h3 class="leading-snug font-extrabold">${spot.name}</h3>
       ${description && html`<p class="line-clamp-1 text-sm text-ink-secondary">${description}</p>`}
-      ${credit && html`<p class="truncate text-[11px] text-ink-muted">Foto: <a href="${spot.image.page}" class="hover:underline" rel="nofollow">${credit}</a></p>`}
     </div>
   </li>`;
 }
@@ -811,6 +869,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
         ${themes.map((theme) => html`<li><a href="${themePath(theme)}" class="${chip}"><span aria-hidden="true">${themeIcon(theme)}</span> ${theme.name}</a></li>`)}
       </ul></nav>`
     }
+    ${photoCredits(places)}
     ${bookingBar(park, cheapest)}`;
 
   return {
@@ -928,6 +987,31 @@ function regionPlaces(parks, surroundings) {
     .map(({ spot }) => spot);
 }
 
+/**
+ * A list page's figures as tiles: how many parks, from what price, how many deals, and for a region where they lie
+ * and which have a pool.
+ */
+function statTiles(parks, { party = PAGE_PARTY, details = true } = {}) {
+  const priced = parks.filter((park) => park.weekends.length);
+  const cheapest = cheapestOf(priced.map((park) => cheapestOf(park.weekends)));
+  const deals = priced.filter((park) => park.weekends.some((weekend) => (weekend.discount ?? 0) >= DEAL_SHARE)).length;
+  const counted = (pairs) =>
+    pairs
+      .map(([id, label]) => [FACILITY_ICONS[id], parks.filter((park) => park.facilities.includes(id)).length, label])
+      .filter(([, number]) => number > 0);
+  const tiles = [
+    ['🏕️', parks.length, parks.length === 1 ? 'park' : 'parken'],
+    cheapest && ['💶', formatEuros(cheapest.priceCents), `vanaf, ${formatWeekend(cheapest)} · ${partyLabel(party)}`],
+    deals > 0 && ['🔥', deals, `${deals === 1 ? 'park' : 'parken'} minstens ${Math.round(DEAL_SHARE * 100)}% onder normaal`],
+    ...(details ? counted(SETTINGS).sort((a, b) => b[1] - a[1]).slice(0, 2) : []),
+    ...(details ? counted([['zwemparadijs', 'met subtropisch zwembad'], ['overdekt-zwembad', 'met binnenzwembad']]) : []),
+  ].filter(Boolean);
+  return html`<ul class="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">${tiles.map(
+    ([emoji, value, label]) =>
+      html`<li class="flex min-w-0 items-center gap-2 rounded-2xl bg-surface px-3 py-2 ring-1 ring-line"><span aria-hidden="true" class="text-xl">${emoji}</span><span><span class="block text-lg leading-tight font-black tabular-nums">${value}</span><span class="block text-xs font-semibold text-ink-secondary">${label}</span></span></li>`,
+  )}</ul>`;
+}
+
 function listIntro(parks, party = PAGE_PARTY) {
   const priced = parks.filter((park) => park.weekends.length);
   const cheapest = cheapestOf(priced.map((park) => cheapestOf(park.weekends)));
@@ -944,25 +1028,12 @@ function listIntro(parks, party = PAGE_PARTY) {
  * @param links [href, label, count] of the regions inside a country
  */
 function placePage(name, parks, { path, place, emoji, pathOf, surroundings, links = [] }) {
-  const pools = [
-    ['zwemparadijs', 'een subtropisch zwemparadijs'],
-    ['overdekt-zwembad', 'een overdekt zwembad'],
-  ]
-    .map(([id, what]) => ({ what, number: parks.filter((park) => park.facilities.includes(id)).length }))
-    .filter(({ number }) => number > 0);
-  const settings = settingCounts(parks);
   const places = regionPlaces(parks, surroundings);
-  const intro = [
-    `${capitalised(place)} liggen ${parks.length} vakantieparken van ${providersOf(parks)}.`,
-    settings.length > 0 && `Daarvan liggen er ${joinAnd(settings)}.`,
-    pools.length > 0 &&
-      `Bij ${count(pools[0].number, 'park', 'parken')} is er ${pools[0].what}${pools[1] ? `, bij ${pools[1].number} ${pools[1].what}` : ''}.`,
-    ...listIntro(parks),
-  ].filter(Boolean);
+  const intro = PLACE_INTROS[name] ?? `Alle vakantieparken ${place}, met de prijs van elk komend weekend.`;
   const preposition = place.slice(0, place.length - name.length).trim();
   const body = html`
     ${breadcrumb(['/parken', 'Alle parken'])}
-    <div class="mt-3">${banner(emoji, html`Vakantieparken ${preposition} <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">${name}</span>`, html`<p class="mt-3 max-w-3xl leading-relaxed font-semibold text-ink-secondary">${intro.join(' ')}</p>`)}</div>
+    <div class="mt-3">${banner(emoji, html`Vakantieparken ${preposition} <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">${name}</span>`, html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${intro}</p>${statTiles(parks)}`)}</div>
     ${links.length > 0 && html`<ul class="mt-6 flex flex-wrap gap-2">${links.map(([href, label, number]) => html`<li><a href="${href}" class="${chip}"><span aria-hidden="true">📍</span> ${label} <span class="text-ink-muted">${number}</span></a></li>`)}</ul>`}
     ${parkList(parks, { pathOf, source: 'regiopagina' })}
     ${
@@ -973,6 +1044,7 @@ function placePage(name, parks, { path, place, emoji, pathOf, surroundings, link
         <ul class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">${places.map((spot) => placeRow(spot, { showDistance: false }))}</ul>
       </section>`
     }
+    ${photoCredits(places)}
     ${bestBar(parks, { source: 'regiobalk' })}`;
   return {
     path,
@@ -991,14 +1063,10 @@ function themePage(theme, parks, { pathOf, themes, party }) {
     .sort((a, b) => b[1].length - a[1].length)
     .slice(0, 3)
     .map(([region]) => region);
-  const intro = [
-    `We volgen ${count(parks.length, 'park', 'parken')} van ${providersOf(parks)} die hierbij passen.`,
-    regions.length > 0 && `De meeste liggen in ${joinAnd(regions)}.`,
-    ...listIntro(parks, party),
-  ].filter(Boolean);
+  const where = regions.length > 0 && html`<p class="mt-3 text-sm font-semibold text-ink-secondary">De meeste liggen in ${joinAnd(regions)}.</p>`;
   const body = html`
     ${breadcrumb(['/parken', 'Alle parken'])}
-    <div class="mt-3">${banner(themeIcon(theme), theme.name, html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${theme.intro}</p><p class="mt-2 max-w-3xl leading-relaxed text-ink-secondary">${intro.join(' ')}</p>`, 'bg-sun-wash')}</div>
+    <div class="mt-3">${banner(themeIcon(theme), theme.name, html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${theme.intro}</p>${statTiles(parks, { party, details: false })}${where}`, 'bg-sun-wash')}</div>
     ${parkList(parks, { pathOf, source: 'themapagina', party, showStay: theme.showStay })}
     <nav aria-labelledby="other-themes" class="mt-10">${sectionTitle('other-themes', '✨', "Andere thema's")}<ul class="mt-4 flex flex-wrap gap-2">${themes.filter((other) => other !== theme).map(
       (other) => html`<li><a href="${themePath(other)}" class="${chip}"><span aria-hidden="true">${themeIcon(other)}</span> ${other.label}</a></li>`,
