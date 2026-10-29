@@ -1,4 +1,4 @@
-import { gzipSync } from 'node:zlib';
+import { gunzipSync, gzipSync } from 'node:zlib';
 import { availabilityTrends, bookingAdvice } from '../shared/advice.mjs';
 import { analysePrices } from '../shared/analysis.mjs';
 import { parkBrand } from '../shared/brands.mjs';
@@ -15,6 +15,7 @@ const BASELINE_LOOKBACK_DAYS = 182;
 // The booking advice compares today's price with the price from at least this many days ago.
 const TREND_REFERENCE_DAYS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const FAMILY_KEY = 'a4-c0';
 // A forecast older than this is no forecast any more.
 const WEATHER_MAX_AGE_MS = DAY_MS;
 
@@ -106,17 +107,21 @@ export async function buildOverview(db, { googleEnabled, party }) {
 
 /** What the public pages tell about every park beyond its prices, also of parks without a free weekend. */
 async function pageDetails(db) {
-  const [landal, names, accommodations, surroundings, ratings, { holidays }] = await Promise.all([
+  const [landal, names, accommodations, surroundings, ratings, { holidays }, families] = await Promise.all([
     db.facilitiesByPark(),
     db.facilityNamesByPark(),
     db.accommodations(),
     db.surroundings(),
     db.googleRatings(),
     db.schoolHolidays(),
+    // The family theme shows four people's prices, from that size's latest overview.
+    db.overviewParks(FAMILY_KEY),
   ]);
   const facilitiesOf = (code) => parkFacilities({ landal: landal.get(code) ?? [], names: names.get(code) ?? [] });
   const occasionsOf = (weekend) => weekendOccasions(weekend, holidays);
-  return { facilitiesOf, accommodations, surroundings, ratings, occasionsOf };
+  const familyParks = families ? JSON.parse(gunzipSync(families)) : null;
+  const parksOf = (key) => (key === FAMILY_KEY ? familyParks : null);
+  return { facilitiesOf, accommodations, surroundings, ratings, occasionsOf, parksOf };
 }
 
 export async function refreshOverview(db, { googleEnabled, party }) {

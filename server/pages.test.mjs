@@ -87,8 +87,10 @@ const details = {
 const pages = buildPages({ parks: [gulpen, hoogduin], allParks, computedAt: '2026-10-29T06:39:10.572Z', details });
 const pageAt = (path) => pages.find((page) => page.path === path);
 
-test('one page per park with something to tell, per weekend, per region and theme with three parks, and the lists', () => {
+test('one page per park with something to tell, per weekend, per country, region and theme with three parks, and the lists', () => {
   assert.deepEqual(pages.map((page) => page.path).sort(), [
+    '/land/nederland',
+    '/last-minute',
     '/park/hoogduin-b',
     '/park/mheerbos',
     '/park/vakantiepark-gulpen',
@@ -136,7 +138,7 @@ test('a weekend shows good weather and what makes it special, on the park and on
 
 test('a region page lists its parks with photos and booking, and the outings most of them have nearby', () => {
   const page = pageAt('/regio/limburg');
-  assert.equal(page.title, 'Vakantieparken in Limburg: weekendje weg en buitenkansjes');
+  assert.equal(page.title, 'Vakantiepark Limburg: alle parken met weekendprijzen');
   assert.match(page.body, /In Limburg liggen 3 vakantieparken van Landal\. Daarvan liggen er 2 in het heuvelland en 1 in een bosrijke omgeving\. Bij 2 parken is er een overdekt zwembad\./);
   assert.match(page.body, /from=regiopagina/);
   assert.match(page.body, /Uitjes in Limburg/);
@@ -202,4 +204,72 @@ test('serves a stored page in the site frame, a 404 page, the sitemap and robots
   assert.match(privacy, /mailto:contact@weekendjeweg.test/);
   assert.match(await (await serve('/sitemap.xml')).text(), /<loc>https:\/\/weekendjeweg.test\/parken<\/loc><lastmod>2026-10-29<\/lastmod>/);
   assert.match(await (await serve('/robots.txt')).text(), /Disallow: \/api\//);
+});
+
+test('the last-minute page shows the coming weekends, the biggest deals first', () => {
+  const page = pageAt('/last-minute');
+  assert.equal(page.title, 'Last minute vakantiepark: weekendje weg dit of volgend weekend');
+  assert.match(page.body, /Eerstvolgende weekend: vr 6 nov – ma 9 nov/);
+  assert.match(page.body, /Het weekend daarna: vr 13 nov – ma 16 nov/);
+  assert.doesNotMatch(page.body, /4 dec/);
+  const first = page.body.slice(page.body.indexOf('Eerstvolgende'), page.body.indexOf('Het weekend daarna'));
+  assert.ok(first.indexOf('Gulpen') < first.indexOf('Hoogduin'), 'the 25% deal before the cheaper park without one');
+  assert.match(page.body, /from=lastminute/);
+});
+
+test('areas people search for get a page: Texel by its villages, the Veluwe by where it lies', () => {
+  const at = (code, name, city, region, lat, lng) => ({ code, provider: 'landal', name, city, region, country: 'NL', lat, lng });
+  const island = [
+    at('T1', 'Beach Park Texel', 'De Koog', 'Noordzee/Wadden (NL)', 53.1, 4.76),
+    at('T2', 'Sluftervallei', 'De Cocksdorp', 'Noordzee/Wadden (NL)', 53.15, 4.85),
+    at('T3', 'Kustpark Texel', 'De Koog', 'Noordzee/Wadden (NL)', 53.09, 4.76),
+    at('A1', 'Ameland', 'Hollum', 'Noordzee/Wadden (NL)', 53.44, 5.63),
+  ];
+  const veluwe = [
+    at('V1', 'Miggelenberg', 'Hoenderloo', 'Gelderland (NL)', 52.12, 5.87),
+    at('V2', 'Rabbit Hill', 'Nieuw Milligen', 'Gelderland (NL)', 52.22, 5.78),
+    at('V3', 'Coldenhove', 'Eerbeek', 'Gelderland', 52.1, 6.06),
+    at('G1', 'Stroombroek', 'Braamt', 'Gelderland (NL)', 51.93, 6.25),
+  ];
+  const all = [...island, ...veluwe];
+  const built = buildPages({
+    parks: [],
+    allParks: new Map(all.map((park) => [park.code, park])),
+    computedAt: '2026-10-29T06:39:10.572Z',
+    details: { facilitiesOf: () => ['bos'] },
+  });
+  const paths = built.map((page) => page.path);
+  assert.ok(paths.includes('/regio/texel') && paths.includes('/regio/veluwe') && paths.includes('/regio/waddeneilanden'));
+  assert.ok(!paths.includes('/regio/ameland'), 'one park is no page');
+  const texel = built.find((page) => page.path === '/regio/texel');
+  assert.match(texel.body, /Op Texel liggen 3 vakantieparken/);
+  assert.equal(texel.title, 'Vakantiepark Texel: alle parken met weekendprijzen');
+  const veluwePage = built.find((page) => page.path === '/regio/veluwe').body;
+  assert.match(veluwePage, /Miggelenberg/);
+  assert.doesNotMatch(veluwePage, /Stroombroek/, 'Braamt lies in the Achterhoek, not on the Veluwe');
+  // The park's own page leads to the most specific region first.
+  assert.match(built.find((page) => page.path === '/park/sluftervallei').body, /Kruimelpad[^]*?\/regio\/texel/);
+});
+
+test("the family theme shows four people's prices and books for four", () => {
+  const family = (code, name, facilities) => ({ code, provider: 'landal', name, city: 'Ergens', country: 'NL', lat: 52, lng: 5, facilities });
+  const kids = [
+    family('K1', 'Speelpark Een', ['speeltuin', 'kinderboerderij']),
+    family('K2', 'Speelpark Twee', ['zwemparadijs', 'kinderclub']),
+    family('K3', 'Speelpark Drie', ['speeltuin', 'peuterbad']),
+    family('K4', 'Rustpark', ['speeltuin']),
+  ];
+  const forFour = kids.map((park) => ({ ...park, brand: 'landal', weekends: [weekend('2026-11-06', '2026-11-09', 52000, 0.1)] }));
+  const built = buildPages({
+    parks: [],
+    allParks: new Map(kids.map((park) => [park.code, park])),
+    computedAt: '2026-10-29T06:39:10.572Z',
+    details: { facilitiesOf: (code) => kids.find((park) => park.code === code).facilities, parksOf: (key) => (key === 'a4-c0' ? forFour : null) },
+  });
+  const page = built.find((entry) => entry.path === '/thema/vakantiepark-met-kinderen');
+  assert.equal(page.title, 'Vakantiepark met kinderen: weekendje weg met de laagste prijzen');
+  assert.match(page.body, /€\s520/);
+  assert.match(page.body, /vr 6 nov – ma 9 nov · 4 personen/);
+  assert.match(page.body, /party=a4-c0/);
+  assert.doesNotMatch(page.body, /Rustpark/, 'one children\'s facility is not enough');
 });
