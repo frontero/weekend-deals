@@ -437,12 +437,14 @@ const ctaLink = (href, label, provider) =>
   html`<a href="${href}" target="_blank" rel="sponsored noopener" class="inline-flex shrink-0 items-center justify-center rounded-full bg-cta px-5 py-2.5 font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover hover:shadow-md">${label}<span class="sr-only"> (opent ${provider} in een nieuw tabblad)</span></a>`;
 
 /**
- * A booking bar that stays in view at the bottom of the screen while reading a park's page, and settles at its end:
- * the cheapest weekend with its booking link, or the provider's page of a park without a free weekend.
+ * A booking bar that stays in view at the bottom of the screen while reading a page, and settles at its end: a
+ * weekend with its booking link, or the provider's page of a park without a free weekend.
+ * @param named whether to name the park: on a page of many parks, the bar holds its best deal
  */
-function bookingBar(park, weekend) {
+function bookingBar(park, weekend, { source = 'parkbalk', party = PAGE_PARTY, named = false } = {}) {
+  if (!park) return '';
   const provider = providerName(park.provider);
-  const parkUrl = trackedParkUrl(park, 'parkbalk');
+  const parkUrl = trackedParkUrl(park, source);
   if (!weekend && !parkUrl) return '';
   const bar = 'sticky bottom-3 z-20 mt-10 flex items-center gap-3 rounded-full bg-surface/95 py-2 pr-2 pl-5 shadow-lg ring-1 ring-line backdrop-blur';
   if (!weekend) {
@@ -452,11 +454,18 @@ function bookingBar(park, weekend) {
   return html`<div class="${bar}">
     <div class="min-w-0 flex-1 leading-tight">
       <p class="flex flex-wrap items-center gap-x-2"><span class="text-xl font-black tabular-nums">${formatEuros(weekend.priceCents)}</span>${percent >= NOTEWORTHY_PERCENT && html`<span class="rounded-full bg-sun px-2 py-0.5 text-xs font-black whitespace-nowrap text-on-sun">${percent}% voordeliger</span>`}</p>
-      <p class="truncate text-xs font-semibold text-ink-secondary">${formatWeekend(weekend)} · ${partyLabel(PAGE_PARTY)}</p>
+      <p class="truncate text-xs font-semibold text-ink-secondary">${named && html`<span class="font-extrabold text-ink">${fullName(park)}</span> · `}${formatWeekend(weekend)} · ${partyLabel(party)}</p>
     </div>
-    ${bookButton(park, weekend, 'parkbalk')}
+    ${bookButton(park, weekend, source, party)}
   </div>`;
 }
+
+/** The best deal among parks for a page's booking bar: its biggest deal, or else its cheapest weekend. */
+const bestOf = (parks) => byDeal(parks.filter((park) => park.weekends.length))[0] ?? null;
+const bestBar = (parks, options) => {
+  const park = bestOf(parks);
+  return park ? bookingBar(park, featuredWeekend(park), { ...options, named: true }) : '';
+};
 
 /** @param trail [href, label] pairs leading up to the page */
 const breadcrumb = (...trail) =>
@@ -824,7 +833,8 @@ function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes,
       <ul class="mt-4 space-y-2">${sorted.slice(0, LISTED_OFFERS).map(offerRow)}</ul>
     </section>
     <p class="mt-6"><a href="${appLink}" class="inline-flex items-center gap-2 rounded-full bg-sun-wash px-4 py-2 font-bold transition hover:bg-sun hover:text-on-sun"><span aria-hidden="true">🔎</span> ${sorted.length > LISTED_OFFERS ? `Bekijk alle ${sorted.length} parken van dit weekend, ook voor jouw gezelschap` : 'Met meer personen, kinderen of een hond? Zoek dit weekend voor jouw gezelschap'}</a></p>
-    <nav aria-label="Andere weekenden" class="mt-10 flex flex-wrap justify-between gap-4">${neighbour(previous, '←')}${neighbour(next, '→')}</nav>`;
+    <nav aria-label="Andere weekenden" class="mt-10 flex flex-wrap justify-between gap-4">${neighbour(previous, '←')}${neighbour(next, '→')}</nav>
+    ${bookingBar((deals[0] ?? sorted[0]).park, (deals[0] ?? sorted[0]).weekend, { source: 'weekendbalk', named: true })}`;
 
   return {
     path: weekendPath(weekend.arrival),
@@ -903,7 +913,8 @@ function placePage(name, parks, { path, place, emoji, pathOf, surroundings, link
         <p class="mt-1 text-sm text-ink-secondary">Wat de meeste parken hier in de buurt hebben.</p>
         <ul class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${places.map((spot) => placeCard(spot, { showDistance: false }))}</ul>
       </section>`
-    }`;
+    }
+    ${bestBar(parks, { source: 'regiobalk' })}`;
   return {
     path,
     // People search "vakantiepark Zeeland", not "weekendje weg Zeeland" (Google Trends): the title starts with it.
@@ -932,7 +943,8 @@ function themePage(theme, parks, { pathOf, themes, party }) {
     ${parkList(parks, { pathOf, source: 'themapagina', party, showStay: theme.showStay })}
     <nav aria-labelledby="other-themes" class="mt-10">${sectionTitle('other-themes', '✨', "Andere thema's")}<ul class="mt-4 flex flex-wrap gap-2">${themes.filter((other) => other !== theme).map(
       (other) => html`<li><a href="${themePath(other)}" class="${chip}"><span aria-hidden="true">${themeIcon(other)}</span> ${other.label}</a></li>`,
-    )}</ul></nav>`;
+    )}</ul></nav>
+    ${bestBar(parks, { source: 'themabalk', party })}`;
   return {
     path: themePath(theme),
     title: `${theme.name}: weekendje weg met de laagste prijzen`,
@@ -962,7 +974,8 @@ function lastMinutePage(weekends, { pathOf, occasionsOf }) {
   const body = html`
     ${banner('⏰', html`Last minute <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">vakantiepark</span>`, html`<p class="mt-3 max-w-3xl leading-relaxed font-semibold text-ink-secondary">Zin om er snel tussenuit te gaan? Dit zijn de vakantieparken die de komende weekenden nog plek hebben voor ${partyLabel(PAGE_PARTY)}, de grootste buitenkansjes eerst. Bijgewerkt na elke prijsronde.</p>`)}
     ${soon.map(section)}
-    ${soon.some(({ offers }) => offers.some((offer) => offer.weekend.weather)) && html`<p class="mt-4 text-xs text-ink-muted">${WEATHER_CREDIT}</p>`}`;
+    ${soon.some(({ offers }) => offers.some((offer) => offer.weekend.weather)) && html`<p class="mt-4 text-xs text-ink-muted">${WEATHER_CREDIT}</p>`}
+    ${soon[0] && bestBar(soon[0].offers.map(({ park, weekend }) => ({ ...park, weekends: [weekend] })), { source: 'lastminutebalk' })}`;
   const [first] = soon;
   return {
     path: '/last-minute',
@@ -994,7 +1007,8 @@ function parksIndex(parks, { pathOf, regions, themes, countries: countryPages })
         <h2 class="text-2xl font-black">${country}</h2>
         <ul class="mt-2 columns-1 gap-8 sm:columns-2">${[...list].sort((a, b) => fullName(a).localeCompare(fullName(b), 'nl')).map(parkRow)}</ul>
       </section>`,
-    )}`;
+    )}
+    ${bestBar(parks, { source: 'overzichtbalk' })}`;
   return {
     path: '/parken',
     title: 'Alle vakantieparken: weekendprijzen bij Landal, Topparken en Molecaten',
@@ -1004,7 +1018,7 @@ function parksIndex(parks, { pathOf, regions, themes, countries: countryPages })
   };
 }
 
-function weekendsIndex(weekends) {
+function weekendsIndex(weekends, { parks }) {
   const row = ({ weekend, offers }) => {
     const cheapest = cheapestOf(offers.map((offer) => offer.weekend));
     const deals = offers.filter((offer) => (offer.weekend.discount ?? 0) >= DEAL_SHARE).length;
@@ -1016,7 +1030,8 @@ function weekendsIndex(weekends) {
   };
   const body = html`
     ${banner('📅', 'Alle weekenden', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">Elk komend weekend (vrijdag tot maandag) met het aantal vakantieparken dat nog plek heeft voor ${partyLabel(PAGE_PARTY)} en de laagste prijs.</p><p class="mt-4"><a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a></p>`)}
-    <ul class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${weekends.map(row)}</ul>`;
+    <ul class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${weekends.map(row)}</ul>
+    ${bestBar(parks, { source: 'overzichtbalk' })}`;
   return {
     path: '/weekenden',
     title: 'Weekendje weg: alle komende weekenden met prijzen',
@@ -1132,7 +1147,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
 
   return [
     parksIndex(everyPark, { pathOf, regions, themes, countries }),
-    weekendsIndex(weekends),
+    weekendsIndex(weekends, { parks: everyPark }),
     lastMinutePage(weekends, { pathOf, occasionsOf: details.occasionsOf }),
     ...everyPark.map((park) =>
       parkPage(park, {

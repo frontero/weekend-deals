@@ -345,3 +345,20 @@ test('a park page always has a booking link in view: the bar with the cheapest w
   assert.match(full, /href="\/api\/go\?url=https%3A%2F%2Fwww\.landal\.nl%2Fparken%2Fsohojlandet&#38;park=SDT&#38;from=parkbalk"/);
   assert.match(full, /Bekijk bij Landal/);
 });
+
+test('every list page keeps its best deal in view, named, with a booking link of its own', () => {
+  for (const [path, source] of [
+    ['/weekend/2026-11-06', 'weekendbalk'],
+    ['/regio/limburg', 'regiobalk'],
+    ['/land/nederland', 'regiobalk'],
+    ['/last-minute', 'lastminutebalk'],
+    ['/parken', 'overzichtbalk'],
+    ['/weekenden', 'overzichtbalk'],
+  ]) {
+    const body = pageAt(path).body;
+    const bar = body.slice(body.lastIndexOf('sticky bottom-3'));
+    assert.match(bar, /Vakantiepark Gulpen/, path);
+    assert.match(bar, /25% voordeliger/, path);
+    assert.match(bar, new RegExp(`from=${source}`), path);
+  }
+});
