@@ -25,8 +25,8 @@ const DEAL_SHARE = 0.2;
 // A region or theme gets a page of its own from this many parks; fewer makes a thin list.
 const MIN_LISTED_PARKS = 3;
 const SHOWN_ACCOMMODATIONS = 8;
-// Region and theme pages show this many parks as cards with photo and booking button, the rest as a short list.
-const PARK_CARDS = 12;
+// Region, country and theme pages show this many park cards at first; the rest come with a button.
+const SHOWN_PARKS = 24;
 const REGION_PLACES = 6;
 // The last-minute page: the coming weekends, and per weekend this many parks as cards.
 const LAST_MINUTE_WEEKENDS = 2;
@@ -417,7 +417,7 @@ const photoSticker = (weekend) =>
 const POPULAR_NOTE = 'Veel aangeklikt op Weekendje weg in de afgelopen 7 dagen.';
 /** Parks visitors clicked through to most this week (see popularParks in server/overview.mjs). */
 const popularBadge = (park, classes = '') =>
-  park.popular && html`<span class="rounded-full bg-cta-wash px-2.5 py-0.5 text-xs font-extrabold whitespace-nowrap text-ink ${classes}" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair</span>`;
+  park.popular > 0 && html`<span class="rounded-full bg-cta-wash px-2.5 py-0.5 text-xs font-extrabold whitespace-nowrap text-ink ${classes}" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair</span>`;
 
 const WEATHER_CREDIT = 'Weersverwachting van MET Norway (yr.no).';
 
@@ -549,13 +549,21 @@ function byDeal(parks) {
  * book it.
  * @param showStay the accommodation behind the price instead of the park: for a series with a requirement
  */
-function parkCard(park, { pathOf, source, party = PAGE_PARTY, showStay = false }) {
+function parkCard(park, { pathOf, source, party = PAGE_PARTY, showStay = false, hidden = false }) {
   const shown = featuredWeekend(park);
+  const cheapest = cheapestOf(park.weekends);
   const stay = showStay && shown && park.accommodations?.[shown.accommodationCode];
   const image = stay?.photos?.[0] ?? park.imageUrl;
   // A name that is only a code ("LU4") tells a visitor nothing; then the photo says it.
   const stayName = /[a-z]/.test(stay?.name ?? '') ? stay.name : null;
-  return html`<li class="${card} flex flex-col transition hover:-translate-y-0.5 hover:shadow-lg">
+  // What the list's sort menu sorts on (see sortScript): the deal and price shown, the rating and the name.
+  const sortKeys = {
+    'data-deal': shown && discountPercent(shown) >= NOTEWORTHY_PERCENT ? discountPercent(shown) : 0,
+    'data-price': cheapest?.priceCents ?? NO_PRICE,
+    'data-rating': park.googleRating?.rating ?? 0,
+    'data-name': fullName(park),
+  };
+  return html`<li class="${card} flex flex-col transition hover:-translate-y-0.5 hover:shadow-lg" ${new Html(Object.entries(sortKeys).map(([key, value]) => `${key}="${escapeHtml(value)}"`).join(' '))}${hidden && new Html(' hidden')}>
     <div class="relative">${image && photo(image, stayName ? `${stayName} bij ${fullName(park)}` : fullName(park))}${photoSticker(shown)}${popularBadge(park, 'absolute top-3 right-3 shadow-sm')}</div>
     <div class="flex flex-1 flex-col gap-1 p-4">
       <a href="${pathOf(park)}" class="text-lg font-extrabold hover:underline">${fullName(park)}</a>
@@ -564,8 +572,9 @@ function parkCard(park, { pathOf, source, party = PAGE_PARTY, showStay = false }
       ${
         shown
           ? html`<p class="mt-auto flex flex-wrap items-baseline gap-2 pt-3"><span class="text-3xl font-black tabular-nums">${formatEuros(shown.priceCents)}</span>${discountPercent(shown) >= NOTEWORTHY_PERCENT && park.baselineCents && html`<s class="text-sm text-ink-muted">${formatEuros(park.baselineCents)}</s>`}</p>
-            <p class="mb-3 text-xs font-semibold text-ink-secondary">${formatWeekend(shown)} · ${partyLabel(party)}</p>
-            ${bookButton(park, shown, source, party)}`
+            <p class="text-xs font-semibold text-ink-secondary">${formatWeekend(shown)} · ${partyLabel(party)}</p>
+            ${cheapest !== shown && html`<p class="text-xs font-bold text-ink-secondary">Of vanaf ${formatEuros(cheapest.priceCents)} op ${formatWeekend(cheapest)}</p>`}
+            <div class="mt-3">${bookButton(park, shown, source, party)}</div>`
           : html`<p class="mt-auto pt-3 text-sm text-ink-secondary">Geen vrij weekend voor ${partyLabel(party)} in de komende maanden</p>`
       }
     </div>
@@ -585,17 +594,46 @@ const offerCard = ({ park, weekend: offer }, { pathOf, source }) =>
     </div>
   </li>`;
 
-/** The parks with the biggest deals as cards, the others as a list: a page with a hundred cards weighs too much. */
+// A price no park has, so parks without a free weekend sort last by price.
+const NO_PRICE = 999_999_999;
+
+// Sorts a park list in the browser, and shows the rest of it on request. Without JavaScript the list is all there,
+// biggest deals first: the noscript style shows the hidden cards and hides the controls.
+const sortScript = `(() => {
+  const list = document.querySelector('[data-parks]');
+  const menu = document.querySelector('[data-sort]');
+  const more = document.querySelector('[data-more]');
+  let all = false;
+  const number = (item, key) => Number(item.dataset[key]);
+  const orders = {
+    deal: (a, b) => number(b, 'deal') - number(a, 'deal') || number(a, 'price') - number(b, 'price'),
+    price: (a, b) => number(a, 'price') - number(b, 'price'),
+    rating: (a, b) => number(b, 'rating') - number(a, 'rating') || number(a, 'price') - number(b, 'price'),
+    name: (a, b) => a.dataset.name.localeCompare(b.dataset.name, 'nl'),
+  };
+  const show = () => [...list.children].forEach((item, index) => { item.hidden = !all && index >= ${SHOWN_PARKS}; });
+  menu.addEventListener('change', () => { list.append(...[...list.children].sort(orders[menu.value])); show(); });
+  more?.addEventListener('click', () => { all = true; show(); more.remove(); });
+})();`;
+
+/** The parks as cards, biggest deals first, with a menu to sort them otherwise; the first ones shown, the rest on request. */
 function parkList(parks, { pathOf, source, party = PAGE_PARTY, showStay = false }) {
   const sorted = byDeal(parks);
-  const row = (park) => {
-    const shown = featuredWeekend(park);
-    const deal = shown && discountPercent(shown) >= NOTEWORTHY_PERCENT && `${discountPercent(shown)}% voordeliger`;
-    return html`<li class="break-inside-avoid py-1.5"><a href="${pathOf(park)}" class="${link}">${fullName(park)}</a> <span class="text-sm text-ink-secondary">· ${placeOf(park)} · ${shown ? [deal, formatEuros(shown.priceCents)].filter(Boolean).join(', ') : 'geen plek'}</span></li>`;
-  };
-  return html`<p class="mt-6 text-sm font-semibold text-ink-secondary"><span aria-hidden="true">🔥</span> Grootste korting eerst: per park het weekend dat het verst onder de normale prijs van het park zit.</p>
-    <ul class="mt-3 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${sorted.slice(0, PARK_CARDS).map((park) => parkCard(park, { pathOf, source, party, showStay }))}</ul>
-    ${sorted.length > PARK_CARDS && html`<section aria-labelledby="more" class="mt-10">${sectionTitle('more', '🏕️', 'Meer parken')}<ul class="mt-3 columns-1 gap-8 sm:columns-2">${sorted.slice(PARK_CARDS).map(row)}</ul></section>`}`;
+  return html`<div class="mt-8 flex flex-wrap items-center justify-between gap-3" data-sort-controls>
+      <p class="font-extrabold">${count(sorted.length, 'park', 'parken')}</p>
+      <label class="flex items-center gap-2 text-sm font-bold">Sorteer op
+        <select data-sort class="rounded-full bg-surface px-3 py-2 font-bold ring-2 ring-line">
+          <option value="deal">Grootste korting</option>
+          <option value="price">Laagste prijs</option>
+          <option value="rating">Beste beoordeling</option>
+          <option value="name">Naam</option>
+        </select>
+      </label>
+    </div>
+    <ul data-parks class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${sorted.map((park, index) => parkCard(park, { pathOf, source, party, showStay, hidden: index >= SHOWN_PARKS }))}</ul>
+    ${sorted.length > SHOWN_PARKS && html`<p class="mt-6 text-center"><button type="button" data-more class="${chip}">Toon alle ${sorted.length} parken</button></p>`}
+    <noscript><style>[data-parks] > [hidden] { display: flex !important; } [data-sort-controls] label, [data-more] { display: none !important; }</style></noscript>
+    <script>${new Html(sortScript)}</script>`;
 }
 
 /** How many people an accommodation sleeps, from "Geschikt voor 4 personen" or Landal's name ("Timber Lodge 4"). */
@@ -707,7 +745,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
     ${breadcrumb(['/parken', 'Alle parken'], ...regionPages.slice(0, 1).map((name) => [regionPath(name), name]))}
     ${park.imageUrl && html`<div class="relative mt-3"><img src="${largePhoto(park.imageUrl)}" alt="${name}" class="aspect-[16/9] w-full rounded-[2rem] bg-line object-cover sm:aspect-[5/2]" />${photoSticker(cheapest)}</div>`}
     <h1 class="mt-5 text-4xl font-black tracking-tight sm:text-5xl">${name}</h1>
-    <p class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-semibold text-ink-secondary">${place && html`<span><span aria-hidden="true">📍</span> ${place}</span>`}<span>bij ${providerName(park.provider)}</span>${rating(park)}${park.popular && html`<span class="rounded-full bg-cta-wash px-3 py-1 text-sm font-extrabold text-ink" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair deze week</span>`}</p>
+    <p class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-semibold text-ink-secondary">${place && html`<span><span aria-hidden="true">📍</span> ${place}</span>`}<span>bij ${providerName(park.provider)}</span>${rating(park)}${park.popular > 0 && html`<span class="rounded-full bg-cta-wash px-3 py-1 text-sm font-extrabold text-ink" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair deze week</span>`}</p>
     ${
       cheapest
         ? html`<section aria-labelledby="cheapest" class="mt-6 flex flex-col gap-4 rounded-[2rem] bg-accent p-6 text-on-accent sm:flex-row sm:items-center">

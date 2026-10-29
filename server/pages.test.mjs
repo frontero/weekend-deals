@@ -326,11 +326,12 @@ test('list pages put the biggest deal first, and show that weekend on the card',
     details: { facilitiesOf: () => ['bos'] },
   });
   const body = built.find((page) => page.path === '/regio/drenthe').body;
-  assert.match(body, /Grootste korting eerst/);
+  assert.match(body, /<option value="deal">Grootste korting<\/option>/);
+  assert.doesNotMatch(body, /<div class="relative">0<\/div>/, 'no stray zero from a park without clicks');
   assert.ok(body.indexOf('Kansjespark') < body.indexOf('Goedkoop Park') && body.indexOf('Goedkoop Park') < body.indexOf('Vol Park'));
   const dealCard = body.slice(body.indexOf('Kansjespark'), body.indexOf('Goedkoop Park'));
   // The sticker sits on the photo, above the name.
-  assert.ok(body.indexOf('30% voordeliger') < body.indexOf('Kansjespark'));
+  assert.ok(body.indexOf('30% voordeliger') < body.indexOf('>Landal Kansjespark<'));
   assert.match(dealCard, /€\s280/);
   assert.match(dealCard, /vr 13 nov – ma 16 nov/);
 });
@@ -368,7 +369,9 @@ test('parks clicked through to often this week are marked popular, with what tha
   const park = built.find((page) => page.path === '/park/vakantiepark-gulpen').body;
   assert.match(park, /Populair deze week/);
   assert.match(park, /title="Veel aangeklikt op Weekendje weg in de afgelopen 7 dagen\."/);
-  assert.doesNotMatch(built.find((page) => page.path === '/park/hoogduin-b').body, /Populair/);
+  const quiet = built.find((page) => page.path === '/park/hoogduin-b').body;
+  assert.doesNotMatch(quiet, /Populair/);
+  assert.doesNotMatch(quiet, /<\/span>0<\/p>/, 'no stray zero after the rating');
   const hub = built.find((page) => page.path === '/parken').body;
   assert.match(hub, /id="popular"[^]*Vakantiepark Gulpen[^]*from=populair/);
   assert.doesNotMatch(pageAt('/parken').body, /Populair deze week/, 'no popular parks, no section');
