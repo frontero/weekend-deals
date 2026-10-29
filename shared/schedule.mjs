@@ -29,7 +29,7 @@ export function lastScheduledRound(schedule, now = new Date()) {
  * the public pages only: its prices come with the morning round alone.
  */
 export function roundFor(party, schedule, now = new Date()) {
-  if (!party.accommodationFeatures?.length) return lastScheduledRound(schedule, now);
+  if (!party.accommodationFeatures?.length && !party.pets) return lastScheduledRound(schedule, now);
   return schedule === 'manual' ? null : lastScheduledRound('daily', now);
 }
 

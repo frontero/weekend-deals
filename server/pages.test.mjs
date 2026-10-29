@@ -298,3 +298,18 @@ test('the hot tub page shows the hot tub series: its accommodation, price and bo
   assert.doesNotMatch(page.body, /Gewoon Park/);
   assert.ok(!build(() => null).some((entry) => entry.path === '/thema/huisje-met-hottub'), 'no series, no page');
 });
+
+test('the dog page shows the pet series for two people and a pet, and books for them', () => {
+  const park = (code, name) => ({ code, provider: 'landal', name, city: 'Ergens', country: 'NL', lat: 52, lng: 5 });
+  const parks = [park('D1', 'Hondenpark Een'), park('D2', 'Hondenpark Twee'), park('D3', 'Hondenpark Drie')];
+  const withPet = parks.map((entry) => ({ ...entry, brand: 'landal', accommodations: {}, weekends: [weekend('2026-11-06', '2026-11-09', 33000, null)] }));
+  const built = buildPages({
+    parks: [],
+    allParks: new Map(parks.map((entry) => [entry.code, entry])),
+    computedAt: '2026-10-29T06:39:10.572Z',
+    details: { facilitiesOf: () => ['bos'], parksOf: (key) => (key === 'a2-c0-p1' ? withPet : null) },
+  });
+  const page = built.find((entry) => entry.path === '/thema/vakantiepark-met-hond');
+  assert.match(page.body, /vr 6 nov – ma 9 nov · 2 personen en 1 huisdier/);
+  assert.match(page.body, /party=a2-c0-p1/);
+});

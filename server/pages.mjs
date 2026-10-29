@@ -12,7 +12,7 @@ import { providerName, trackedBookingUrl } from '../src/lib/providers.js';
 import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
-import { FEATURE_PARTIES, groupKey, parseGroupKey, partyLabel, STANDARD_PARTIES } from '../shared/party.mjs';
+import { groupKey, HOT_TUB_PARTY, parseGroupKey, partyLabel, PET_PARTY, STANDARD_PARTIES } from '../shared/party.mjs';
 
 // Two adults, the app's own default: the most searched-for weekend away.
 export const PAGE_PARTY = STANDARD_PARTIES[0];
@@ -77,12 +77,24 @@ const THEMES = [
     slug: 'huisje-met-hottub',
     facilities: [],
     minimum: 0,
-    party: groupKey(FEATURE_PARTIES[0]),
+    party: groupKey(HOT_TUB_PARTY),
     showStay: true,
     icon: '🛁',
     label: 'Huisje met hottub',
     name: 'Huisje met hottub of jacuzzi',
     intro: 'Na een dag buiten opwarmen in je eigen hottub of buitenbubbelbad, onder de sterren. De prijs is die van het goedkoopste huisje mét hottub op het park, voor 2 personen.',
+  },
+  {
+    // Its own price series too: two people and a pet, only accommodations where it may come.
+    slug: 'vakantiepark-met-hond',
+    facilities: [],
+    minimum: 0,
+    party: groupKey(PET_PARTY),
+    showStay: true,
+    icon: '🐕',
+    label: 'Met hond',
+    name: 'Vakantiepark met hond',
+    intro: 'Je hond mag mee: de prijs is die van het goedkoopste huisje waar een huisdier welkom is, voor 2 personen en 1 huisdier. Bij Landal zit de toeslag voor je hond in de prijs, bij Molecaten betaal je die apart.',
   },
   {
     slug: 'vakantiepark-met-kinderen',
@@ -466,13 +478,14 @@ function placeCard(spot, { showDistance = true } = {}) {
 function parkCard(park, { pathOf, source, party = PAGE_PARTY, showStay = false }) {
   const cheapest = cheapestOf(park.weekends);
   const stay = showStay && cheapest && park.accommodations?.[cheapest.accommodationCode];
+  // A name that is only a code ("LU4") tells a visitor nothing; it is left out, the photo stays.
   const image = stay?.photos?.[0] ?? park.imageUrl;
   return html`<li class="${card} flex flex-col transition hover:-translate-y-0.5 hover:shadow-lg">
     <div class="relative">${image && photo(image, stay ? `${stay.name} bij ${fullName(park)}` : fullName(park))}${photoSticker(cheapest)}</div>
     <div class="flex flex-1 flex-col gap-1 p-4">
       <a href="${pathOf(park)}" class="text-lg font-extrabold hover:underline">${fullName(park)}</a>
       <p class="flex flex-wrap gap-x-2 text-sm text-ink-secondary"><span><span aria-hidden="true">📍</span> ${placeOf(park)}</span>${rating(park)}</p>
-      ${stay?.name && html`<p class="text-sm font-bold"><span aria-hidden="true">🏡</span> ${stay.name}</p>`}
+      ${/[a-z]/.test(stay?.name ?? '') && html`<p class="text-sm font-bold"><span aria-hidden="true">🏡</span> ${stay.name}</p>`}
       ${
         cheapest
           ? html`<p class="mt-auto pt-3 text-3xl font-black tabular-nums">${formatEuros(cheapest.priceCents)}</p>

@@ -29,4 +29,5 @@ test('a series with a requirement takes its prices from the morning round only',
   assert.equal(roundFor(couple, 'twice-daily', evening).getHours(), 18);
   assert.equal(roundFor(hotTub, 'twice-daily', evening).getHours(), 6);
   assert.equal(roundFor(hotTub, 'manual', evening), null);
+  assert.equal(roundFor({ ...couple, pets: 1 }, 'twice-daily', evening).getHours(), 6);
 });
