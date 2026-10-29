@@ -141,6 +141,14 @@ const SCHEMA = `
     meta TEXT NOT NULL,
     parks BLOB NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS pages (
+    path TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    image TEXT,
+    body TEXT NOT NULL,
+    computed_at TEXT NOT NULL
+  );
 `;
 
 // Latest price per park and weekend, plus how that weekend's price behaved over all scans. The reference is the
@@ -1059,6 +1067,26 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
     /** @returns the gzipped park list as an ArrayBuffer, or null before the first round with these settings */
     async overviewParks(key) {
       return (await first(`SELECT parks FROM overviews WHERE group_key = ?`, key))?.parks ?? null;
+    },
+
+    /** The public pages (server/pages.mjs), all at once: a weekend gone by loses its page. One row per statement, as a page is large. */
+    async replacePages(pages, computedAt) {
+      const insert = `INSERT INTO pages (path, title, description, image, body, computed_at) VALUES (?, ?, ?, ?, ?, ?)`;
+      await client.batch(
+        [
+          'DELETE FROM pages',
+          ...pages.map((page) => ({ sql: insert, args: [page.path, page.title, page.description, page.image, page.body, computedAt] })),
+        ],
+        'write',
+      );
+    },
+
+    page(path) {
+      return first(`SELECT title, description, image, body FROM pages WHERE path = ?`, path);
+    },
+
+    pagePaths() {
+      return all(`SELECT path, computed_at AS computedAt FROM pages ORDER BY path`);
     },
 
     /** Everything the status call needs, in one round trip. */

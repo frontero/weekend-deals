@@ -1,6 +1,7 @@
 import { createCollector } from './collector.mjs';
 import { openDatabase } from './db.mjs';
 import { createApiHandler } from './handler.mjs';
+import { servePage } from './pages.mjs';
 
 const AUTO_SCAN_CHECK_MS = 15 * 60 * 1000;
 
@@ -46,6 +47,9 @@ export async function createApi({ client, googleApiKey = null, appUrl = null, af
     isAdmin: () => true,
   });
 
+  /** A park or weekend page, see server/pages.mjs; `stylesheet` is the app's, as this server serves it. */
+  const page = (request, stylesheet) => servePage(db, request, { stylesheet });
+
   function close() {
     clearInterval(timer);
     collector
@@ -54,5 +58,5 @@ export async function createApi({ client, googleApiKey = null, appUrl = null, af
       .finally(() => db.close());
   }
 
-  return { handle, close };
+  return { handle, page, close };
 }

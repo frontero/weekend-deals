@@ -395,3 +395,18 @@ test('keeps per provider how many searches failed, and reads older plain message
   assert.deepEqual(await db.providerErrors(), { molecaten: { error: 'fetch failed', failed: null, total: null } });
   db.close();
 });
+
+test('replaces all public pages at once, so a weekend gone by loses its page', async () => {
+  const db = await open('pages.db');
+  const page = (path) => ({ path, title: `Titel ${path}`, description: 'Omschrijving', image: null, body: '<h1>Hallo</h1>' });
+  await db.replacePages([page('/parken'), page('/weekend/2026-11-06')], '2026-10-29T06:00:00Z');
+  await db.replacePages([page('/parken'), page('/weekend/2026-11-13')], '2026-10-29T18:00:00Z');
+
+  assert.deepEqual(await db.pagePaths(), [
+    { path: '/parken', computedAt: '2026-10-29T18:00:00Z' },
+    { path: '/weekend/2026-11-13', computedAt: '2026-10-29T18:00:00Z' },
+  ]);
+  assert.deepEqual(await db.page('/parken'), { title: 'Titel /parken', description: 'Omschrijving', image: null, body: '<h1>Hallo</h1>' });
+  assert.equal(await db.page('/weekend/2026-11-06'), null);
+  db.close();
+});

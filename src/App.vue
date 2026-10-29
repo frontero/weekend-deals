@@ -468,6 +468,10 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
       affiliate-links: boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra,
       en het bepaalt niet welke parken je hier ziet.
     </p>
+    <nav aria-label="Overzichten" class="mx-auto flex max-w-7xl gap-4 px-4 pb-6 text-sm sm:px-6">
+      <a href="/weekenden" class="font-medium text-accent hover:underline">Alle weekenden</a>
+      <a href="/parken" class="font-medium text-accent hover:underline">Alle parken</a>
+    </nav>
   </footer>
 
   <FilterSheet v-model:open="filtersOpen" :result-count="cards.length" :can-clear="chips.length > 0" @clear="clearFilters">

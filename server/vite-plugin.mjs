@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { createApi } from './api.mjs';
 import { connect } from './connect.mjs';
+import { isPagePath } from './pages.mjs';
 
 async function toRequest(req) {
   let body;
@@ -24,13 +26,24 @@ async function send(res, response) {
 export function weekendDealsApi({ env, googleApiKey, appUrl = null, affiliateLinks = {}, collect = true }) {
   const log = (line) => console.log(`[weekend-deals] ${line}`);
 
-  const mount = async (server) => {
+  /** @param stylesheet the app's stylesheet for the park and weekend pages, as this server serves it */
+  const mount = async (server, stylesheet) => {
     const { client, where } = connect(env);
     log(`prices in ${where}`);
     const api = await createApi({ client, googleApiKey, appUrl, affiliateLinks, autoScan: collect, log });
     server.middlewares.use('/api', async (req, res) => send(res, await api.handle(await toRequest(req))));
+    server.middlewares.use(async (req, res, next) => {
+      if (!isPagePath(new URL(req.url, 'http://localhost').pathname)) return next();
+      send(res, await api.page(await toRequest(req), stylesheet));
+    });
     server.httpServer?.once('close', api.close);
   };
 
-  return { name: 'weekend-deals-api', configureServer: mount, configurePreviewServer: mount };
+  return {
+    name: 'weekend-deals-api',
+    configureServer: (server) => mount(server, '/src/style.css'),
+    // The built stylesheet's name changes with every build.
+    configurePreviewServer: (server) =>
+      mount(server, readFileSync('dist/index.html', 'utf8').match(/href="([^"]+\.css)"/)?.[1] ?? null),
+  };
 }

@@ -5,6 +5,7 @@ import { parkBrand } from '../shared/brands.mjs';
 import { accommodationGroups, facilityGroups, parkFacilities } from '../shared/facilities.mjs';
 import { groupKey } from '../shared/party.mjs';
 import { localToday, shiftDays } from '../shared/weekends.mjs';
+import { buildPages, PAGE_PARTY } from './pages.mjs';
 import { PROVIDERS } from './providers.mjs';
 
 // Half a year of weekends feeds each park's normal price.
@@ -92,6 +93,7 @@ export async function refreshOverview(db, { googleEnabled, party }) {
   const computedAt = new Date().toISOString();
   const { key, meta, parks } = await buildOverview(db, { googleEnabled, party });
   await db.saveOverview(key, { computedAt, meta: JSON.stringify(meta), parks: gzipSync(JSON.stringify(parks)) });
+  if (key === groupKey(PAGE_PARTY)) await db.replacePages(buildPages({ parks, allParks: await db.parks(), computedAt }), computedAt);
 }
 
 /**
