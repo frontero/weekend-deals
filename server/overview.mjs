@@ -3,16 +3,20 @@ import { availabilityTrends, bookingAdvice } from '../shared/advice.mjs';
 import { analysePrices } from '../shared/analysis.mjs';
 import { parkBrand } from '../shared/brands.mjs';
 import { accommodationGroups, facilityGroups, parkFacilities } from '../shared/facilities.mjs';
+import { weekendOccasions } from '../shared/occasions.mjs';
 import { groupKey } from '../shared/party.mjs';
 import { localToday, shiftDays } from '../shared/weekends.mjs';
 import { buildPages, PAGE_PARTY } from './pages.mjs';
 import { PROVIDERS } from './providers.mjs';
+import { goodWeekendWeather } from './weather.mjs';
 
 // Half a year of weekends feeds each park's normal price.
 const BASELINE_LOOKBACK_DAYS = 182;
 // The booking advice compares today's price with the price from at least this many days ago.
 const TREND_REFERENCE_DAYS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
+// A forecast older than this is no forecast any more.
+const WEATHER_MAX_AGE_MS = DAY_MS;
 
 /** The screen's data for one travel party: every park with its weekends, deals and advice. */
 export async function buildOverview(db, { googleEnabled, party }) {
@@ -30,6 +34,8 @@ export async function buildOverview(db, { googleEnabled, party }) {
     googleRatings,
     providerErrors,
     accommodations,
+    weather,
+    { holidays },
   ] = await Promise.all([
     db.priceSummaries(key, fromArrival, referenceBefore),
     db.availability(key, today),
@@ -39,13 +45,18 @@ export async function buildOverview(db, { googleEnabled, party }) {
     db.googleRatings(),
     db.providerErrors(),
     db.accommodations(),
+    db.parkWeather(new Date(Date.now() - WEATHER_MAX_AGE_MS).toISOString()),
+    db.schoolHolidays(),
   ]);
   const { parks } = analysePrices(summaries, today);
   const availability = availabilityTrends(availabilityRows);
-  const withAdvice = (provider) => (weekend) => ({
+  // Good weather only: a forecast of rain sells no weekend, so it is left out rather than shown.
+  const withAdvice = (provider, code) => (weekend) => ({
     ...weekend,
     advice: bookingAdvice({ ...weekend, today, availability: availability.get(`${provider}|${weekend.arrival}`) }),
+    weather: goodWeekendWeather(weather.get(code) ?? [], weekend) ?? undefined,
   });
+  const arrivals = [...new Map(parks.flatMap((park) => park.weekends).map((weekend) => [weekend.arrival, weekend])).values()];
   // Only the accommodations behind a shown price: the whole list is downloaded on every new overview.
   const accommodationsFor = (park) => {
     const known = accommodations.get(park.code) ?? {};
@@ -66,6 +77,10 @@ export async function buildOverview(db, { googleEnabled, party }) {
       facilityGroups: facilityGroups(),
       accommodationGroups: accommodationGroups(await db.facilityGroups('accommodation')),
       lastScan: await db.lastScan(key),
+      // Per weekend what makes it special: a long weekend, Valentine's Day, the school holidays.
+      occasions: Object.fromEntries(
+        arrivals.map((weekend) => [weekend.arrival, weekendOccasions(weekend, holidays)]).filter(([, list]) => list.length),
+      ),
     },
     parks: parks
       .filter((park) => park.weekends.length)
@@ -75,7 +90,7 @@ export async function buildOverview(db, { googleEnabled, party }) {
         return {
           ...info,
           ...park,
-          weekends: park.weekends.map(withAdvice(info?.provider ?? 'landal')),
+          weekends: park.weekends.map(withAdvice(info?.provider ?? 'landal', park.code)),
           brand: parkBrand({ provider: info?.provider, placeName: googleRating?.placeName, brandCode: info?.brandCode }),
           // The app's own filters, from Landal's facets or another provider's park page.
           facilities: parkFacilities({
@@ -91,15 +106,17 @@ export async function buildOverview(db, { googleEnabled, party }) {
 
 /** What the public pages tell about every park beyond its prices, also of parks without a free weekend. */
 async function pageDetails(db) {
-  const [landal, names, accommodations, surroundings, ratings] = await Promise.all([
+  const [landal, names, accommodations, surroundings, ratings, { holidays }] = await Promise.all([
     db.facilitiesByPark(),
     db.facilityNamesByPark(),
     db.accommodations(),
     db.surroundings(),
     db.googleRatings(),
+    db.schoolHolidays(),
   ]);
   const facilitiesOf = (code) => parkFacilities({ landal: landal.get(code) ?? [], names: names.get(code) ?? [] });
-  return { facilitiesOf, accommodations, surroundings, ratings };
+  const occasionsOf = (weekend) => weekendOccasions(weekend, holidays);
+  return { facilitiesOf, accommodations, surroundings, ratings, occasionsOf };
 }
 
 export async function refreshOverview(db, { googleEnabled, party }) {

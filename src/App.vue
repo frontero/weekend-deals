@@ -387,6 +387,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
               :deal="deal"
               :settings="overview.settings"
               :priced-for="overview.pricedFor"
+              :occasions="overview.occasions?.[deal.weekend.arrival] ?? []"
               @open="openPark(deal.park, deal.weekend.arrival, $event?.reviews)"
             />
           </div>
@@ -517,6 +518,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
     :settings="overview.settings"
     :priced-for="overview.pricedFor"
     :party-key="overview.shownParty ?? ''"
+    :occasions="overview.occasions ?? {}"
     @close="opened = null"
     @alert="openParkAlert"
   />

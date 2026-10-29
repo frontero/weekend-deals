@@ -17,6 +17,7 @@ import ParkLocation from './ParkLocation.vue';
 import PhotoCarousel from './PhotoCarousel.vue';
 import PriceColumns from './PriceColumns.vue';
 import PriceInsight from './PriceInsight.vue';
+import WeekendTags from './WeekendTags.vue';
 
 const props = defineProps({
   // The park with all its weekends, or null when closed.
@@ -33,6 +34,8 @@ const props = defineProps({
   pricedFor: { type: Object, default: null },
   // Group key of the party whose prices are shown, for the price history.
   partyKey: { type: String, default: '' },
+  // Per arrival date what makes the weekend special, see shared/occasions.mjs.
+  occasions: { type: Object, default: () => ({}) },
 });
 const emit = defineEmits(['close', 'alert']);
 const reviewsSection = ref(null);
@@ -151,6 +154,7 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
             <Icon name="calendar" class="size-4 text-ink-secondary" />
             {{ formatWeekend(focus) }} · {{ nights(focus) }} nachten
           </p>
+          <WeekendTags :weather="focus.weather" :occasions="occasions[focus.arrival] ?? []" explain class="mt-2" />
           <p v-if="accommodation" class="mt-1 flex items-center gap-1.5 text-sm text-ink-secondary">
             <Icon name="home" class="size-4" />
             {{ accommodation }}
@@ -225,7 +229,10 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
                 :aria-pressed="row.arrival === focusArrival"
                 @click="focusArrival = row.arrival"
               >
-                <span class="flex-1">{{ formatWeekend(row) }}</span>
+                <span class="flex-1">
+                  {{ formatWeekend(row) }}
+                  <span v-if="row.weather" title="Zonnig verwacht" aria-label="zonnig verwacht">☀</span>
+                </span>
                 <span class="hidden sm:block" :class="row.isDeal ? 'font-medium text-good-ink' : 'text-ink-secondary'">
                   {{ row.description }}
                 </span>

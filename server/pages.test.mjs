@@ -28,7 +28,7 @@ const gulpen = {
   accommodations: {},
   weekends: [
     weekend('2026-11-06', '2026-11-09', 30000, 0.25, { advice: { verdict: 'book', reasons: [{ code: 'leaving-soon', days: 3 }] } }),
-    weekend('2026-11-13', '2026-11-16', 42000, -0.05),
+    weekend('2026-11-13', '2026-11-16', 42000, -0.05, { weather: { maxTemp: 14 } }),
     weekend('2026-12-04', '2026-12-07', 52000, -0.3),
   ],
 };
@@ -81,6 +81,7 @@ const details = {
     ['VKB', [valkenier]],
   ]),
   ratings: new Map(),
+  occasionsOf: ({ arrival }) => (arrival === '2026-11-13' ? [{ label: 'Herfstvakantie Zuid', text: 'Het is herfstvakantie in regio Zuid.' }] : []),
 };
 
 const pages = buildPages({ parks: [gulpen, hoogduin], allParks, computedAt: '2026-10-29T06:39:10.572Z', details });
@@ -120,6 +121,17 @@ test("a park page tells where it lies, what to sleep in and when it is cheapest,
   // Where it lies is said in its text, not again as something to do.
   assert.doesNotMatch(body, /In het heuvelland/);
   assert.equal(body.match(/>De Valkenier</g).length, 1);
+});
+
+test('a weekend shows good weather and what makes it special, on the park and on its own page', () => {
+  const park = pageAt('/park/vakantiepark-gulpen').body;
+  assert.match(park, /Zonnig verwacht, tot 14 °C/);
+  assert.match(park, />Herfstvakantie Zuid</);
+  assert.match(park, /Weersverwachting van MET Norway/);
+  const page = pageAt('/weekend/2026-11-13').body;
+  assert.match(page, /Het is herfstvakantie in regio Zuid\./);
+  assert.match(page, /Bij 1 park wordt het een zonnig en droog weekend\./);
+  assert.doesNotMatch(pageAt('/weekend/2026-11-06').body, /Zonnig verwacht/);
 });
 
 test('a region page lists its parks with photos and booking, and the outings most of them have nearby', () => {

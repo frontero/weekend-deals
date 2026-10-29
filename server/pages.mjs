@@ -240,6 +240,16 @@ function compared(weekend) {
   return html`<span class="text-xs whitespace-nowrap text-ink-muted">${percent === 0 ? 'normale prijs' : `${-percent}% boven normaal`}</span>`;
 }
 
+const WEATHER_CREDIT = 'Weersverwachting van MET Norway (yr.no).';
+
+/** Only good weather is ever passed on (see server/weather.mjs); a forecast, and said so. */
+const weatherChip = (weather) =>
+  weather &&
+  html`<span class="rounded-full bg-warning-wash px-2 py-0.5 text-xs font-semibold whitespace-nowrap text-warning-ink" title="${WEATHER_CREDIT}"><span aria-hidden="true">☀</span> Zonnig verwacht, tot ${weather.maxTemp} °C</span>`;
+
+const occasionChips = (occasions) =>
+  occasions.map((occasion) => html`<span class="rounded-full bg-accent-wash px-2 py-0.5 text-xs font-medium whitespace-nowrap text-accent">${occasion.label}</span>`);
+
 function bookButton(park, weekend, source) {
   const provider = providerName(park.provider);
   return html`<a href="${trackedBookingUrl(park, weekend, PAGE_PARTY, source)}" target="_blank" rel="sponsored noopener" class="inline-flex shrink-0 items-center justify-center rounded-lg bg-accent px-4 py-2 font-semibold text-on-accent shadow-sm transition hover:bg-accent-hover">Boek bij ${provider}<span class="sr-only"> (opent ${provider} in een nieuw tabblad)</span></a>`;
@@ -344,7 +354,7 @@ function parkIntro(park, { accommodations, weekendCount }) {
 }
 
 /** @param themes the themes that have a page, by facility */
-function parkPage(park, { pathOf, nearby, updated, accommodations, places, weekendCount, hasRegionPage, themes: themeOf }) {
+function parkPage(park, { pathOf, nearby, updated, accommodations, places, weekendCount, hasRegionPage, themes: themeOf, occasionsOf }) {
   const name = fullName(park);
   const place = placeOf(park);
   const region = regionOf(park);
@@ -368,7 +378,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
     const advice = ['book', 'wait'].includes(weekend.advice?.verdict) ? weekend.advice : null;
     return html`<li class="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
       <div class="min-w-0 basis-full sm:basis-0 sm:flex-1">
-        <p class="flex flex-wrap items-center gap-x-2 gap-y-1"><a href="${weekendPath(weekend.arrival)}" class="${link}">${formatWeekend(weekend)}</a> ${compared(weekend)}</p>
+        <p class="flex flex-wrap items-center gap-x-2 gap-y-1"><a href="${weekendPath(weekend.arrival)}" class="${link}">${formatWeekend(weekend)}</a> ${compared(weekend)} ${weatherChip(weekend.weather)} ${occasionChips(occasionsOf(weekend))}</p>
         ${advice && html`<p class="mt-1 text-sm ${advice.verdict === 'book' ? 'text-good-ink' : 'text-ink-secondary'}">${verdictLabel(advice.verdict)}: ${reasonText(advice.reasons[0] ?? {})}</p>`}
       </div>
       <p class="flex-1 text-lg font-bold tabular-nums sm:flex-none">${formatEuros(weekend.priceCents)}</p>
@@ -418,7 +428,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
         ? html`<section aria-labelledby="cheapest" class="mt-6 flex flex-col gap-4 rounded-2xl bg-surface p-5 ring-1 ring-line sm:flex-row sm:items-center">
             <div class="flex-1">
               <h2 id="cheapest" class="text-sm font-medium text-ink-secondary">Goedkoopste weekend voor ${partyLabel(PAGE_PARTY)}</h2>
-              <p class="mt-1 font-semibold">${formatWeekend(cheapest)}</p>
+              <p class="mt-1 flex flex-wrap items-center gap-2 font-semibold">${formatWeekend(cheapest)} ${weatherChip(cheapest.weather)} ${occasionChips(occasionsOf(cheapest))}</p>
               <p class="mt-1 flex flex-wrap items-center gap-2"><span class="text-3xl font-bold tabular-nums">${formatEuros(cheapest.priceCents)}</span> ${compared(cheapest)}</p>
               <p class="text-xs text-ink-secondary">${stay(cheapest)}</p>
             </div>
@@ -459,6 +469,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
         <h2 id="weekends" class="text-xl font-semibold">Prijzen per weekend</h2>
         <p class="mt-1 text-sm text-ink-secondary">Vrijdag tot maandag voor ${partyLabel(PAGE_PARTY)}: het goedkoopste huisje van het park, inclusief toeslagen. Bijgewerkt op ${updated}.</p>
         <ul class="mt-2 divide-y divide-line">${park.weekends.map(weekendRow)}</ul>
+        ${park.weekends.some((weekend) => weekend.weather) && html`<p class="text-xs text-ink-muted">${WEATHER_CREDIT}</p>`}
       </section>`
     }
     <p class="mt-6 text-sm"><a href="${appLink}" class="${link}">Met meer personen, kinderen of een hond? Bekijk ${name} voor jouw gezelschap</a></p>
@@ -488,7 +499,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
   };
 }
 
-function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes }) {
+function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes, occasions }) {
   const sorted = [...offers].sort((a, b) => a.weekend.priceCents - b.weekend.priceCents);
   const deals = offers
     .filter(({ weekend: offer }) => (offer.discount ?? 0) >= DEAL_SHARE)
@@ -497,6 +508,8 @@ function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes 
   const from = formatEuros(sorted[0].weekend.priceCents);
   const dealCount = deals.length === 1 ? '1 park is' : `${deals.length} parken zijn`;
   const appLink = `/?${new URLSearchParams({ from: weekend.arrival, to: weekend.arrival, minDiscountPercent: '0' })}`;
+  const sunny = offers.filter((offer) => offer.weekend.weather).length;
+  const fireworksFree = occasions.some((occasion) => occasion.label === 'Oud en nieuw') && [...themes.values()].find((theme) => theme.facility === 'vuurwerkvrij');
   // Per theme the cheapest park that has it this weekend and is not named for another theme yet.
   const named = new Set();
   const themed = [...themes.values()]
@@ -515,6 +528,7 @@ function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes 
         <span class="text-sm text-ink-secondary">${placeOf(park)}</span>
         <p class="mt-auto flex flex-wrap items-center gap-2"><span class="text-2xl font-bold tabular-nums">${formatEuros(offer.priceCents)}</span> ${compared(offer)}</p>
         ${park.baselineCents && html`<p class="text-xs text-ink-secondary">normaal ${formatEuros(park.baselineCents)}</p>`}
+        ${offer.weather && html`<p>${weatherChip(offer.weather)}</p>`}
         ${bookButton(park, offer, 'weekendpagina')}
       </div>
     </li>`;
@@ -523,7 +537,7 @@ function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes 
     html`<li class="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
       <div class="min-w-0 basis-full sm:basis-0 sm:flex-1">
         <a href="${pathOf(park)}" class="${link}">${fullName(park)}</a>
-        <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-secondary">${placeOf(park)} ${compared(offer)}</p>
+        <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-secondary">${placeOf(park)} ${compared(offer)} ${weatherChip(offer.weather)}</p>
       </div>
       <p class="flex-1 text-lg font-bold tabular-nums sm:flex-none">${formatEuros(offer.priceCents)}</p>
       ${bookButton(park, offer, 'weekendpagina')}
@@ -536,6 +550,13 @@ function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes 
     ${breadcrumb(['/weekenden', 'Alle weekenden'])}
     <h1 class="mt-2 text-3xl font-bold tracking-tight">Weekendje weg ${range}</h1>
     <p class="mt-2 max-w-2xl text-ink-secondary">${offers.length} vakantieparken hebben nog plek van ${formatWeekend(weekend)} voor ${partyLabel(PAGE_PARTY)}, vanaf ${from}. ${deals.length > 0 && `${dealCount} minstens ${Math.round(DEAL_SHARE * 100)}% goedkoper dan normaal.`}</p>
+    ${
+      (occasions.length > 0 || sunny > 0) &&
+      html`<div class="mt-4 flex max-w-2xl flex-col gap-2 rounded-2xl bg-surface p-4 ring-1 ring-line">
+        ${occasions.length > 0 && html`<p class="flex flex-wrap items-center gap-2">${occasionChips(occasions)} <span>${occasions.map((occasion) => occasion.text).join(' ')}</span>${fireworksFree && html` <a href="${themePath(fireworksFree)}" class="${link}">Vuurwerkvrije parken</a>`}</p>`}
+        ${sunny > 0 && html`<p class="flex flex-wrap items-center gap-2">${weatherChip({ maxTemp: Math.max(...offers.filter((offer) => offer.weekend.weather).map((offer) => offer.weekend.weather.maxTemp)) })} <span>Bij ${count(sunny, 'park', 'parken')} wordt het een zonnig en droog weekend. <span class="text-xs text-ink-muted">${WEATHER_CREDIT}</span></span></p>`}
+      </div>`
+    }
     ${
       deals.length > 0 &&
       html`<section aria-labelledby="deals" class="mt-6">
@@ -729,7 +750,13 @@ function weekendsIndex(weekends) {
   };
 }
 
-const NO_DETAILS = { facilitiesOf: () => [], accommodations: new Map(), surroundings: new Map(), ratings: new Map() };
+const NO_DETAILS = {
+  facilitiesOf: () => [],
+  accommodations: new Map(),
+  surroundings: new Map(),
+  ratings: new Map(),
+  occasionsOf: () => [],
+};
 
 /**
  * Every page: one per park, one per weekend, one per region and theme with enough parks, and the lists. A park
@@ -739,7 +766,8 @@ const NO_DETAILS = { facilitiesOf: () => [], accommodations: new Map(), surround
  * @param computedAt when the prices were put together
  * @param details what the pages tell beyond prices, for every park: see pageDetails in server/overview.mjs
  */
-export function buildPages({ parks, allParks, computedAt, details = NO_DETAILS }) {
+export function buildPages({ parks, allParks, computedAt, details: given = {} }) {
+  const details = { ...NO_DETAILS, ...given };
   const priced = new Map(parks.map((park) => [park.code, park]));
   // Accommodations by name: a provider can list a few with the same name, which to a reader is one sort.
   const accommodationsOf = (park) => [
@@ -819,6 +847,7 @@ export function buildPages({ parks, allParks, computedAt, details = NO_DETAILS }
         weekendCount: weekends.length,
         hasRegionPage: regionsWithPage.has(regionOf(park)),
         themes: themeOf,
+        occasionsOf: details.occasionsOf,
       }),
     ),
     ...weekends.map(({ weekend, offers }, index) =>
@@ -828,6 +857,7 @@ export function buildPages({ parks, allParks, computedAt, details = NO_DETAILS }
         next: weekends[index + 1]?.weekend,
         updated,
         themes: themeOf,
+        occasions: details.occasionsOf(weekend),
       }),
     ),
     ...regions.map(([region, list]) => regionPage(region, list, { pathOf, surroundings: details.surroundings })),

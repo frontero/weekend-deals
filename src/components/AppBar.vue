@@ -36,6 +36,7 @@ const progressLabel = computed(() =>
     accommodations: 'Huisjes ophalen',
     ratings: 'Google-scores ophalen',
     surroundings: 'Omgeving ophalen',
+    weather: 'Weerbericht ophalen',
   })[
     props.scan.phase
   ] ?? 'Prijzen ophalen',

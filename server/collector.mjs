@@ -13,6 +13,8 @@ import { overviewIsStale, refreshOverview } from './overview.mjs';
 import { activeProviders, PROVIDERS, providerBrand } from './providers.mjs';
 import { roundInProgress } from './status.mjs';
 import { fetchSurroundings } from './surroundings.mjs';
+import { fetchSchoolHolidays } from './holidays.mjs';
+import { fetchForecast } from './weather.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Park facilities hardly change, and mapping them costs a few hundred requests.
@@ -25,6 +27,8 @@ const RATING_MAX_AGE_MS = 30 * DAY_MS;
 const SURROUNDINGS_MAX_AGE_MS = 182 * DAY_MS;
 // Wikidata's query service asks for light use, and one lookup can take half a minute.
 const SURROUNDINGS_PER_ROUND = 10;
+// School holidays are set years ahead; a monthly look picks up the next school year once it is published.
+const SCHOOL_HOLIDAYS_MAX_AGE_MS = 30 * DAY_MS;
 // Other processes see the progress this often; every step would be a write over the network.
 const PROGRESS_WRITE_MS = 5000;
 // A size whose round failed or was interrupted is tried again, but at most every half hour and three times per
@@ -303,6 +307,35 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
     }
   }
 
+  /**
+   * The forecast for every park, for the coming weekends' good-weather notes; parks close together share one
+   * request. Extra: a failing park is only logged, and its old forecast ages out.
+   */
+  async function refreshWeather() {
+    const parks = [...(await db.parks()).values()].filter((park) => park.lat != null && park.lng != null);
+    const byCell = Map.groupBy(parks, (park) => `${park.lat.toFixed(2)},${park.lng.toFixed(2)}`);
+    await startPhase('weather', byCell.size);
+    for (const cell of byCell.values()) {
+      try {
+        const days = await fetchForecast(cell[0]);
+        throwIfCancelled();
+        for (const park of cell) await db.saveParkWeather(park.code, days);
+      } catch (error) {
+        if (cancelled) throw error;
+        log(`${cell[0].code} weather failed: ${error.message}`);
+      }
+      await step();
+    }
+  }
+
+  async function refreshSchoolHolidays() {
+    const { fetchedAt } = await db.schoolHolidays();
+    if (fetchedAt && Date.now() - Date.parse(fetchedAt) < SCHOOL_HOLIDAYS_MAX_AGE_MS) return;
+    const holidays = await fetchSchoolHolidays(localToday());
+    // A failed fetch leaves the holidays known so far.
+    if (holidays.length) await db.saveSchoolHolidays(holidays);
+  }
+
   /** Rebuilds the screen's data of each collected party whose data is missing or outdated. */
   async function updateOverviews() {
     if (cancelled) return;
@@ -412,6 +445,9 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
       await refreshRatings();
       throwIfCancelled();
       await refreshSurroundings().catch((error) => log(`surroundings failed: ${error.message}`));
+      throwIfCancelled();
+      await refreshWeather().catch((error) => log(`weather failed: ${error.message}`));
+      await refreshSchoolHolidays().catch((error) => log(`school holidays failed: ${error.message}`));
     });
 
     if (rerunRequested && !cancelled) {

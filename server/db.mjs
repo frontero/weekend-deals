@@ -154,6 +154,11 @@ const SCHEMA = `
     places TEXT NOT NULL,
     fetched_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS park_weather (
+    park_code TEXT PRIMARY KEY,
+    days TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+  );
 `;
 
 // Latest price per park and weekend, plus how that weekend's price behaved over all scans. The reference is the
@@ -509,6 +514,29 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
           ON CONFLICT (park_code) DO UPDATE SET places = excluded.places, fetched_at = excluded.fetched_at`,
         args: [parkCode, JSON.stringify(places), fetchedAt],
       });
+    },
+
+    /** The weather forecast per park (server/weather.mjs), only those fetched since `since`: park code → days. */
+    async parkWeather(since) {
+      const rows = await all(`SELECT park_code AS parkCode, days FROM park_weather WHERE fetched_at >= ?`, since);
+      return new Map(rows.map((row) => [row.parkCode, JSON.parse(row.days)]));
+    },
+
+    async saveParkWeather(parkCode, days, fetchedAt = new Date().toISOString()) {
+      await client.execute({
+        sql: `INSERT INTO park_weather (park_code, days, fetched_at) VALUES (?, ?, ?)
+          ON CONFLICT (park_code) DO UPDATE SET days = excluded.days, fetched_at = excluded.fetched_at`,
+        args: [parkCode, JSON.stringify(days), fetchedAt],
+      });
+    },
+
+    /** The school holidays (server/holidays.mjs) and when they were fetched: { holidays, fetchedAt }. */
+    async schoolHolidays() {
+      return parseJson(await readSetting('schoolHolidays'), { holidays: [], fetchedAt: null });
+    },
+
+    async saveSchoolHolidays(holidays, fetchedAt = new Date().toISOString()) {
+      await writeSetting('schoolHolidays', JSON.stringify({ holidays, fetchedAt }));
     },
 
     /** Parks with coordinates whose surroundings are missing or were fetched before `fetchedBefore`, oldest first. */

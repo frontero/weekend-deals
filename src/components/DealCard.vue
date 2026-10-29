@@ -9,6 +9,7 @@ import AdviceBadge from './AdviceBadge.vue';
 import BrandBadge from './BrandBadge.vue';
 import GoogleRating from './GoogleRating.vue';
 import Icon from './Icon.vue';
+import WeekendTags from './WeekendTags.vue';
 import ParkLocation from './ParkLocation.vue';
 import PhotoCarousel from './PhotoCarousel.vue';
 
@@ -18,6 +19,8 @@ const props = defineProps({
   settings: { type: Object, required: true },
   // The party size the listed prices are for; the park panel gives the exact party's price.
   pricedFor: { type: Object, default: null },
+  // What makes this weekend special, see shared/occasions.mjs.
+  occasions: { type: Array, default: () => [] },
 });
 const emit = defineEmits(['open']);
 
@@ -95,6 +98,7 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
           · +{{ otherWeekends }} {{ otherWeekends === 1 ? 'weekend' : 'weekenden' }}
         </span>
       </p>
+      <WeekendTags :weather="weekend.weather" :occasions="occasions" />
       <p v-if="accommodation" class="flex min-w-0 items-center gap-1.5 text-sm text-ink-secondary" :title="accommodation">
         <Icon name="home" class="size-4" />
         <span class="truncate">{{ accommodation }}</span>
