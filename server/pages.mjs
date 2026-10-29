@@ -414,6 +414,11 @@ function compared(weekend) {
 const photoSticker = (weekend) =>
   weekend && discountPercent(weekend) >= NOTEWORTHY_PERCENT && html`<span class="${sticker} absolute top-3 left-3">${discountPercent(weekend)}% voordeliger</span>`;
 
+const POPULAR_NOTE = 'Veel aangeklikt op Weekendje weg in de afgelopen 7 dagen.';
+/** Parks visitors clicked through to most this week (see popularParks in server/overview.mjs). */
+const popularBadge = (park, classes = '') =>
+  park.popular && html`<span class="rounded-full bg-cta-wash px-2.5 py-0.5 text-xs font-extrabold whitespace-nowrap text-ink ${classes}" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair</span>`;
+
 const WEATHER_CREDIT = 'Weersverwachting van MET Norway (yr.no).';
 
 /** Only good weather is ever passed on (see server/weather.mjs); a forecast, and said so. */
@@ -458,6 +463,17 @@ function bookingBar(park, weekend, { source = 'parkbalk', party = PAGE_PARTY, na
     </div>
     ${bookButton(park, weekend, source, party)}
   </div>`;
+}
+
+/** The parks visitors clicked through to most this week, as cards; nothing while none reached the threshold. */
+function popularSection(parks, { pathOf, id = 'popular' }) {
+  const popular = parks.filter((park) => park.popular && park.weekends.length).sort((a, b) => b.popular - a.popular).slice(0, LAST_MINUTE_CARDS);
+  if (!popular.length) return '';
+  return html`<section aria-labelledby="${id}" class="mt-10">
+    ${sectionTitle(id, '🔥', 'Populair deze week')}
+    <p class="mt-1 text-sm text-ink-secondary">${POPULAR_NOTE}</p>
+    <ul class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${popular.map((park) => parkCard(park, { pathOf, source: 'populair' }))}</ul>
+  </section>`;
 }
 
 /** The best deal among parks for a page's booking bar: its biggest deal, or else its cheapest weekend. */
@@ -540,7 +556,7 @@ function parkCard(park, { pathOf, source, party = PAGE_PARTY, showStay = false }
   // A name that is only a code ("LU4") tells a visitor nothing; then the photo says it.
   const stayName = /[a-z]/.test(stay?.name ?? '') ? stay.name : null;
   return html`<li class="${card} flex flex-col transition hover:-translate-y-0.5 hover:shadow-lg">
-    <div class="relative">${image && photo(image, stayName ? `${stayName} bij ${fullName(park)}` : fullName(park))}${photoSticker(shown)}</div>
+    <div class="relative">${image && photo(image, stayName ? `${stayName} bij ${fullName(park)}` : fullName(park))}${photoSticker(shown)}${popularBadge(park, 'absolute top-3 right-3 shadow-sm')}</div>
     <div class="flex flex-1 flex-col gap-1 p-4">
       <a href="${pathOf(park)}" class="text-lg font-extrabold hover:underline">${fullName(park)}</a>
       <p class="flex flex-wrap gap-x-2 text-sm text-ink-secondary"><span><span aria-hidden="true">📍</span> ${placeOf(park)}</span>${rating(park)}</p>
@@ -559,7 +575,7 @@ function parkCard(park, { pathOf, source, party = PAGE_PARTY, showStay = false }
 /** One park's offer for one weekend as a card: the weekend and last-minute pages. */
 const offerCard = ({ park, weekend: offer }, { pathOf, source }) =>
   html`<li class="${card} flex flex-col transition hover:-translate-y-0.5 hover:shadow-lg">
-    <div class="relative">${park.imageUrl && photo(park.imageUrl, fullName(park))}${photoSticker(offer)}</div>
+    <div class="relative">${park.imageUrl && photo(park.imageUrl, fullName(park))}${photoSticker(offer)}${popularBadge(park, 'absolute top-3 right-3 shadow-sm')}</div>
     <div class="flex flex-1 flex-col gap-2 p-4">
       <a href="${pathOf(park)}" class="text-lg font-extrabold hover:underline">${fullName(park)}</a>
       <span class="text-sm text-ink-secondary"><span aria-hidden="true">📍</span> ${placeOf(park)}</span>
@@ -691,7 +707,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
     ${breadcrumb(['/parken', 'Alle parken'], ...regionPages.slice(0, 1).map((name) => [regionPath(name), name]))}
     ${park.imageUrl && html`<div class="relative mt-3"><img src="${largePhoto(park.imageUrl)}" alt="${name}" class="aspect-[16/9] w-full rounded-[2rem] bg-line object-cover sm:aspect-[5/2]" />${photoSticker(cheapest)}</div>`}
     <h1 class="mt-5 text-4xl font-black tracking-tight sm:text-5xl">${name}</h1>
-    <p class="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-semibold text-ink-secondary">${place && html`<span><span aria-hidden="true">📍</span> ${place}</span>`}<span>bij ${providerName(park.provider)}</span>${rating(park)}</p>
+    <p class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-semibold text-ink-secondary">${place && html`<span><span aria-hidden="true">📍</span> ${place}</span>`}<span>bij ${providerName(park.provider)}</span>${rating(park)}${park.popular && html`<span class="rounded-full bg-cta-wash px-3 py-1 text-sm font-extrabold text-ink" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair deze week</span>`}</p>
     ${
       cheapest
         ? html`<section aria-labelledby="cheapest" class="mt-6 flex flex-col gap-4 rounded-[2rem] bg-accent p-6 text-on-accent sm:flex-row sm:items-center">
@@ -960,7 +976,7 @@ function themePage(theme, parks, { pathOf, themes, party }) {
 }
 
 /** The coming weekends with room, the biggest deals first: for whoever wants to go away now. */
-function lastMinutePage(weekends, { pathOf, occasionsOf }) {
+function lastMinutePage(weekends, { pathOf, occasionsOf, parks }) {
   const soon = weekends.slice(0, LAST_MINUTE_WEEKENDS);
   const section = ({ weekend, offers }, index) => {
     // The biggest deals first, then the cheapest: a weekend without deals still shows its best prices.
@@ -979,6 +995,7 @@ function lastMinutePage(weekends, { pathOf, occasionsOf }) {
   const body = html`
     ${banner('⏰', html`Last minute <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">vakantiepark</span>`, html`<p class="mt-3 max-w-3xl leading-relaxed font-semibold text-ink-secondary">Zin om er snel tussenuit te gaan? Dit zijn de vakantieparken die de komende weekenden nog plek hebben voor ${partyLabel(PAGE_PARTY)}, de grootste buitenkansjes eerst. Bijgewerkt na elke prijsronde.</p>`)}
     ${soon.map(section)}
+    ${popularSection(parks, { pathOf })}
     ${soon.some(({ offers }) => offers.some((offer) => offer.weekend.weather)) && html`<p class="mt-4 text-xs text-ink-muted">${WEATHER_CREDIT}</p>`}
     ${soon[0] && bestBar(soon[0].offers.map(({ park, weekend }) => ({ ...park, weekends: [weekend] })), { source: 'lastminutebalk' })}`;
   const [first] = soon;
@@ -1004,6 +1021,7 @@ function parksIndex(parks, { pathOf, regions, themes, countries: countryPages })
     html`<ul class="mt-4 flex flex-wrap gap-2">${items.map(([href, emoji, label, number]) => html`<li><a href="${href}" class="${chip}"><span aria-hidden="true">${emoji}</span> ${label} <span class="text-ink-muted">${number}</span></a></li>`)}</ul>`;
   const body = html`
     ${banner('🏕️', 'Alle vakantieparken', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">${parks.length} parken van Landal, Topparken en Molecaten, met de laagste weekendprijs voor ${partyLabel(PAGE_PARTY)} (vrijdag tot maandag).</p><p class="mt-4"><a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a></p>`)}
+    ${popularSection(parks, { pathOf })}
     <section aria-labelledby="themes" class="mt-10">${sectionTitle('themes', '✨', 'Per thema')}${chips(themes.map(([theme, list]) => [themePath(theme), themeIcon(theme), theme.label, list.length]))}</section>
     <section aria-labelledby="countries" class="mt-10">${sectionTitle('countries', '🌍', 'Per land')}${chips(countryPages.map(([country, list]) => [countryPath(country), '📍', countryName(country), list.length]))}</section>
     <section aria-labelledby="regions" class="mt-10">${sectionTitle('regions', '🗺️', 'Per regio')}${chips(regions.map(([region, list]) => [regionPath(region), '📍', region, list.length]))}</section>
@@ -1023,7 +1041,7 @@ function parksIndex(parks, { pathOf, regions, themes, countries: countryPages })
   };
 }
 
-function weekendsIndex(weekends, { parks }) {
+function weekendsIndex(weekends, { parks, pathOf }) {
   const row = ({ weekend, offers }) => {
     const cheapest = cheapestOf(offers.map((offer) => offer.weekend));
     const deals = offers.filter((offer) => (offer.weekend.discount ?? 0) >= DEAL_SHARE).length;
@@ -1035,6 +1053,7 @@ function weekendsIndex(weekends, { parks }) {
   };
   const body = html`
     ${banner('📅', 'Alle weekenden', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">Elk komend weekend (vrijdag tot maandag) met het aantal vakantieparken dat nog plek heeft voor ${partyLabel(PAGE_PARTY)} en de laagste prijs.</p><p class="mt-4"><a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a></p>`)}
+    ${popularSection(parks, { pathOf })}
     <ul class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${weekends.map(row)}</ul>
     ${bestBar(parks, { source: 'overzichtbalk' })}`;
   return {
@@ -1054,6 +1073,8 @@ const NO_DETAILS = {
   occasionsOf: () => [],
   // Another party size's overview, by group key, for themes that show its prices.
   parksOf: () => null,
+  // Clicks this week per popular park.
+  popular: new Map(),
 };
 
 /**
@@ -1078,7 +1099,8 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
   const everyPark = [...allParks.values()]
     .map((info) => {
       const park = priced.get(info.code);
-      if (park) return { ...park, facilities: park.facilities?.length ? park.facilities : details.facilitiesOf(info.code) };
+      const popular = details.popular.get(info.code) ?? 0;
+      if (park) return { ...park, popular, facilities: park.facilities?.length ? park.facilities : details.facilitiesOf(info.code) };
       const placeName = details.ratings.get(info.code)?.placeName;
       return {
         ...info,
@@ -1086,6 +1108,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
         brand: parkBrand({ ...info, placeName }),
         facilities: details.facilitiesOf(info.code),
         googleRating: details.ratings.get(info.code) ?? null,
+        popular,
       };
     })
     // Without prices, facilities, accommodations or surroundings a page would say next to nothing.
@@ -1140,7 +1163,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
     const own = details.parksOf(theme.party) ?? [];
     return own
       .filter((park) => pathOf(park))
-      .map((park) => ({ ...park, facilities: facilitiesOf.get(park.code) ?? [] }))
+      .map((park) => ({ ...park, facilities: facilitiesOf.get(park.code) ?? [], popular: details.popular.get(park.code) ?? 0 }))
       .filter((park) => fitsTheme(theme, park));
   };
   const themes = THEMES.map((theme) => [theme, themeParks(theme)]).filter(enough);
@@ -1152,8 +1175,8 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
 
   return [
     parksIndex(everyPark, { pathOf, regions, themes, countries }),
-    weekendsIndex(weekends, { parks: everyPark }),
-    lastMinutePage(weekends, { pathOf, occasionsOf: details.occasionsOf }),
+    weekendsIndex(weekends, { parks: everyPark, pathOf }),
+    lastMinutePage(weekends, { pathOf, occasionsOf: details.occasionsOf, parks: everyPark }),
     ...everyPark.map((park) =>
       parkPage(park, {
         pathOf,

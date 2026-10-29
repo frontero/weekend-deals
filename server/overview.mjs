@@ -16,6 +16,13 @@ const BASELINE_LOOKBACK_DAYS = 182;
 const TREND_REFERENCE_DAYS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FAMILY_KEY = 'a4-c0';
+// "Populair deze week": parks visitors clicked through to the provider at least this often in the last days. A
+// threshold, so a handful of clicks makes nothing popular.
+const POPULAR_DAYS = 7;
+const POPULAR_MIN_CLICKS = 5;
+const POPULAR_LIMIT = 12;
+const popularParks = (db) =>
+  db.popularParks(new Date(Date.now() - POPULAR_DAYS * DAY_MS).toISOString(), { minimum: POPULAR_MIN_CLICKS, limit: POPULAR_LIMIT });
 // A forecast older than this is no forecast any more.
 const WEATHER_MAX_AGE_MS = DAY_MS;
 
@@ -37,6 +44,7 @@ export async function buildOverview(db, { googleEnabled, party }) {
     accommodations,
     weather,
     { holidays },
+    popular,
   ] = await Promise.all([
     db.priceSummaries(key, fromArrival, referenceBefore),
     db.availability(key, today),
@@ -48,6 +56,7 @@ export async function buildOverview(db, { googleEnabled, party }) {
     db.accommodations(),
     db.parkWeather(new Date(Date.now() - WEATHER_MAX_AGE_MS).toISOString()),
     db.schoolHolidays(),
+    popularParks(db),
   ]);
   const { parks } = analysePrices(summaries, today);
   const availability = availabilityTrends(availabilityRows);
@@ -78,6 +87,8 @@ export async function buildOverview(db, { googleEnabled, party }) {
       facilityGroups: facilityGroups(),
       accommodationGroups: accommodationGroups(await db.facilityGroups('accommodation')),
       lastScan: await db.lastScan(key),
+      // Parks visitors clicked through to most this week, most first.
+      popular: [...popular.keys()],
       // Per weekend what makes it special: a long weekend, Valentine's Day, the school holidays.
       occasions: Object.fromEntries(
         arrivals.map((weekend) => [weekend.arrival, weekendOccasions(weekend, holidays)]).filter(([, list]) => list.length),
@@ -109,20 +120,21 @@ export async function buildOverview(db, { googleEnabled, party }) {
 async function pageDetails(db) {
   // Themes with prices of their own party, from that party's latest overview: four people, and the hot tub series.
   const themeKeys = [FAMILY_KEY, ...FEATURE_PARTIES.map(groupKey)];
-  const [landal, names, accommodations, surroundings, ratings, { holidays }, ...themeOverviews] = await Promise.all([
+  const [landal, names, accommodations, surroundings, ratings, { holidays }, popular, ...themeOverviews] = await Promise.all([
     db.facilitiesByPark(),
     db.facilityNamesByPark(),
     db.accommodations(),
     db.surroundings(),
     db.googleRatings(),
     db.schoolHolidays(),
+    popularParks(db),
     ...themeKeys.map((key) => db.overviewParks(key)),
   ]);
   const facilitiesOf = (code) => parkFacilities({ landal: landal.get(code) ?? [], names: names.get(code) ?? [] });
   const occasionsOf = (weekend) => weekendOccasions(weekend, holidays);
   const themeParks = new Map(themeKeys.map((key, index) => [key, themeOverviews[index] ? JSON.parse(gunzipSync(themeOverviews[index])) : null]));
   const parksOf = (key) => themeParks.get(key) ?? null;
-  return { facilitiesOf, accommodations, surroundings, ratings, occasionsOf, parksOf };
+  return { facilitiesOf, accommodations, surroundings, ratings, occasionsOf, parksOf, popular };
 }
 
 export async function refreshOverview(db, { googleEnabled, party }) {

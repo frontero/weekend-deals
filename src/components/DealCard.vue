@@ -9,6 +9,7 @@ import AdviceBadge from './AdviceBadge.vue';
 import BrandBadge from './BrandBadge.vue';
 import GoogleRating from './GoogleRating.vue';
 import Icon from './Icon.vue';
+import PopularBadge from './PopularBadge.vue';
 import WeekendTags from './WeekendTags.vue';
 import ParkLocation from './ParkLocation.vue';
 import PhotoCarousel from './PhotoCarousel.vue';
@@ -21,6 +22,8 @@ const props = defineProps({
   pricedFor: { type: Object, default: null },
   // What makes this weekend special, see shared/occasions.mjs.
   occasions: { type: Array, default: () => [] },
+  // Visitors clicked through to this park often this week.
+  popular: { type: Boolean, default: false },
 });
 const emit = defineEmits(['open']);
 
@@ -83,7 +86,10 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
     </div>
 
     <div class="flex flex-1 flex-col gap-1.5 p-4">
-      <BrandBadge :brand="park.brand" class="self-start" />
+      <p class="flex flex-wrap items-center gap-2">
+        <BrandBadge :brand="park.brand" />
+        <PopularBadge v-if="popular" />
+      </p>
       <h3 class="mt-0.5 text-lg leading-snug font-extrabold">
         <button type="button" class="text-left after:absolute after:inset-0 focus-visible:outline-none" @click="emit('open')">
           {{ park.name }}

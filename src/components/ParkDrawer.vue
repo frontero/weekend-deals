@@ -17,6 +17,7 @@ import ParkLocation from './ParkLocation.vue';
 import PhotoCarousel from './PhotoCarousel.vue';
 import PriceColumns from './PriceColumns.vue';
 import PriceInsight from './PriceInsight.vue';
+import PopularBadge from './PopularBadge.vue';
 import WeekendTags from './WeekendTags.vue';
 
 const props = defineProps({
@@ -36,6 +37,8 @@ const props = defineProps({
   partyKey: { type: String, default: '' },
   // Per arrival date what makes the weekend special, see shared/occasions.mjs.
   occasions: { type: Object, default: () => ({}) },
+  // Codes of the parks visitors clicked through to most this week.
+  popular: { type: Array, default: () => [] },
 });
 const emit = defineEmits(['close', 'alert']);
 const reviewsSection = ref(null);
@@ -143,7 +146,10 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
 
       <div class="flex flex-col gap-6 p-5">
         <header class="flex flex-col items-start gap-1">
-          <BrandBadge :brand="park.brand" />
+          <p class="flex flex-wrap items-center gap-2">
+            <BrandBadge :brand="park.brand" />
+            <PopularBadge v-if="popular.includes(park.code)" />
+          </p>
           <h2 id="park-title" class="text-2xl font-black">{{ park.name }}</h2>
           <ParkLocation :park="park" />
           <GoogleRating :rating="park.googleRating" as-button @select="reviewsSection?.open()" />

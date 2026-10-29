@@ -812,6 +812,19 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       return { days: plain(days), providers: plain(providers), sources: plain(sources), parks: plain(parks), total: plain(total)[0] };
     },
 
+    /** Parks clicked through to a provider at least `minimum` times since `since`: park code → clicks, most first. */
+    async popularParks(since, { minimum, limit }) {
+      const rows = await all(
+        `SELECT park_code AS parkCode, COUNT(*) AS clicks FROM clicks
+          WHERE at >= ? AND park_code IS NOT NULL
+          GROUP BY park_code HAVING COUNT(*) >= ? ORDER BY clicks DESC LIMIT ?`,
+        since,
+        minimum,
+        limit,
+      );
+      return new Map(rows.map((row) => [row.parkCode, Number(row.clicks)]));
+    },
+
     async saveAdminStats(key, { computedAt, data }) {
       await client.execute({
         sql: `INSERT OR REPLACE INTO admin_stats (group_key, computed_at, data) VALUES (?, ?, ?)`,

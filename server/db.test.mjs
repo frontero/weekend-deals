@@ -410,3 +410,13 @@ test('replaces all public pages at once, so a weekend gone by loses its page', a
   assert.equal(await db.page('/weekend/2026-11-06'), null);
   db.close();
 });
+
+test('a park is popular from five clicks this week; older clicks do not count', async () => {
+  const db = await open('popular.db');
+  for (let i = 0; i < 5; i += 1) await db.saveClick({ provider: 'landal', parkCode: 'HOT' }, '2026-10-28T10:00:00Z');
+  for (let i = 0; i < 4; i += 1) await db.saveClick({ provider: 'landal', parkCode: 'MILD' }, '2026-10-28T10:00:00Z');
+  for (let i = 0; i < 6; i += 1) await db.saveClick({ provider: 'landal', parkCode: 'OLD' }, '2026-10-01T10:00:00Z');
+  const popular = await db.popularParks('2026-10-22T00:00:00Z', { minimum: 5, limit: 10 });
+  assert.deepEqual([...popular], [['HOT', 5]]);
+  db.close();
+});

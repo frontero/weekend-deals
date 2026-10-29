@@ -362,3 +362,14 @@ test('every list page keeps its best deal in view, named, with a booking link of
     assert.match(bar, new RegExp(`from=${source}`), path);
   }
 });
+
+test('parks clicked through to often this week are marked popular, with what that means', () => {
+  const built = buildPages({ parks: [gulpen, hoogduin], allParks, computedAt: '2026-10-29T06:39:10.572Z', details: { ...details, popular: new Map([['GPN', 7]]) } });
+  const park = built.find((page) => page.path === '/park/vakantiepark-gulpen').body;
+  assert.match(park, /Populair deze week/);
+  assert.match(park, /title="Veel aangeklikt op Weekendje weg in de afgelopen 7 dagen\."/);
+  assert.doesNotMatch(built.find((page) => page.path === '/park/hoogduin-b').body, /Populair/);
+  const hub = built.find((page) => page.path === '/parken').body;
+  assert.match(hub, /id="popular"[^]*Vakantiepark Gulpen[^]*from=populair/);
+  assert.doesNotMatch(pageAt('/parken').body, /Populair deze week/, 'no popular parks, no section');
+});
