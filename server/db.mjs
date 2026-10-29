@@ -149,6 +149,11 @@ const SCHEMA = `
     body TEXT NOT NULL,
     computed_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS park_surroundings (
+    park_code TEXT PRIMARY KEY,
+    places TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+  );
 `;
 
 // Latest price per park and weekend, plus how that weekend's price behaved over all scans. The reference is the
@@ -490,6 +495,33 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
         FROM google_ratings WHERE rating IS NOT NULL
       `);
       return new Map(rows.map(({ parkCode, ...rating }) => [parkCode, rating]));
+    },
+
+    /** What there is to do around each park, see server/surroundings.mjs: park code → places. */
+    async surroundings() {
+      const rows = await all(`SELECT park_code AS parkCode, places FROM park_surroundings`);
+      return new Map(rows.map((row) => [row.parkCode, JSON.parse(row.places)]));
+    },
+
+    async saveSurroundings(parkCode, places, fetchedAt = new Date().toISOString()) {
+      await client.execute({
+        sql: `INSERT INTO park_surroundings (park_code, places, fetched_at) VALUES (?, ?, ?)
+          ON CONFLICT (park_code) DO UPDATE SET places = excluded.places, fetched_at = excluded.fetched_at`,
+        args: [parkCode, JSON.stringify(places), fetchedAt],
+      });
+    },
+
+    /** Parks with coordinates whose surroundings are missing or were fetched before `fetchedBefore`, oldest first. */
+    parksNeedingSurroundings(fetchedBefore) {
+      return all(
+        `
+        SELECT parks.code, parks.lat, parks.lng
+        FROM parks LEFT JOIN park_surroundings ON park_surroundings.park_code = parks.code
+        WHERE parks.lat IS NOT NULL AND (park_surroundings.fetched_at IS NULL OR park_surroundings.fetched_at < ?)
+        ORDER BY park_surroundings.fetched_at IS NOT NULL, park_surroundings.fetched_at
+      `,
+        fetchedBefore,
+      );
     },
 
     /** Parks with coordinates whose rating is missing or was fetched before `fetchedBefore`, oldest first. */

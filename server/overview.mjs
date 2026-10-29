@@ -89,11 +89,27 @@ export async function buildOverview(db, { googleEnabled, party }) {
   };
 }
 
+/** What the public pages tell about every park beyond its prices, also of parks without a free weekend. */
+async function pageDetails(db) {
+  const [landal, names, accommodations, surroundings, ratings] = await Promise.all([
+    db.facilitiesByPark(),
+    db.facilityNamesByPark(),
+    db.accommodations(),
+    db.surroundings(),
+    db.googleRatings(),
+  ]);
+  const facilitiesOf = (code) => parkFacilities({ landal: landal.get(code) ?? [], names: names.get(code) ?? [] });
+  return { facilitiesOf, accommodations, surroundings, ratings };
+}
+
 export async function refreshOverview(db, { googleEnabled, party }) {
   const computedAt = new Date().toISOString();
   const { key, meta, parks } = await buildOverview(db, { googleEnabled, party });
   await db.saveOverview(key, { computedAt, meta: JSON.stringify(meta), parks: gzipSync(JSON.stringify(parks)) });
-  if (key === groupKey(PAGE_PARTY)) await db.replacePages(buildPages({ parks, allParks: await db.parks(), computedAt }), computedAt);
+  if (key === groupKey(PAGE_PARTY)) {
+    const pages = buildPages({ parks, allParks: await db.parks(), computedAt, details: await pageDetails(db) });
+    await db.replacePages(pages, computedAt);
+  }
 }
 
 /**

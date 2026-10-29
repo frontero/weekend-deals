@@ -17,13 +17,14 @@ export function textOf(html) {
     .trim();
 }
 
-export async function fetchWithRetry(url, options) {
+/** @param options fetch's options, plus `timeoutMs` per attempt (20 seconds unless given) */
+export async function fetchWithRetry(url, { timeoutMs = 20_000, ...options } = {}) {
   for (let attempt = 0; ; attempt += 1) {
     try {
       const response = await fetch(url, {
         ...options,
-        headers: { 'User-Agent': USER_AGENT, ...options?.headers },
-        signal: AbortSignal.timeout(20_000),
+        headers: { 'User-Agent': USER_AGENT, ...options.headers },
+        signal: AbortSignal.timeout(timeoutMs),
       });
       if (!response.ok) throw new Error(`${new URL(url).host} answered ${response.status}`);
       return response;

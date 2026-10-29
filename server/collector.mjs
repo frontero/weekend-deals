@@ -12,6 +12,7 @@ import { fetchParksWithFacility } from './landal.mjs';
 import { overviewIsStale, refreshOverview } from './overview.mjs';
 import { activeProviders, PROVIDERS, providerBrand } from './providers.mjs';
 import { roundInProgress } from './status.mjs';
+import { fetchSurroundings } from './surroundings.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 // Park facilities hardly change, and mapping them costs a few hundred requests.
@@ -20,6 +21,10 @@ const FACILITIES_MAX_AGE_MS = 7 * DAY_MS;
 const FACILITY_PAGE_PAUSE_MS = 400;
 // Google's terms allow keeping place data for 30 days.
 const RATING_MAX_AGE_MS = 30 * DAY_MS;
+// What is around a park hardly changes; a new park gets its surroundings in the next rounds.
+const SURROUNDINGS_MAX_AGE_MS = 182 * DAY_MS;
+// Wikidata's query service asks for light use, and one lookup can take half a minute.
+const SURROUNDINGS_PER_ROUND = 10;
 // Other processes see the progress this often; every step would be a write over the network.
 const PROGRESS_WRITE_MS = 5000;
 // A size whose round failed or was interrupted is tried again, but at most every half hour and three times per
@@ -278,6 +283,26 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
     }
   }
 
+  /** What there is to do around the parks, for their public pages. Extra: a failing park is only logged. */
+  async function refreshSurroundings() {
+    const cutoff = new Date(Date.now() - SURROUNDINGS_MAX_AGE_MS).toISOString();
+    const parks = (await db.parksNeedingSurroundings(cutoff)).slice(0, SURROUNDINGS_PER_ROUND);
+    if (!parks.length) return;
+    await startPhase('surroundings', parks.length);
+    for (const park of parks) {
+      try {
+        const places = await fetchSurroundings(park);
+        throwIfCancelled();
+        await db.saveSurroundings(park.code, places);
+        detailsAdded = true;
+      } catch (error) {
+        if (cancelled) throw error;
+        log(`${park.code} surroundings failed: ${error.message}`);
+      }
+      await step();
+    }
+  }
+
   /** Rebuilds the screen's data of each collected party whose data is missing or outdated. */
   async function updateOverviews() {
     if (cancelled) return;
@@ -385,6 +410,8 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
       );
       throwIfCancelled();
       await refreshRatings();
+      throwIfCancelled();
+      await refreshSurroundings().catch((error) => log(`surroundings failed: ${error.message}`));
     });
 
     if (rerunRequested && !cancelled) {

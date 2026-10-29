@@ -31,7 +31,12 @@ const accommodation = computed(
 const progressPercent = computed(() => (props.scan.total ? Math.round((props.scan.done / props.scan.total) * 100) : 0));
 const updated = computed(() => (props.scan.lastScan ? formatTimestamp(props.scan.lastScan.finishedAt) : null));
 const progressLabel = computed(() =>
-  ({ facilities: 'Faciliteiten ophalen', accommodations: 'Huisjes ophalen', ratings: 'Google-scores ophalen' })[
+  ({
+    facilities: 'Faciliteiten ophalen',
+    accommodations: 'Huisjes ophalen',
+    ratings: 'Google-scores ophalen',
+    surroundings: 'Omgeving ophalen',
+  })[
     props.scan.phase
   ] ?? 'Prijzen ophalen',
 );
