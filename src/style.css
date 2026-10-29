@@ -1,18 +1,21 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/nunito';
 
 /* Each colour is light-dark(light, dark); `color-scheme` on the root picks which one applies. */
 @theme {
-  --color-surface: light-dark(#fcfcfb, #1a1a19);
-  --color-plane: light-dark(#f5f4f0, #0d0d0d);
-  --color-ink: light-dark(#0b0b0b, #f0efec);
-  --color-ink-secondary: light-dark(#52514e, #c3c2b7);
-  --color-ink-muted: light-dark(#6c6a64, #9a988f);
-  --color-line: light-dark(#e1e0d9, #2c2c2a);
-  --color-axis: light-dark(#c3c2b7, #383835);
+  /* Rounded and friendly, served from this site (Google's font servers would see every visitor). */
+  --font-sans: 'Nunito Variable', ui-rounded, system-ui, sans-serif;
+  --color-surface: light-dark(#ffffff, #15263a);
+  --color-plane: light-dark(#fffaf0, #0e1b29);
+  --color-ink: light-dark(#17324d, #f3f7fb);
+  --color-ink-secondary: light-dark(#4a6276, #b6c6d6);
+  --color-ink-muted: light-dark(#5b7085, #93a8bd);
+  --color-line: light-dark(#e6eef3, #24384f);
+  --color-axis: light-dark(#c9d6e0, #33485f);
   /* Outline of text fields and selects: at least 3:1 against what they sit on. */
-  --color-field: light-dark(#8a8880, #72716a);
+  --color-field: light-dark(#7c8d9c, #6f879e);
   /* Fill under the pointer: clearly apart from both the page and the panels on it. */
-  --color-hover: light-dark(#e9e8e1, #2b2b29);
+  --color-hover: light-dark(#eef5f7, #1f3349);
   --color-series: light-dark(#2a78d6, #3987e5);
   --color-good: #0ca30c;
   --color-good-ink: light-dark(#006300, #4cc94c);
@@ -20,10 +23,19 @@
   --color-serious: #ec835a;
   --color-warning-ink: light-dark(#7a4b00, #f5c46b);
   --color-warning-wash: light-dark(#fdf3e1, #33260d);
-  --color-accent: light-dark(#0f6b66, #3fb3aa);
-  --color-accent-hover: light-dark(#0b5753, #5cc6be);
-  --color-accent-wash: light-dark(#e3f1f0, #10302d);
-  --color-on-accent: light-dark(#ffffff, #0d0d0d);
+  --color-accent: light-dark(#0a7774, #3cc9c4);
+  --color-accent-hover: light-dark(#075f5c, #63d8d3);
+  --color-accent-wash: light-dark(#e3f6f5, #103a3d);
+  --color-on-accent: light-dark(#ffffff, #0e1b29);
+  /* Sunny yellow for stickers, with dark brown text on it. */
+  --color-sun: #ffd23f;
+  --color-sun-wash: light-dark(#fff4c7, #3a3110);
+  --color-on-sun: #4a3600;
+  /* Coral for booking: the one colour that means "go to the provider". Navy text on it reads better than white. */
+  --color-cta: #ff7657;
+  --color-cta-hover: #ff9076;
+  --color-cta-wash: light-dark(#ffe6df, #3d2219);
+  --color-on-cta: #1a2b3c;
   --color-star: light-dark(#e8a20c, #f5b82e);
 }
 
@@ -41,7 +53,7 @@
 body {
   background: var(--color-plane);
   color: var(--color-ink);
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
 }
 
 /* In the base layer, so a component's own focus or cursor utilities win over these defaults. */

@@ -242,11 +242,14 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
 
   <!-- What and when, on a band of its own above the results, like the search area of the big booking sites.
        Tighter on phones, so the first deals show without scrolling far. -->
-  <section class="border-b border-line bg-surface" aria-labelledby="page-title">
+  <section class="rounded-b-[2.5rem] bg-accent-wash" aria-labelledby="page-title">
     <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:gap-6 sm:px-6 sm:py-8">
       <div>
-        <h1 id="page-title" class="text-xl font-semibold tracking-tight sm:text-3xl">Buitenkansjes voor een weekendje weg</h1>
-        <p class="mt-1 max-w-2xl text-sm text-ink-secondary sm:text-base">
+        <h1 id="page-title" class="text-2xl font-black tracking-tight sm:text-4xl">
+          Buitenkansjes voor een
+          <span class="inline-block -rotate-1 rounded-3xl bg-sun px-2 text-on-sun">weekendje weg</span>
+        </h1>
+        <p class="mt-2 max-w-2xl text-sm font-semibold text-ink-secondary sm:text-base">
           Weekenden (vrijdag tot maandag) bij Landal, Topparken en Molecaten die duidelijk onder de normale prijs van
           het park zitten.
         </p>
@@ -276,7 +279,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
       <aside class="hidden lg:block" aria-labelledby="filters-title">
         <!-- Scrolling clips at the edges, so a little room around the card keeps its ring and focus outlines whole. -->
         <div class="sticky top-24 -mx-1 max-h-[calc(100dvh-7rem)] overflow-y-auto px-1 pt-1 pb-6 [scrollbar-width:thin]">
-          <div class="rounded-2xl bg-surface ring-1 ring-line">
+          <div class="rounded-3xl bg-surface ring-1 ring-line">
             <div class="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
               <h2 id="filters-title" class="font-semibold">Filters</h2>
               <button
@@ -312,7 +315,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
 
       <div class="flex min-w-0 flex-col gap-4">
         <div class="flex flex-wrap items-center gap-3">
-          <h2 class="text-xl font-semibold" aria-live="polite">
+          <h2 class="text-2xl font-black" aria-live="polite">
             {{ cards.length }} {{ cards.length === 1 ? 'park' : 'parken' }}
             <template v-if="filters.minDiscountPercent">met een buitenkansje</template>
             <span v-if="periodLabel" class="font-normal text-ink-secondary">· {{ periodLabel }}</span>
@@ -363,7 +366,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
         <ActiveFilters :chips="chips" @remove="removeChip" @clear="clearFilters" />
 
         <div v-if="isLoading" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Laden">
-          <div v-for="index in 6" :key="index" class="animate-pulse overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
+          <div v-for="index in 6" :key="index" class="animate-pulse overflow-hidden rounded-3xl bg-surface ring-1 ring-line">
             <div class="aspect-[3/2] bg-line" />
             <div class="flex flex-col gap-2 p-4">
               <div class="h-4 w-2/3 rounded bg-line" />
@@ -391,7 +394,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
               @open="openPark(deal.park, deal.weekend.arrival, $event?.reviews)"
             />
           </div>
-          <div v-else class="flex flex-col items-center gap-3 rounded-2xl bg-surface px-6 py-12 text-center ring-1 ring-line">
+          <div v-else class="flex flex-col items-center gap-3 rounded-3xl bg-surface px-6 py-12 text-center ring-1 ring-line">
             <span class="grid size-12 place-items-center rounded-full bg-plane">
               <Icon name="search" class="size-6 text-ink-secondary" />
             </span>
@@ -406,7 +409,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
               <button
                 v-if="filters.minDiscountPercent > 10"
                 type="button"
-                class="rounded-lg bg-accent px-3 py-2 font-medium text-on-accent hover:bg-accent-hover"
+                class="rounded-full bg-accent px-3 py-2 font-medium text-on-accent hover:bg-accent-hover"
                 @click="filters.minDiscountPercent = 10"
               >
                 Toon vanaf 10%
@@ -434,7 +437,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
           <!-- A section of its own: the full list to compare, after the highlights above. -->
           <section class="mt-8 flex flex-col gap-4 border-t border-line pt-8 sm:mt-10 sm:pt-10" aria-labelledby="all-parks-title">
             <div>
-              <h2 id="all-parks-title" class="text-xl font-semibold">Alle parken vergelijken ({{ visibleParks.length }})</h2>
+              <h2 id="all-parks-title" class="text-2xl font-black">Alle parken vergelijken ({{ visibleParks.length }})</h2>
               <p class="text-sm text-ink-secondary">
                 Per park het weekend dat het verst onder de normale prijs zit. Klik op een kolomkop om te sorteren.
               </p>
@@ -443,7 +446,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
           </section>
         </template>
 
-        <div v-else-if="overview" class="flex flex-col items-center gap-3 rounded-2xl bg-surface px-6 py-12 text-center ring-1 ring-line">
+        <div v-else-if="overview" class="flex flex-col items-center gap-3 rounded-3xl bg-surface px-6 py-12 text-center ring-1 ring-line">
           <template v-if="isScanning || overview.partyPending">
             <Icon name="refresh" class="size-8 animate-spin text-accent [animation-direction:reverse]" />
             <p class="font-semibold">De eerste prijzen voor dit gezelschap komen binnen</p>
@@ -454,7 +457,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
             <button
               v-if="overview.admin"
               type="button"
-              class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover"
+              class="rounded-full bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover"
               @click="startScan"
             >
               Prijzen ophalen

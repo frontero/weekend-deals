@@ -45,7 +45,7 @@ watch(open, (isOpen) => {
         </button>
         <button
           type="button"
-          class="ml-auto rounded-lg bg-accent px-5 py-2.5 font-semibold text-on-accent hover:bg-accent-hover"
+          class="ml-auto rounded-full bg-accent px-5 py-2.5 font-semibold text-on-accent hover:bg-accent-hover"
           @click="open = false"
         >
           Toon {{ resultCount }} {{ resultCount === 1 ? 'park' : 'parken' }}

@@ -38,7 +38,7 @@ function save() {
 <template>
   <dialog
     ref="dialog"
-    class="m-auto max-h-[90dvh] w-[min(44rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl bg-surface p-0 text-ink shadow-2xl"
+    class="m-auto max-h-[90dvh] w-[min(44rem,calc(100vw-1.5rem))] overflow-hidden rounded-3xl bg-surface p-0 text-ink shadow-2xl"
     aria-labelledby="settings-title"
     @close="open = false"
   >
@@ -115,7 +115,7 @@ function save() {
         <button type="button" class="ml-auto rounded-lg px-4 py-2 font-medium hover:bg-hover sm:ml-0" @click="open = false">
           Annuleren
         </button>
-        <button type="submit" class="rounded-lg bg-accent px-4 py-2 font-medium text-on-accent hover:bg-accent-hover">
+        <button type="submit" class="rounded-full bg-accent px-4 py-2 font-medium text-on-accent hover:bg-accent-hover">
           Opslaan
         </button>
       </footer>

@@ -129,7 +129,7 @@ const visibleRows = computed(() => (showAll.value ? rows.value : rows.value.slic
               :href="row.bookUrl"
               target="_blank"
               rel="sponsored noopener"
-              class="inline-flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-on-accent hover:bg-accent-hover"
+              class="inline-flex items-center gap-1 rounded-full bg-cta px-3 py-1.5 text-xs font-extrabold whitespace-nowrap text-on-cta hover:bg-cta-hover"
               @click.stop
             >
               Boek

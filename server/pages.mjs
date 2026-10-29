@@ -30,6 +30,8 @@ const PARK_CARDS = 12;
 const REGION_PLACES = 6;
 // The months' average weekend prices are worth a sentence when the cheapest is at least this much under the dearest.
 const MONTH_GAP = 0.1;
+// Under this many percent from the park's normal price a weekend costs the normal price: no news.
+const NOTEWORTHY_PERCENT = 5;
 const SITE_NAME = 'Weekendje weg';
 
 const PAGE_PATH =
@@ -228,36 +230,139 @@ const discountPercent = (weekend) => Math.round((weekend.discount ?? 0) * 100);
 const stay = (weekend) => `${nights(weekend)} nachten · ${partyLabel(PAGE_PARTY)} · incl. toeslagen`;
 const providersOf = (parks) => joinAnd([...new Set(parks.map((park) => providerName(park.provider)))]);
 
-const link = 'font-medium text-accent hover:underline';
-const chip = 'rounded-full bg-surface px-3 py-1 text-sm ring-1 ring-line';
+const link = 'font-bold text-accent hover:underline';
+const chip = 'inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-sm font-bold ring-2 ring-line transition hover:ring-accent';
+const card = 'overflow-hidden rounded-3xl bg-surface ring-1 ring-line';
+const sticker = 'inline-block -rotate-3 rounded-full bg-sun px-3 py-1 text-sm font-black whitespace-nowrap text-on-sun shadow-md';
+
+// A picture per facility, outing and section: quicker to take in than words alone.
+const FACILITY_ICONS = {
+  'overdekt-zwembad': '🏊',
+  zwemparadijs: '🌴',
+  openluchtzwembad: '☀️',
+  peuterbad: '🐥',
+  'natuurlijk-zwemwater': '🏞️',
+  waterspeeltuin: '💦',
+  'huisjes-met-privezwembad': '🏡',
+  speeltuin: '🛝',
+  'indoor-speelparadijs': '🧗',
+  kinderboerderij: '🐐',
+  animatie: '🎭',
+  kinderclub: '🧸',
+  amusementshal: '🕹️',
+  restaurant: '🍽️',
+  cafe: '☕',
+  snackbar: '🍟',
+  winkel: '🛒',
+  fietsverhuur: '🚲',
+  minigolf: '⛳',
+  bowling: '🎳',
+  vissen: '🎣',
+  tennis: '🎾',
+  watersport: '🛶',
+  golfbaan: '🏌️',
+  padel: '🏓',
+  squash: '🏸',
+  pumptrack: '🚵',
+  'jeu-de-boules': '🎯',
+  sportveld: '⚽',
+  sauna: '🧖',
+  wellness: '💆',
+  'massage-beauty': '💅',
+  fitness: '🏋️',
+  zonnebank: '😎',
+  wifi: '📶',
+  laadpalen: '🔌',
+  'nieuw-park': '✨',
+  vuurwerkvrij: '🔇',
+  vuurwerkluw: '🔕',
+  bos: '🌲',
+  kust: '🏖️',
+  water: '🌊',
+  landelijk: '🌾',
+  heuvels: '⛰️',
+  bergen: '🏔️',
+  skigebied: '⛷️',
+};
+const PLACE_ICONS = {
+  Pretpark: '🎢',
+  Dierentuin: '🦁',
+  Aquarium: '🐠',
+  Zwemparadijs: '💦',
+  Kasteel: '🏰',
+  Paleis: '👑',
+  Landhuis: '🏡',
+  Vesting: '🛡️',
+  Fort: '🛡️',
+  Museum: '🖼️',
+  Kunstmuseum: '🎨',
+  'Historisch museum': '🏺',
+  Openluchtmuseum: '🏘️',
+  Natuurmuseum: '🦕',
+  Techniekmuseum: '⚙️',
+  Strand: '🏖️',
+  'Nationaal park': '🌳',
+  Natuurgebied: '🌿',
+  Bos: '🌲',
+  Meer: '🛶',
+  Uitkijktoren: '🔭',
+  Berg: '🏔️',
+  Heuvel: '⛰️',
+  Grot: '🦇',
+  Waterval: '💧',
+  Skigebied: '⛷️',
+  Molen: '🌬️',
+  Bezienswaardigheid: '📍',
+};
+// Each sort of facility its own soft colour behind the pictures.
+const GROUP_TINTS = {
+  Zwemmen: 'bg-accent-wash',
+  Kinderen: 'bg-sun-wash',
+  'Eten en drinken': 'bg-cta-wash',
+  'Sport en spel': 'bg-good-wash',
+  Wellness: 'bg-accent-wash',
+};
+const emojiDot = (emoji, tint = 'bg-accent-wash') =>
+  emoji && html`<span aria-hidden="true" class="grid size-8 shrink-0 place-items-center rounded-full ${tint} text-base">${emoji}</span>`;
+const sectionTitle = (id, emoji, text) =>
+  html`<h2 id="${id}" class="flex items-center gap-2 text-2xl font-black"><span aria-hidden="true">${emoji}</span>${text}</h2>`;
+
+/** Landal's photos come in any width; the big one on top of a park's page asks for a sharp one. */
+const largePhoto = (url) => url?.replace(/([?&]t=)cw\d+/, '$1cw1600') ?? null;
 
 function compared(weekend) {
   if (weekend.discount == null) return '';
   const percent = discountPercent(weekend);
-  if (percent > 0) {
-    return html`<span class="rounded-full bg-good-wash px-2 py-0.5 text-xs font-semibold whitespace-nowrap text-good-ink">${percent}% onder normaal</span>`;
+  // A few percent either way is the normal price; the yellow is kept for real deals.
+  if (percent >= NOTEWORTHY_PERCENT) {
+    return html`<span class="rounded-full bg-sun px-2.5 py-0.5 text-xs font-black whitespace-nowrap text-on-sun">${percent}% voordeliger</span>`;
   }
-  return html`<span class="text-xs whitespace-nowrap text-ink-muted">${percent === 0 ? 'normale prijs' : `${-percent}% boven normaal`}</span>`;
+  return html`<span class="text-xs font-semibold whitespace-nowrap text-ink-muted">${percent > -NOTEWORTHY_PERCENT ? 'normale prijs' : `${-percent}% boven normaal`}</span>`;
 }
+
+/** The discount as a sticker on a photo. */
+const photoSticker = (weekend) =>
+  weekend && discountPercent(weekend) >= NOTEWORTHY_PERCENT && html`<span class="${sticker} absolute top-3 left-3">${discountPercent(weekend)}% voordeliger</span>`;
 
 const WEATHER_CREDIT = 'Weersverwachting van MET Norway (yr.no).';
 
 /** Only good weather is ever passed on (see server/weather.mjs); a forecast, and said so. */
 const weatherChip = (weather) =>
   weather &&
-  html`<span class="rounded-full bg-warning-wash px-2 py-0.5 text-xs font-semibold whitespace-nowrap text-warning-ink" title="${WEATHER_CREDIT}"><span aria-hidden="true">☀</span> Zonnig verwacht, tot ${weather.maxTemp} °C</span>`;
+  html`<span class="rounded-full bg-sun-wash px-2.5 py-0.5 text-xs font-bold whitespace-nowrap text-warning-ink" title="${WEATHER_CREDIT}"><span aria-hidden="true">☀️</span> Zonnig verwacht, tot ${weather.maxTemp} °C</span>`;
 
-const occasionChips = (occasions) =>
-  occasions.map((occasion) => html`<span class="rounded-full bg-accent-wash px-2 py-0.5 text-xs font-medium whitespace-nowrap text-accent">${occasion.label}</span>`);
+/** @param tint the chip's own colour; on a banner of the same colour it takes the surface instead */
+const occasionChips = (occasions, tint = 'bg-accent-wash') =>
+  occasions.map((occasion) => html`<span class="rounded-full ${tint} px-2.5 py-0.5 text-xs font-bold whitespace-nowrap text-accent">${occasion.label}</span>`);
 
 function bookButton(park, weekend, source) {
   const provider = providerName(park.provider);
-  return html`<a href="${trackedBookingUrl(park, weekend, PAGE_PARTY, source)}" target="_blank" rel="sponsored noopener" class="inline-flex shrink-0 items-center justify-center rounded-lg bg-accent px-4 py-2 font-semibold text-on-accent shadow-sm transition hover:bg-accent-hover">Boek bij ${provider}<span class="sr-only"> (opent ${provider} in een nieuw tabblad)</span></a>`;
+  return html`<a href="${trackedBookingUrl(park, weekend, PAGE_PARTY, source)}" target="_blank" rel="sponsored noopener" class="inline-flex shrink-0 items-center justify-center rounded-full bg-cta px-5 py-2.5 font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover hover:shadow-md">Boek bij ${provider}<span class="sr-only"> (opent ${provider} in een nieuw tabblad)</span></a>`;
 }
 
 /** @param trail [href, label] pairs leading up to the page */
 const breadcrumb = (...trail) =>
-  html`<nav aria-label="Kruimelpad" class="text-sm text-ink-secondary">${trail.map(([href, label]) => html`<a href="${href}" class="${link}">${label}</a> › `)}</nav>`;
+  html`<nav aria-label="Kruimelpad" class="text-sm font-semibold text-ink-secondary">${trail.map(([href, label]) => html`<a href="${href}" class="${link}">${label}</a> › `)}</nav>`;
 
 function rating(park) {
   const { rating: score, ratingCount } = park.googleRating ?? {};
@@ -269,18 +374,45 @@ function rating(park) {
 const photo = (src, alt, classes = 'aspect-[3/2]') =>
   html`<img src="${src}" alt="${alt}" loading="lazy" decoding="async" class="${classes} w-full bg-line object-cover" />`;
 
+/** A colourful banner on top of a list page. */
+const banner = (emoji, title, intro, tint = 'bg-accent-wash') =>
+  html`<div class="rounded-[2rem] ${tint} p-6 sm:p-8">
+    <p aria-hidden="true" class="text-4xl">${emoji}</p>
+    <h1 class="mt-2 text-3xl font-black tracking-tight sm:text-5xl">${title}</h1>
+    ${intro}
+  </div>`;
+
+/** An outing near a park, with its photo (or its picture when it has none) and the photo's credit. */
+function placeCard(spot, { showDistance = true } = {}) {
+  const credit = spot.image && [spot.image.author, spot.image.license].filter(Boolean).join(', ');
+  // Wikidata often describes a place by its kind alone ("pretpark"): then the kind says it already.
+  const description = spot.description && spot.description.toLowerCase() !== spot.kind.toLowerCase() ? spot.description : null;
+  const emoji = PLACE_ICONS[spot.kind] ?? '📍';
+  return html`<li class="${card}">
+    <div class="relative">
+      ${spot.image ? photo(spot.image.url, spot.name) : html`<div aria-hidden="true" class="grid aspect-[3/2] place-items-center bg-accent-wash text-5xl">${emoji}</div>`}
+      <span class="absolute top-3 left-3 rounded-full bg-surface/95 px-3 py-1 text-xs font-extrabold shadow-sm"><span aria-hidden="true">${emoji}</span> ${spot.kind}${showDistance && ` · ${spot.km.toLocaleString('nl-NL')} km`}</span>
+    </div>
+    <div class="p-4">
+      <h3 class="text-lg font-extrabold">${spot.name}</h3>
+      ${description && html`<p class="text-sm text-ink-secondary">${description}</p>`}
+      ${credit && html`<p class="mt-1 text-xs text-ink-muted">Foto: <a href="${spot.image.page}" class="hover:underline" rel="nofollow">${credit}</a></p>`}
+    </div>
+  </li>`;
+}
+
 /** A park as a card on the region and theme pages: photo, place, its cheapest weekend and a way to book it. */
 function parkCard(park, { pathOf, source }) {
   const cheapest = cheapestOf(park.weekends);
-  return html`<li class="flex flex-col overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
-    ${park.imageUrl && photo(park.imageUrl, fullName(park))}
+  return html`<li class="${card} flex flex-col transition hover:-translate-y-0.5 hover:shadow-lg">
+    <div class="relative">${park.imageUrl && photo(park.imageUrl, fullName(park))}${photoSticker(cheapest)}</div>
     <div class="flex flex-1 flex-col gap-1 p-4">
-      <a href="${pathOf(park)}" class="${link}">${fullName(park)}</a>
-      <p class="flex flex-wrap gap-x-2 text-sm text-ink-secondary"><span>${placeOf(park)}</span>${rating(park)}</p>
+      <a href="${pathOf(park)}" class="text-lg font-extrabold hover:underline">${fullName(park)}</a>
+      <p class="flex flex-wrap gap-x-2 text-sm text-ink-secondary"><span><span aria-hidden="true">📍</span> ${placeOf(park)}</span>${rating(park)}</p>
       ${
         cheapest
-          ? html`<p class="mt-auto flex flex-wrap items-center gap-2 pt-3"><span class="text-2xl font-bold tabular-nums">${formatEuros(cheapest.priceCents)}</span> ${compared(cheapest)}</p>
-            <p class="mb-3 text-xs text-ink-secondary">${formatWeekend(cheapest)} · ${partyLabel(PAGE_PARTY)}</p>
+          ? html`<p class="mt-auto pt-3 text-3xl font-black tabular-nums">${formatEuros(cheapest.priceCents)}</p>
+            <p class="mb-3 text-xs font-semibold text-ink-secondary">${formatWeekend(cheapest)} · ${partyLabel(PAGE_PARTY)}</p>
             ${bookButton(park, cheapest, source)}`
           : html`<p class="mt-auto pt-3 text-sm text-ink-secondary">Geen vrij weekend voor ${partyLabel(PAGE_PARTY)} in de komende maanden</p>`
       }
@@ -297,10 +429,10 @@ function parkList(parks, { pathOf, source }) {
   const sorted = byPrice(parks);
   const row = (park) => {
     const from = cheapestOf(park.weekends);
-    return html`<li class="py-1.5"><a href="${pathOf(park)}" class="${link}">${fullName(park)}</a> <span class="text-sm text-ink-secondary">· ${placeOf(park)} · ${from ? `vanaf ${formatEuros(from.priceCents)}` : 'geen plek'}</span></li>`;
+    return html`<li class="break-inside-avoid py-1.5"><a href="${pathOf(park)}" class="${link}">${fullName(park)}</a> <span class="text-sm text-ink-secondary">· ${placeOf(park)} · ${from ? `vanaf ${formatEuros(from.priceCents)}` : 'geen plek'}</span></li>`;
   };
-  return html`<ul class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${sorted.slice(0, PARK_CARDS).map((park) => parkCard(park, { pathOf, source }))}</ul>
-    ${sorted.length > PARK_CARDS && html`<h2 class="mt-8 text-xl font-semibold">Meer parken</h2><ul class="mt-2 columns-1 gap-8 sm:columns-2">${sorted.slice(PARK_CARDS).map(row)}</ul>`}`;
+  return html`<ul class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${sorted.slice(0, PARK_CARDS).map((park) => parkCard(park, { pathOf, source }))}</ul>
+    ${sorted.length > PARK_CARDS && html`<section aria-labelledby="more" class="mt-10">${sectionTitle('more', '🏕️', 'Meer parken')}<ul class="mt-3 columns-1 gap-8 sm:columns-2">${sorted.slice(PARK_CARDS).map(row)}</ul></section>`}`;
 }
 
 /** How many people an accommodation sleeps, from "Geschikt voor 4 personen" or Landal's name ("Timber Lodge 4"). */
@@ -369,19 +501,19 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
   const intro = parkIntro(park, { accommodations, weekendCount });
   const appLink = `/?${new URLSearchParams({ search: park.name, minDiscountPercent: '0' })}`;
 
-  const facility = (option) => {
+  const facilityChip = (tint) => (option) => {
     const theme = themeOf.get(option.id);
-    return html`<li>${theme ? html`<a href="${themePath(theme)}" class="${link}">${option.name}</a>` : option.name}</li>`;
+    return html`<li class="inline-flex items-center gap-2 rounded-full bg-surface py-1 pr-3.5 pl-1 text-sm font-bold ring-2 ring-line">${emojiDot(FACILITY_ICONS[option.id], tint)}${theme ? html`<a href="${themePath(theme)}" class="hover:text-accent hover:underline">${option.name}</a>` : option.name}</li>`;
   };
 
   const weekendRow = (weekend) => {
     const advice = ['book', 'wait'].includes(weekend.advice?.verdict) ? weekend.advice : null;
-    return html`<li class="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+    return html`<li class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-surface p-3 pl-4 ring-1 ring-line">
       <div class="min-w-0 basis-full sm:basis-0 sm:flex-1">
         <p class="flex flex-wrap items-center gap-x-2 gap-y-1"><a href="${weekendPath(weekend.arrival)}" class="${link}">${formatWeekend(weekend)}</a> ${compared(weekend)} ${weatherChip(weekend.weather)} ${occasionChips(occasionsOf(weekend))}</p>
-        ${advice && html`<p class="mt-1 text-sm ${advice.verdict === 'book' ? 'text-good-ink' : 'text-ink-secondary'}">${verdictLabel(advice.verdict)}: ${reasonText(advice.reasons[0] ?? {})}</p>`}
+        ${advice && html`<p class="mt-1 text-sm font-semibold ${advice.verdict === 'book' ? 'text-good-ink' : 'text-ink-secondary'}">${verdictLabel(advice.verdict)}: ${reasonText(advice.reasons[0] ?? {})}</p>`}
       </div>
-      <p class="flex-1 text-lg font-bold tabular-nums sm:flex-none">${formatEuros(weekend.priceCents)}</p>
+      <p class="flex-1 text-xl font-black tabular-nums sm:flex-none">${formatEuros(weekend.priceCents)}</p>
       ${bookButton(park, weekend, 'parkpagina')}
     </li>`;
   };
@@ -389,102 +521,89 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
   const accommodationCard = (accommodation) => {
     const facts = accommodation.facts.filter((fact) => !/geschikt voor \d+ personen/i.test(fact)).slice(0, 4);
     const people = sleeps(accommodation);
-    return html`<li class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
-      ${accommodation.photos[0] && photo(accommodation.photos[0], `${accommodation.name} bij ${name}`)}
+    return html`<li class="${card}">
+      ${accommodation.photos[0] ? photo(accommodation.photos[0], `${accommodation.name} bij ${name}`) : html`<div aria-hidden="true" class="grid aspect-[3/2] place-items-center bg-sun-wash text-4xl">🏡</div>`}
       <div class="p-3">
-        <h3 class="font-semibold">${accommodation.name}</h3>
-        <p class="text-sm text-ink-secondary">${[people && `${people} personen`, ...facts].filter(Boolean).join(' · ')}</p>
+        <h3 class="font-extrabold">${accommodation.name}</h3>
+        ${people && html`<p class="mt-1"><span class="rounded-full bg-accent-wash px-2 py-0.5 text-xs font-bold text-accent">${people} personen</span></p>`}
+        <p class="mt-1 text-sm text-ink-secondary">${facts.join(' · ')}</p>
       </div>
     </li>`;
   };
 
-  const placeCard = (spot) => {
-    const credit = spot.image && [spot.image.author, spot.image.license].filter(Boolean).join(', ');
-    // Wikidata often describes a place by its kind alone ("pretpark"): then the kind says it already.
-    const description = spot.description && spot.description.toLowerCase() !== spot.kind.toLowerCase() ? spot.description : null;
-    return html`<li class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
-      ${spot.image && photo(spot.image.url, spot.name)}
-      <div class="p-3">
-        <p class="text-xs font-medium tracking-wide text-ink-secondary uppercase">${spot.kind} · ${spot.km.toLocaleString('nl-NL')} km</p>
-        <h3 class="font-semibold">${spot.name}</h3>
-        ${description && html`<p class="text-sm text-ink-secondary">${description}</p>`}
-        ${credit && html`<p class="mt-1 text-xs text-ink-muted">Foto: <a href="${spot.image.page}" class="hover:underline" rel="nofollow">${credit}</a></p>`}
-      </div>
-    </li>`;
-  };
-
-  const nearbyRow = ({ park: other, km }) => {
+  const nearbyCard = ({ park: other, km }) => {
     const from = cheapestOf(other.weekends);
-    return html`<li class="py-2"><a href="${pathOf(other)}" class="${link}">${fullName(other)}</a> <span class="text-sm text-ink-secondary">· ${km} km · ${from ? `vanaf ${formatEuros(from.priceCents)}` : 'geen plek'}</span></li>`;
+    return html`<li class="rounded-2xl bg-surface px-4 py-3 ring-1 ring-line"><a href="${pathOf(other)}" class="${link}">${fullName(other)}</a><p class="text-sm text-ink-secondary">${km} km · ${from ? `vanaf ${formatEuros(from.priceCents)}` : 'geen plek'}</p></li>`;
   };
 
   const body = html`
     ${breadcrumb(['/parken', 'Alle parken'], ...(hasRegionPage ? [[regionPath(region), region]] : []))}
-    <h1 class="mt-2 text-3xl font-bold tracking-tight">${name}</h1>
-    <p class="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-ink-secondary">${place && html`<span>${place}</span>`}<span>bij ${providerName(park.provider)}</span>${rating(park)}</p>
-    ${park.imageUrl && html`<img src="${park.imageUrl}" alt="${name}" class="mt-5 aspect-[2/1] w-full rounded-2xl bg-line object-cover sm:aspect-[3/1]" />`}
+    ${park.imageUrl && html`<div class="relative mt-3"><img src="${largePhoto(park.imageUrl)}" alt="${name}" class="aspect-[16/9] w-full rounded-[2rem] bg-line object-cover sm:aspect-[5/2]" />${photoSticker(cheapest)}</div>`}
+    <h1 class="mt-5 text-4xl font-black tracking-tight sm:text-5xl">${name}</h1>
+    <p class="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-semibold text-ink-secondary">${place && html`<span><span aria-hidden="true">📍</span> ${place}</span>`}<span>bij ${providerName(park.provider)}</span>${rating(park)}</p>
     ${
       cheapest
-        ? html`<section aria-labelledby="cheapest" class="mt-6 flex flex-col gap-4 rounded-2xl bg-surface p-5 ring-1 ring-line sm:flex-row sm:items-center">
+        ? html`<section aria-labelledby="cheapest" class="mt-6 flex flex-col gap-4 rounded-[2rem] bg-accent p-6 text-on-accent sm:flex-row sm:items-center">
             <div class="flex-1">
-              <h2 id="cheapest" class="text-sm font-medium text-ink-secondary">Goedkoopste weekend voor ${partyLabel(PAGE_PARTY)}</h2>
-              <p class="mt-1 flex flex-wrap items-center gap-2 font-semibold">${formatWeekend(cheapest)} ${weatherChip(cheapest.weather)} ${occasionChips(occasionsOf(cheapest))}</p>
-              <p class="mt-1 flex flex-wrap items-center gap-2"><span class="text-3xl font-bold tabular-nums">${formatEuros(cheapest.priceCents)}</span> ${compared(cheapest)}</p>
-              <p class="text-xs text-ink-secondary">${stay(cheapest)}</p>
+              <h2 id="cheapest" class="text-sm font-bold">Goedkoopste weekend voor ${partyLabel(PAGE_PARTY)}</h2>
+              <p class="mt-1 text-lg font-extrabold">${formatWeekend(cheapest)}</p>
+              <p class="mt-1 flex flex-wrap items-center gap-3"><span class="text-5xl font-black tabular-nums">${formatEuros(cheapest.priceCents)}</span> ${compared(cheapest)}</p>
+              <p class="mt-1 text-sm font-semibold">${stay(cheapest)}</p>
+              ${(cheapest.weather || occasionsOf(cheapest).length > 0) && html`<p class="mt-2 flex flex-wrap gap-1.5">${weatherChip(cheapest.weather)} ${occasionChips(occasionsOf(cheapest))}</p>`}
             </div>
             ${bookButton(park, cheapest, 'parkpagina')}
           </section>`
-        : html`<p class="mt-6 rounded-2xl bg-surface p-5 ring-1 ring-line">Voor ${partyLabel(PAGE_PARTY)} vonden we bij ${name} geen vrij weekend in de komende maanden. Bekijk de parken in de buurt, of <a href="/" class="${link}">zoek een ander weekend</a>.</p>`
+        : html`<p class="mt-6 rounded-[2rem] bg-sun-wash p-6 font-semibold">Voor ${partyLabel(PAGE_PARTY)} vonden we bij ${name} geen vrij weekend in de komende maanden. Bekijk de parken in de buurt, of <a href="/" class="${link}">zoek een ander weekend</a>.</p>`
     }
-    ${intro.length > 0 && html`<p class="mt-6 max-w-3xl leading-relaxed">${intro.join(' ')}</p>`}
+    ${intro.length > 0 && html`<p class="mt-8 max-w-3xl text-lg leading-relaxed">${intro.join(' ')}</p>`}
     ${
       todo.length > 0 &&
-      html`<section aria-labelledby="todo" class="mt-8">
-        <h2 id="todo" class="text-xl font-semibold">Op het park</h2>
-        <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">${todo.map(
-          (group) => html`<div class="rounded-2xl bg-surface p-4 ring-1 ring-line"><h3 class="font-semibold">${group.name}</h3><ul class="mt-1 space-y-0.5 text-sm text-ink-secondary">${group.options.map(facility)}</ul></div>`,
+      html`<section aria-labelledby="todo" class="mt-10">
+        ${sectionTitle('todo', '🎈', 'Op het park')}
+        <div class="mt-4 space-y-4">${todo.map(
+          (group) => html`<div><h3 class="text-sm font-extrabold tracking-wide text-ink-secondary uppercase">${group.name}</h3><ul class="mt-2 flex flex-wrap gap-2">${group.options.map(facilityChip(GROUP_TINTS[group.name]))}</ul></div>`,
         )}</div>
-        ${goodToKnow.length > 0 && html`<p class="mt-3 text-sm text-ink-secondary">Goed om te weten: ${joinAnd(goodToKnow.map((option) => option.name.toLowerCase()))}.</p>`}
+        ${goodToKnow.length > 0 && html`<p class="mt-4 text-sm font-semibold text-ink-secondary">Goed om te weten: ${joinAnd(goodToKnow.map((option) => option.name.toLowerCase()))}.</p>`}
       </section>`
     }
     ${
       places.length > 0 &&
-      html`<section aria-labelledby="around" class="mt-8">
-        <h2 id="around" class="text-xl font-semibold">In de omgeving</h2>
-        <p class="mt-1 text-sm text-ink-secondary">Uitjes binnen 15 kilometer, hemelsbreed gemeten vanaf het park.</p>
-        <ul class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${places.map(placeCard)}</ul>
+      html`<section aria-labelledby="around" class="mt-10">
+        ${sectionTitle('around', '🗺️', 'Uitjes in de buurt')}
+        <p class="mt-1 text-sm text-ink-secondary">Binnen 15 kilometer, hemelsbreed gemeten vanaf het park.</p>
+        <ul class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${places.map((spot) => placeCard(spot))}</ul>
       </section>`
     }
     ${
       shownAccommodations.length > 0 &&
-      html`<section aria-labelledby="stay" class="mt-8">
-        <h2 id="stay" class="text-xl font-semibold">Huisjes</h2>
-        <ul class="mt-3 grid grid-cols-2 gap-4 lg:grid-cols-4">${shownAccommodations.map(accommodationCard)}</ul>
+      html`<section aria-labelledby="stay" class="mt-10">
+        ${sectionTitle('stay', '🏡', 'Huisjes')}
+        <ul class="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">${shownAccommodations.map(accommodationCard)}</ul>
         ${accommodations.length > shownAccommodations.length && html`<p class="mt-2 text-sm text-ink-secondary">En nog ${count(accommodations.length - shownAccommodations.length, 'ander soort huisje', 'andere soorten huisjes')}.</p>`}
       </section>`
     }
     ${
       cheapest &&
-      html`<section aria-labelledby="weekends" class="mt-8">
-        <h2 id="weekends" class="text-xl font-semibold">Prijzen per weekend</h2>
+      html`<section aria-labelledby="weekends" class="mt-10">
+        ${sectionTitle('weekends', '📅', 'Prijzen per weekend')}
         <p class="mt-1 text-sm text-ink-secondary">Vrijdag tot maandag voor ${partyLabel(PAGE_PARTY)}: het goedkoopste huisje van het park, inclusief toeslagen. Bijgewerkt op ${updated}.</p>
-        <ul class="mt-2 divide-y divide-line">${park.weekends.map(weekendRow)}</ul>
-        ${park.weekends.some((weekend) => weekend.weather) && html`<p class="text-xs text-ink-muted">${WEATHER_CREDIT}</p>`}
+        <ul class="mt-4 space-y-2">${park.weekends.map(weekendRow)}</ul>
+        ${park.weekends.some((weekend) => weekend.weather) && html`<p class="mt-2 text-xs text-ink-muted">${WEATHER_CREDIT}</p>`}
       </section>`
     }
-    <p class="mt-6 text-sm"><a href="${appLink}" class="${link}">Met meer personen, kinderen of een hond? Bekijk ${name} voor jouw gezelschap</a></p>
+    <p class="mt-6"><a href="${appLink}" class="inline-flex items-center gap-2 rounded-full bg-sun-wash px-4 py-2 font-bold transition hover:bg-sun hover:text-on-sun"><span aria-hidden="true">👨‍👩‍👧</span> Met meer personen, kinderen of een hond? Bekijk ${name} voor jouw gezelschap</a></p>
     ${
       nearby.length > 0 &&
-      html`<section aria-labelledby="nearby" class="mt-8">
-        <h2 id="nearby" class="text-xl font-semibold">Parken in de buurt</h2>
-        <ul class="mt-2 divide-y divide-line">${nearby.map(nearbyRow)}</ul>
+      html`<section aria-labelledby="nearby" class="mt-10">
+        ${sectionTitle('nearby', '📍', 'Parken in de buurt')}
+        <ul class="mt-4 grid gap-2 sm:grid-cols-2">${nearby.map(nearbyCard)}</ul>
       </section>`
     }
     ${
       (hasRegionPage || themes.length > 0) &&
-      html`<nav aria-label="Meer zoals dit" class="mt-8"><h2 class="text-xl font-semibold">Meer zoals dit</h2><ul class="mt-3 flex flex-wrap gap-2">
-        ${hasRegionPage && html`<li><a href="${regionPath(region)}" class="${chip} ${link}">Alle parken in ${region}</a></li>`}
-        ${themes.map((theme) => html`<li><a href="${themePath(theme)}" class="${chip} ${link}">${theme.name}</a></li>`)}
+      html`<nav aria-labelledby="more-like" class="mt-10">${sectionTitle('more-like', '✨', 'Meer zoals dit')}<ul class="mt-4 flex flex-wrap gap-2">
+        ${hasRegionPage && html`<li><a href="${regionPath(region)}" class="${chip}"><span aria-hidden="true">🗺️</span> Alle parken in ${region}</a></li>`}
+        ${themes.map((theme) => html`<li><a href="${themePath(theme)}" class="${chip}"><span aria-hidden="true">${FACILITY_ICONS[theme.facility]}</span> ${theme.name}</a></li>`)}
       </ul></nav>`
     }`;
 
@@ -521,66 +640,63 @@ function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes,
     .filter(({ offer }) => offer);
 
   const dealCard = ({ park, weekend: offer }) =>
-    html`<li class="flex flex-col overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
-      ${park.imageUrl && photo(park.imageUrl, fullName(park))}
+    html`<li class="${card} flex flex-col transition hover:-translate-y-0.5 hover:shadow-lg">
+      <div class="relative">${park.imageUrl && photo(park.imageUrl, fullName(park))}${photoSticker(offer)}</div>
       <div class="flex flex-1 flex-col gap-2 p-4">
-        <a href="${pathOf(park)}" class="${link}">${fullName(park)}</a>
-        <span class="text-sm text-ink-secondary">${placeOf(park)}</span>
-        <p class="mt-auto flex flex-wrap items-center gap-2"><span class="text-2xl font-bold tabular-nums">${formatEuros(offer.priceCents)}</span> ${compared(offer)}</p>
-        ${park.baselineCents && html`<p class="text-xs text-ink-secondary">normaal ${formatEuros(park.baselineCents)}</p>`}
+        <a href="${pathOf(park)}" class="text-lg font-extrabold hover:underline">${fullName(park)}</a>
+        <span class="text-sm text-ink-secondary"><span aria-hidden="true">📍</span> ${placeOf(park)}</span>
+        <p class="mt-auto flex flex-wrap items-baseline gap-2"><span class="text-3xl font-black tabular-nums">${formatEuros(offer.priceCents)}</span>${park.baselineCents && html`<s class="text-sm text-ink-muted">${formatEuros(park.baselineCents)}</s>`}</p>
         ${offer.weather && html`<p>${weatherChip(offer.weather)}</p>`}
         ${bookButton(park, offer, 'weekendpagina')}
       </div>
     </li>`;
 
   const offerRow = ({ park, weekend: offer }) =>
-    html`<li class="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+    html`<li class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-surface p-3 pl-4 ring-1 ring-line">
       <div class="min-w-0 basis-full sm:basis-0 sm:flex-1">
         <a href="${pathOf(park)}" class="${link}">${fullName(park)}</a>
         <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-secondary">${placeOf(park)} ${compared(offer)} ${weatherChip(offer.weather)}</p>
       </div>
-      <p class="flex-1 text-lg font-bold tabular-nums sm:flex-none">${formatEuros(offer.priceCents)}</p>
+      <p class="flex-1 text-xl font-black tabular-nums sm:flex-none">${formatEuros(offer.priceCents)}</p>
       ${bookButton(park, offer, 'weekendpagina')}
     </li>`;
 
   const neighbour = (other, label) =>
-    other && html`<a href="${weekendPath(other.arrival)}" class="${link}">${label} ${formatWeekend(other)}</a>`;
+    other && html`<a href="${weekendPath(other.arrival)}" class="${chip}">${label} ${formatWeekend(other)}</a>`;
 
   const body = html`
     ${breadcrumb(['/weekenden', 'Alle weekenden'])}
-    <h1 class="mt-2 text-3xl font-bold tracking-tight">Weekendje weg ${range}</h1>
-    <p class="mt-2 max-w-2xl text-ink-secondary">${offers.length} vakantieparken hebben nog plek van ${formatWeekend(weekend)} voor ${partyLabel(PAGE_PARTY)}, vanaf ${from}. ${deals.length > 0 && `${dealCount} minstens ${Math.round(DEAL_SHARE * 100)}% goedkoper dan normaal.`}</p>
-    ${
-      (occasions.length > 0 || sunny > 0) &&
-      html`<div class="mt-4 flex max-w-2xl flex-col gap-2 rounded-2xl bg-surface p-4 ring-1 ring-line">
-        ${occasions.length > 0 && html`<p class="flex flex-wrap items-center gap-2">${occasionChips(occasions)} <span>${occasions.map((occasion) => occasion.text).join(' ')}</span>${fireworksFree && html` <a href="${themePath(fireworksFree)}" class="${link}">Vuurwerkvrije parken</a>`}</p>`}
-        ${sunny > 0 && html`<p class="flex flex-wrap items-center gap-2">${weatherChip({ maxTemp: Math.max(...offers.filter((offer) => offer.weekend.weather).map((offer) => offer.weekend.weather.maxTemp)) })} <span>Bij ${count(sunny, 'park', 'parken')} wordt het een zonnig en droog weekend. <span class="text-xs text-ink-muted">${WEATHER_CREDIT}</span></span></p>`}
-      </div>`
-    }
+    <div class="mt-3 rounded-[2rem] bg-accent-wash p-6 sm:p-8">
+      <h1 class="text-3xl font-black tracking-tight sm:text-5xl">Weekendje weg <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">${range}</span></h1>
+      <p class="mt-3 max-w-2xl font-semibold text-ink-secondary">${offers.length} vakantieparken hebben nog plek van ${formatWeekend(weekend)} voor ${partyLabel(PAGE_PARTY)}, vanaf ${from}. ${deals.length > 0 && `${dealCount} minstens ${Math.round(DEAL_SHARE * 100)}% goedkoper dan normaal.`}</p>
+      ${occasions.length > 0 && html`<p class="mt-4 flex flex-wrap items-center gap-2">${occasionChips(occasions, 'bg-surface')} <span class="font-semibold">${occasions.map((occasion) => occasion.text).join(' ')}</span>${fireworksFree && html` <a href="${themePath(fireworksFree)}" class="${link}">Vuurwerkvrije parken</a>`}</p>`}
+      ${sunny > 0 && html`<p class="mt-3 flex flex-wrap items-center gap-2">${weatherChip({ maxTemp: Math.max(...offers.filter((offer) => offer.weekend.weather).map((offer) => offer.weekend.weather.maxTemp)) })} <span class="font-semibold">Bij ${count(sunny, 'park', 'parken')} wordt het een zonnig en droog weekend.</span> <span class="text-xs text-ink-muted">${WEATHER_CREDIT}</span></p>`}
+    </div>
     ${
       deals.length > 0 &&
-      html`<section aria-labelledby="deals" class="mt-6">
-        <h2 id="deals" class="text-xl font-semibold">Grootste buitenkansjes</h2>
-        <ul class="mt-3 grid gap-4 sm:grid-cols-3">${deals.slice(0, TOP_DEALS).map(dealCard)}</ul>
+      html`<section aria-labelledby="deals" class="mt-10">
+        ${sectionTitle('deals', '🎉', 'Grootste buitenkansjes')}
+        <ul class="mt-4 grid gap-5 sm:grid-cols-3">${deals.slice(0, TOP_DEALS).map(dealCard)}</ul>
       </section>`
     }
     ${
       themed.length > 0 &&
-      html`<section aria-labelledby="themes" class="mt-8">
-        <h2 id="themes" class="text-xl font-semibold">Dit weekend het goedkoopst</h2>
-        <ul class="mt-2 grid gap-x-8 sm:grid-cols-2">${themed.map(
-          ({ theme, offer }) => html`<li class="border-b border-line py-2"><a href="${themePath(theme)}" class="text-sm text-ink-secondary hover:underline">${theme.label}</a>
-            <p class="flex items-baseline justify-between gap-3"><a href="${pathOf(offer.park)}" class="${link}">${fullName(offer.park)}</a> <span class="font-semibold tabular-nums">${formatEuros(offer.weekend.priceCents)}</span></p></li>`,
+      html`<section aria-labelledby="themes" class="mt-10">
+        ${sectionTitle('themes', '🏷️', 'Dit weekend het goedkoopst')}
+        <ul class="mt-4 grid gap-2 sm:grid-cols-2">${themed.map(
+          ({ theme, offer }) => html`<li class="flex items-center gap-3 rounded-2xl bg-surface p-3 ring-1 ring-line">${emojiDot(FACILITY_ICONS[theme.facility])}
+            <div class="min-w-0 flex-1"><a href="${themePath(theme)}" class="text-sm font-semibold text-ink-secondary hover:underline">${theme.label}</a><p><a href="${pathOf(offer.park)}" class="${link}">${fullName(offer.park)}</a></p></div>
+            <span class="text-lg font-black tabular-nums">${formatEuros(offer.weekend.priceCents)}</span></li>`,
         )}</ul>
       </section>`
     }
-    <section aria-labelledby="all" class="mt-8">
-      <h2 id="all" class="text-xl font-semibold">${sorted.length > LISTED_OFFERS ? `De ${LISTED_OFFERS} goedkoopste parken` : 'Alle parken met plek, goedkoopste eerst'}</h2>
+    <section aria-labelledby="all" class="mt-10">
+      ${sectionTitle('all', '💶', sorted.length > LISTED_OFFERS ? `De ${LISTED_OFFERS} goedkoopste parken` : 'Alle parken met plek, goedkoopste eerst')}
       <p class="mt-1 text-sm text-ink-secondary">${stay(weekend)}. Het goedkoopste huisje per park, bijgewerkt op ${updated}.</p>
-      <ul class="mt-2 divide-y divide-line">${sorted.slice(0, LISTED_OFFERS).map(offerRow)}</ul>
+      <ul class="mt-4 space-y-2">${sorted.slice(0, LISTED_OFFERS).map(offerRow)}</ul>
     </section>
-    <p class="mt-6 text-sm"><a href="${appLink}" class="${link}">${sorted.length > LISTED_OFFERS ? `Bekijk alle ${sorted.length} parken van dit weekend, ook voor jouw gezelschap` : 'Met meer personen, kinderen of een hond? Zoek dit weekend voor jouw gezelschap'}</a></p>
-    <nav aria-label="Andere weekenden" class="mt-8 flex flex-wrap justify-between gap-4 text-sm">${neighbour(previous, '←')}${neighbour(next, '→')}</nav>`;
+    <p class="mt-6"><a href="${appLink}" class="inline-flex items-center gap-2 rounded-full bg-sun-wash px-4 py-2 font-bold transition hover:bg-sun hover:text-on-sun"><span aria-hidden="true">🔎</span> ${sorted.length > LISTED_OFFERS ? `Bekijk alle ${sorted.length} parken van dit weekend, ook voor jouw gezelschap` : 'Met meer personen, kinderen of een hond? Zoek dit weekend voor jouw gezelschap'}</a></p>
+    <nav aria-label="Andere weekenden" class="mt-10 flex flex-wrap justify-between gap-4">${neighbour(previous, '←')}${neighbour(next, '→')}</nav>`;
 
   return {
     path: weekendPath(weekend.arrival),
@@ -615,13 +731,6 @@ function regionPlaces(parks, surroundings) {
     .map(({ spot }) => spot);
 }
 
-const placeTile = (spot) =>
-  html`<li class="overflow-hidden rounded-2xl bg-surface ring-1 ring-line">
-    ${spot.image && photo(spot.image.url, spot.name)}
-    <div class="p-3"><p class="text-xs font-medium tracking-wide text-ink-secondary uppercase">${spot.kind}</p><h3 class="font-semibold">${spot.name}</h3>
-    ${spot.image && html`<p class="mt-1 text-xs text-ink-muted">Foto: <a href="${spot.image.page}" class="hover:underline" rel="nofollow">${[spot.image.author, spot.image.license].filter(Boolean).join(', ')}</a></p>`}</div>
-  </li>`;
-
 function listIntro(parks) {
   const priced = parks.filter((park) => park.weekends.length);
   const cheapest = cheapestOf(priced.map((park) => cheapestOf(park.weekends)));
@@ -650,15 +759,14 @@ function regionPage(region, parks, { pathOf, surroundings }) {
   ].filter(Boolean);
   const body = html`
     ${breadcrumb(['/parken', 'Alle parken'])}
-    <h1 class="mt-2 text-3xl font-bold tracking-tight">Vakantieparken in ${region}</h1>
-    <p class="mt-2 max-w-3xl leading-relaxed text-ink-secondary">${intro.join(' ')}</p>
+    <div class="mt-3">${banner('🗺️', html`Vakantieparken in <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">${region}</span>`, html`<p class="mt-3 max-w-3xl leading-relaxed font-semibold text-ink-secondary">${intro.join(' ')}</p>`)}</div>
     ${parkList(parks, { pathOf, source: 'regiopagina' })}
     ${
       places.length > 0 &&
       html`<section aria-labelledby="todo" class="mt-10">
-        <h2 id="todo" class="text-xl font-semibold">Uitjes in ${region}</h2>
+        ${sectionTitle('todo', '🎡', `Uitjes in ${region}`)}
         <p class="mt-1 text-sm text-ink-secondary">Wat de meeste parken hier in de buurt hebben.</p>
-        <ul class="mt-3 grid grid-cols-2 gap-4 lg:grid-cols-3">${places.map(placeTile)}</ul>
+        <ul class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${places.map((spot) => placeCard(spot, { showDistance: false }))}</ul>
       </section>`
     }`;
   return {
@@ -683,12 +791,10 @@ function themePage(theme, parks, { pathOf, themes }) {
   ].filter(Boolean);
   const body = html`
     ${breadcrumb(['/parken', 'Alle parken'])}
-    <h1 class="mt-2 text-3xl font-bold tracking-tight">${theme.name}</h1>
-    <p class="mt-2 max-w-3xl leading-relaxed">${theme.intro}</p>
-    <p class="mt-2 max-w-3xl leading-relaxed text-ink-secondary">${intro.join(' ')}</p>
+    <div class="mt-3">${banner(FACILITY_ICONS[theme.facility], theme.name, html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${theme.intro}</p><p class="mt-2 max-w-3xl leading-relaxed text-ink-secondary">${intro.join(' ')}</p>`, 'bg-sun-wash')}</div>
     ${parkList(parks, { pathOf, source: 'themapagina' })}
-    <nav aria-label="Andere thema's" class="mt-10"><h2 class="text-xl font-semibold">Andere thema's</h2><ul class="mt-3 flex flex-wrap gap-2">${[...themes.values()].filter((other) => other !== theme).map(
-      (other) => html`<li><a href="${themePath(other)}" class="${chip} ${link}">${other.label}</a></li>`,
+    <nav aria-labelledby="other-themes" class="mt-10">${sectionTitle('other-themes', '✨', "Andere thema's")}<ul class="mt-4 flex flex-wrap gap-2">${[...themes.values()].filter((other) => other !== theme).map(
+      (other) => html`<li><a href="${themePath(other)}" class="${chip}"><span aria-hidden="true">${FACILITY_ICONS[other.facility]}</span> ${other.label}</a></li>`,
     )}</ul></nav>`;
   return {
     path: themePath(theme),
@@ -704,18 +810,17 @@ function parksIndex(parks, { pathOf, regions, themes }) {
   const countries = [...byCountry].sort((a, b) => b[1].length - a[1].length);
   const parkRow = (park) => {
     const from = cheapestOf(park.weekends);
-    return html`<li class="py-1.5"><a href="${pathOf(park)}" class="${link}">${fullName(park)}</a> <span class="text-sm text-ink-secondary">${park.city && `· ${park.city} `}· ${from ? `vanaf ${formatEuros(from.priceCents)}` : 'geen plek'}</span></li>`;
+    return html`<li class="break-inside-avoid py-1.5"><a href="${pathOf(park)}" class="${link}">${fullName(park)}</a> <span class="text-sm text-ink-secondary">${park.city && `· ${park.city} `}· ${from ? `vanaf ${formatEuros(from.priceCents)}` : 'geen plek'}</span></li>`;
   };
   const chips = (items) =>
-    html`<ul class="mt-3 flex flex-wrap gap-2">${items.map(([href, label, number]) => html`<li><a href="${href}" class="${chip} ${link}">${label} <span class="text-ink-secondary">${number}</span></a></li>`)}</ul>`;
+    html`<ul class="mt-4 flex flex-wrap gap-2">${items.map(([href, emoji, label, number]) => html`<li><a href="${href}" class="${chip}"><span aria-hidden="true">${emoji}</span> ${label} <span class="text-ink-muted">${number}</span></a></li>`)}</ul>`;
   const body = html`
-    <h1 class="text-3xl font-bold tracking-tight">Alle vakantieparken</h1>
-    <p class="mt-2 max-w-2xl text-ink-secondary">${parks.length} parken van Landal, Topparken en Molecaten, met de laagste weekendprijs voor ${partyLabel(PAGE_PARTY)} (vrijdag tot maandag).</p>
-    <section aria-labelledby="regions" class="mt-6"><h2 id="regions" class="text-xl font-semibold">Per regio</h2>${chips(regions.map(([region, list]) => [regionPath(region), region, list.length]))}</section>
-    <section aria-labelledby="themes" class="mt-6"><h2 id="themes" class="text-xl font-semibold">Per thema</h2>${chips(themes.map(([theme, list]) => [themePath(theme), theme.label, list.length]))}</section>
+    ${banner('🏕️', 'Alle vakantieparken', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">${parks.length} parken van Landal, Topparken en Molecaten, met de laagste weekendprijs voor ${partyLabel(PAGE_PARTY)} (vrijdag tot maandag).</p>`)}
+    <section aria-labelledby="themes" class="mt-10">${sectionTitle('themes', '✨', 'Per thema')}${chips(themes.map(([theme, list]) => [themePath(theme), FACILITY_ICONS[theme.facility], theme.label, list.length]))}</section>
+    <section aria-labelledby="regions" class="mt-10">${sectionTitle('regions', '🗺️', 'Per regio')}${chips(regions.map(([region, list]) => [regionPath(region), '📍', region, list.length]))}</section>
     ${countries.map(
-      ([country, list]) => html`<section class="mt-8">
-        <h2 class="text-xl font-semibold">${country}</h2>
+      ([country, list]) => html`<section class="mt-10">
+        <h2 class="text-2xl font-black">${country}</h2>
         <ul class="mt-2 columns-1 gap-8 sm:columns-2">${[...list].sort((a, b) => fullName(a).localeCompare(fullName(b), 'nl')).map(parkRow)}</ul>
       </section>`,
     )}`;
@@ -732,15 +837,15 @@ function weekendsIndex(weekends) {
   const row = ({ weekend, offers }) => {
     const cheapest = cheapestOf(offers.map((offer) => offer.weekend));
     const deals = offers.filter((offer) => (offer.weekend.discount ?? 0) >= DEAL_SHARE).length;
-    return html`<li class="flex flex-wrap items-baseline gap-x-3 gap-y-1 py-3">
-      <a href="${weekendPath(weekend.arrival)}" class="${link}">${formatWeekend(weekend)}</a>
-      <span class="text-sm text-ink-secondary">${offers.length} parken · vanaf ${formatEuros(cheapest.priceCents)}${deals > 0 && ` · ${deals} ${deals === 1 ? 'buitenkansje' : 'buitenkansjes'}`}</span>
+    return html`<li class="flex flex-col gap-1 rounded-3xl bg-surface p-4 ring-1 ring-line transition hover:-translate-y-0.5 hover:shadow-lg">
+      <a href="${weekendPath(weekend.arrival)}" class="text-lg font-extrabold hover:underline">${formatWeekend(weekend)}</a>
+      <p class="text-sm text-ink-secondary">${offers.length} parken met plek</p>
+      <p class="mt-1 flex flex-wrap items-center gap-2"><span class="text-2xl font-black tabular-nums">vanaf ${formatEuros(cheapest.priceCents)}</span>${deals > 0 && html`<span class="rounded-full bg-sun px-2.5 py-0.5 text-xs font-black text-on-sun">${deals} ${deals === 1 ? 'buitenkansje' : 'buitenkansjes'}</span>`}</p>
     </li>`;
   };
   const body = html`
-    <h1 class="text-3xl font-bold tracking-tight">Alle weekenden</h1>
-    <p class="mt-2 max-w-2xl text-ink-secondary">Elk komend weekend (vrijdag tot maandag) met het aantal vakantieparken dat nog plek heeft voor ${partyLabel(PAGE_PARTY)} en de laagste prijs.</p>
-    <ul class="mt-4 divide-y divide-line">${weekends.map(row)}</ul>`;
+    ${banner('📅', 'Alle weekenden', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">Elk komend weekend (vrijdag tot maandag) met het aantal vakantieparken dat nog plek heeft voor ${partyLabel(PAGE_PARTY)} en de laagste prijs.</p>`)}
+    <ul class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${weekends.map(row)}</ul>`;
   return {
     path: '/weekenden',
     title: 'Weekendje weg: alle komende weekenden met prijzen',
@@ -894,7 +999,7 @@ const privacyPage = (hostname) => ({
       <h2 class="${heading} text-ink">Wie er verder iets ziet</h2>
       <ul class="${listing}">
         <li>Een adres dat je intypt, zoeken we via onze server op bij PDOK (de overheid) of OpenStreetMap. Wij bewaren het niet.</li>
-        <li>De kaart komt van OpenStreetMap, foto's van de aanbieders en recensies van Google. Zoals bij elke website zien zij je IP-adres.</li>
+        <li>De kaart komt van OpenStreetMap, foto's van de aanbieders en van Wikimedia, en recensies van Google. Zoals bij elke website zien zij je IP-adres.</li>
         <li>Prijsalarmen gaan via ntfy.sh naar de ntfy-app op je telefoon.</li>
         <li>Klik je door naar een aanbieder, dan kan die aanbieder of een affiliate-netwerk zoals TradeTracker of Awin een cookie plaatsen. Daarmee zien zij dat je boeking via ons kwam. Daarvoor geldt hun privacybeleid.</li>
         <li>De site draait bij Cloudflare. Cloudflare verwerkt technische gegevens zoals je IP-adres om de site te leveren en te beveiligen.</li>
@@ -915,8 +1020,8 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
     <meta name="description" content="${description}" />
     <link rel="canonical" href="${url}" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#fffaf0" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e1b29" media="(prefers-color-scheme: dark)" />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="nl_NL" />
     <meta property="og:site_name" content="${SITE_NAME}" />
@@ -935,23 +1040,23 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
   </head>
   <body>
     <header class="border-b border-line bg-surface">
-      <div class="mx-auto flex max-w-4xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
-        <a href="/" class="flex items-center gap-2 font-semibold"><img src="/favicon.svg" alt="" class="size-7" />${SITE_NAME}</a>
+      <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
+        <a href="/" class="flex items-center gap-2 text-lg font-black"><span aria-hidden="true" class="grid size-9 -rotate-6 place-items-center rounded-full bg-sun text-lg shadow-sm">🏡</span>${SITE_NAME}</a>
         <nav aria-label="Hoofdmenu" class="flex gap-4 text-sm">
           <a href="/weekenden" class="${link}">Weekenden</a>
           <a href="/parken" class="${link}">Parken</a>
         </nav>
-        <a href="/" class="ml-auto rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent hover:bg-accent-hover">Zoek een weekend</a>
+        <a href="/" class="ml-auto rounded-full bg-cta px-4 py-2 text-sm font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover">Zoek een weekend</a>
       </div>
     </header>
-    <main class="mx-auto max-w-4xl px-4 py-6 sm:px-6">${new Html(body)}</main>
-    <footer class="border-t border-line bg-surface">
-      <p class="mx-auto max-w-4xl px-4 py-6 text-sm text-ink-secondary sm:px-6">
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:px-6">${new Html(body)}</main>
+    <footer class="mt-16 rounded-t-[2.5rem] bg-accent-wash">
+      <p class="mx-auto max-w-5xl px-4 pt-8 pb-4 text-sm font-semibold text-ink-secondary sm:px-6">
         ${SITE_NAME} vergelijkt prijzen van Landal, Topparken en Molecaten. Links naar een aanbieder zijn affiliate-links:
         boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra, en het bepaalt
         niet welke parken je hier ziet.
       </p>
-      <nav aria-label="Over de site" class="mx-auto max-w-4xl px-4 pb-6 text-sm sm:px-6"><a href="/privacy" class="${link}">Privacy</a></nav>
+      <nav aria-label="Over de site" class="mx-auto flex max-w-5xl gap-4 px-4 pb-8 text-sm sm:px-6"><a href="/weekenden" class="${link}">Alle weekenden</a><a href="/parken" class="${link}">Alle parken</a><a href="/privacy" class="${link}">Privacy</a></nav>
     </footer>
   </body>
 </html>

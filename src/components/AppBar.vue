@@ -46,8 +46,8 @@ const progressLabel = computed(() =>
 <template>
   <header class="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
     <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
-      <a href="/" class="flex items-center gap-2 font-semibold tracking-tight">
-        <span class="grid size-8 place-items-center rounded-lg bg-accent text-on-accent">
+      <a href="/" class="flex items-center gap-2 text-lg font-black tracking-tight">
+        <span class="grid size-9 -rotate-6 place-items-center rounded-full bg-sun text-on-sun shadow-sm">
           <Icon name="home" class="size-5" />
         </span>
         Weekendje weg

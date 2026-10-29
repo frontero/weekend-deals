@@ -86,7 +86,7 @@ watch(isDark, shade);
   <!-- isolate: the map's own layers stay below the sticky top bar. -->
   <div
     ref="container"
-    class="isolate h-[70vh] min-h-96 overflow-hidden rounded-2xl ring-1 ring-line"
+    class="isolate h-[70vh] min-h-96 overflow-hidden rounded-3xl ring-1 ring-line"
     role="region"
     aria-label="Kaart met de parken en hun prijs; de lijst eronder heeft dezelfde parken"
   />

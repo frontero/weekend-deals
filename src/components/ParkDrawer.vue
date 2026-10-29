@@ -144,12 +144,12 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
       <div class="flex flex-col gap-6 p-5">
         <header class="flex flex-col items-start gap-1">
           <BrandBadge :brand="park.brand" />
-          <h2 id="park-title" class="text-xl font-semibold">{{ park.name }}</h2>
+          <h2 id="park-title" class="text-2xl font-black">{{ park.name }}</h2>
           <ParkLocation :park="park" />
           <GoogleRating :rating="park.googleRating" as-button @select="reviewsSection?.open()" />
         </header>
 
-        <section v-if="focus" class="rounded-2xl p-4 ring-1 ring-line" aria-label="Gekozen weekend">
+        <section v-if="focus" class="rounded-3xl p-4 ring-1 ring-line" aria-label="Gekozen weekend">
           <p class="flex items-center gap-1.5 text-sm font-medium">
             <Icon name="calendar" class="size-4 text-ink-secondary" />
             {{ formatWeekend(focus) }} · {{ nights(focus) }} nachten
@@ -160,7 +160,7 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
             {{ accommodation }}
           </p>
           <div class="mt-2 flex flex-wrap items-baseline gap-x-3">
-            <span class="text-3xl font-bold tabular-nums">{{ formatEuros(focus.priceCents) }}</span>
+            <span class="text-4xl font-black tabular-nums">{{ formatEuros(focus.priceCents) }}</span>
             <span v-if="pricedFor" class="text-sm text-ink-secondary">voor {{ partyLabel(pricedFor) }}</span>
             <span v-if="park.baselineCents" class="text-sm text-ink-muted tabular-nums">
               normaal <span class="line-through">{{ formatEuros(park.baselineCents) }}</span>
@@ -256,14 +256,14 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
       <!-- The booking button stays in view while reading reviews, prices and facilities. -->
       <div v-if="focus" class="sticky bottom-0 z-20 flex items-center gap-3 border-t border-line bg-surface/95 px-5 py-3 backdrop-blur">
         <div class="min-w-0 flex-1">
-          <p class="text-lg leading-tight font-bold tabular-nums">{{ formatEuros((quote ?? focus).priceCents) }}</p>
+          <p class="text-xl leading-tight font-black tabular-nums">{{ formatEuros((quote ?? focus).priceCents) }}</p>
           <p class="truncate text-xs text-ink-secondary">{{ formatWeekend(focus) }} · incl. toeslagen</p>
         </div>
         <a
           :href="bookUrl"
           target="_blank"
           rel="sponsored noopener"
-          class="flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-5 py-3 font-semibold text-on-accent shadow-sm transition hover:bg-accent-hover hover:shadow-md"
+          class="flex shrink-0 items-center gap-1.5 rounded-full bg-cta font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover hover:shadow-md px-5 py-3"
         >
           Boek bij {{ provider }}
           <Icon name="external" class="size-4" />

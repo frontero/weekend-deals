@@ -135,7 +135,7 @@ async function switchTopic() {
 <template>
   <dialog
     ref="dialog"
-    class="m-auto max-h-[90dvh] w-[min(40rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl bg-surface p-0 text-ink shadow-2xl"
+    class="m-auto max-h-[90dvh] w-[min(40rem,calc(100vw-1.5rem))] overflow-hidden rounded-3xl bg-surface p-0 text-ink shadow-2xl"
     aria-labelledby="alerts-title"
     @close="open = false"
   >
@@ -177,7 +177,7 @@ async function switchTopic() {
           <div class="mt-3 flex flex-wrap items-center gap-3">
             <button
               type="button"
-              class="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-50"
+              class="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-hover disabled:opacity-50"
               :disabled="exists || creating || !validLimit"
               @click="setAlert"
             >

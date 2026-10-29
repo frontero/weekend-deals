@@ -53,17 +53,17 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
 <template>
   <!-- The whole card opens the park; the location, rating and booking links sit above that click area. -->
   <article
-    class="group relative flex flex-col overflow-hidden rounded-2xl bg-surface ring-1 ring-line transition hover:shadow-lg hover:ring-field has-[h3_button:focus-visible]:ring-2 has-[h3_button:focus-visible]:ring-accent"
+    class="group relative flex flex-col overflow-hidden rounded-3xl bg-surface ring-1 ring-line transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-field has-[h3_button:focus-visible]:ring-2 has-[h3_button:focus-visible]:ring-accent"
   >
     <!-- Above the card's click area so the photos can be swiped; a click still opens the park. -->
     <div class="relative z-10 aspect-[3/2] cursor-pointer overflow-hidden bg-line" @click="emit('open')">
       <PhotoCarousel :photos="photos" />
       <span
         v-if="belowNormal"
-        class="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-good-wash px-2.5 py-1 text-sm font-semibold text-good-ink shadow-sm"
+        class="absolute top-3 left-3 inline-flex -rotate-3 items-center gap-1 rounded-full bg-sun px-3 py-1 text-sm font-black text-on-sun shadow-md"
       >
         <Icon name="arrowDown" class="size-3.5" />
-        {{ formatPercent(weekend.discount) }} onder normaal
+        {{ formatPercent(weekend.discount) }} voordeliger
       </span>
       <span
         v-else-if="comparedLabel"
@@ -84,7 +84,7 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
 
     <div class="flex flex-1 flex-col gap-1.5 p-4">
       <BrandBadge :brand="park.brand" class="self-start" />
-      <h3 class="mt-0.5 leading-snug font-semibold">
+      <h3 class="mt-0.5 text-lg leading-snug font-extrabold">
         <button type="button" class="text-left after:absolute after:inset-0 focus-visible:outline-none" @click="emit('open')">
           {{ park.name }}
         </button>
@@ -112,7 +112,7 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
           <p v-else-if="park.baselineCents" class="text-sm text-ink-muted tabular-nums">
             normaal {{ formatEuros(park.baselineCents) }}
           </p>
-          <p class="text-2xl leading-tight font-bold tabular-nums"><span class="sr-only">Nu </span>{{ formatEuros(weekend.priceCents) }}</p>
+          <p class="text-3xl leading-tight font-black tabular-nums"><span class="sr-only">Nu </span>{{ formatEuros(weekend.priceCents) }}</p>
           <p class="text-xs text-ink-secondary">{{ stay }}</p>
           <p v-if="belowNormal" class="mt-1 text-sm font-medium text-good-ink">{{ saving }} onder normaal</p>
         </div>
@@ -120,7 +120,7 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
           :href="bookUrl"
           target="_blank"
           rel="sponsored noopener"
-          class="relative z-10 mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-4 py-2.5 font-semibold text-on-accent shadow-sm transition hover:bg-accent-hover hover:shadow-md"
+          class="relative z-10 mt-3 flex w-full items-center justify-center gap-1.5 rounded-full bg-cta font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover hover:shadow-md px-4 py-2.5"
         >
           Boek bij {{ provider }}
           <Icon name="external" class="size-4" />

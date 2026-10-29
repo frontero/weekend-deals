@@ -112,7 +112,7 @@ test("a park page tells where it lies, what to sleep in and when it is cheapest,
   assert.match(body, /Normaal kost een weekend hier voor 2 personen rond €\s400\./);
   assert.match(body, /In november ben je het voordeligst uit: gemiddeld €\s360, tegen €\s520 in december\./);
   assert.match(body, /Van de komende 3 weekenden zijn er nog 3 vrij\./);
-  assert.match(body, /<h3 class="font-semibold">Zwemmen<\/h3>/);
+  assert.match(body, />Zwemmen<\/h3>/);
   assert.match(body, /Goed om te weten: gratis wifi\./);
   assert.match(body, /alt="Timber Lodge 4 bij Landal Vakantiepark Gulpen"/);
   assert.match(body, /Pretpark · 7,9 km/);
@@ -150,7 +150,7 @@ test('a park page shows its cheapest weekend and books through the tracked link'
   assert.match(page.body, /href="\/api\/go\?url=[^"]+from=parkpagina/);
   assert.match(page.body, /rel="sponsored noopener"/);
   assert.match(page.body, /Nu boeken: Vertrek over 3 dagen/);
-  assert.match(page.body, /25% onder normaal/);
+  assert.match(page.body, /25% voordeliger/);
   assert.match(page.body, /Overdekt zwembad/);
   assert.match(page.body, /href="\/park\/hoogduin-b"/);
 });

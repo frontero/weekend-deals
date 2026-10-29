@@ -101,7 +101,7 @@ const dayClass = (day) => {
 <template>
   <dialog
     ref="dialog"
-    class="m-auto max-h-[92dvh] w-[min(46rem,calc(100vw-1rem))] overflow-hidden rounded-2xl bg-surface p-0 text-ink shadow-2xl"
+    class="m-auto max-h-[92dvh] w-[min(46rem,calc(100vw-1rem))] overflow-hidden rounded-3xl bg-surface p-0 text-ink shadow-2xl"
     aria-labelledby="dates-title"
     @close="open = false"
   >
@@ -192,7 +192,7 @@ const dayClass = (day) => {
         </button>
         <button
           type="button"
-          class="rounded-lg bg-accent px-4 py-2 font-semibold text-on-accent hover:bg-accent-hover"
+          class="rounded-full bg-accent px-4 py-2 font-semibold text-on-accent hover:bg-accent-hover"
           @click="apply"
         >
           {{ draft.from ? 'Toon weekenden' : 'Alle weekenden' }}
