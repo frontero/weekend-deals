@@ -1,4 +1,4 @@
-import { connect } from './connect.mjs';
+import { connect, databaseBlocked } from './connect.mjs';
 import { openDatabase } from './db.mjs';
 import { createWatcher } from './watch.mjs';
 
@@ -7,6 +7,10 @@ import { createWatcher } from './watch.mjs';
 const log = (line) => console.log(`${new Date().toISOString()} ${line}`);
 
 const { client, where } = connect();
+if (await databaseBlocked(client)) {
+  console.log('::warning::Turso blocks the database until its monthly limit resets; no watch.');
+  process.exit(0);
+}
 const db = await openDatabase(client);
 if (!(await createWatcher(db, { log }).runIfDue())) log(`no watch due (${where})`);
 db.close();

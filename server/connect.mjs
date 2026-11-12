@@ -34,7 +34,21 @@ export function withRetries(client, { delays = RETRY_DELAYS_MS, wait = sleep } =
   });
 }
 
-export const LOCAL_DATABASE_FILE = fileURLToPath(new URL('../data/prices.db', import.meta.url));
+/**
+ * Whether Turso turns every query away: its free plan blocks the database for the rest of the month once a monthly
+ * limit is reached. Background jobs then skip quietly instead of failing every ten minutes.
+ */
+export async function databaseBlocked(client) {
+  try {
+    await client.execute('SELECT 1');
+    return false;
+  } catch (error) {
+    if (/\bBLOCKED\b/.test(`${error?.code} ${error?.message}`)) return true;
+    throw error;
+  }
+}
+
+export const LOCAL_DATABASE_FILE =fileURLToPath(new URL('../data/prices.db', import.meta.url));
 
 /**
  * Turso when both its values are in the environment (`.env.local`, see scripts/setup-turso.sh), otherwise the

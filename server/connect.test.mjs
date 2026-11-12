@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { withRetries } from './connect.mjs';
+import { databaseBlocked, withRetries } from './connect.mjs';
 
 const capacity = new Error('SQLITE_UNKNOWN: Server database capacity temporarily exceeded, please try again later');
 
@@ -45,4 +45,12 @@ test('gives up after the last pause, and at once on a real error', async () => {
   const broken = flaky(10, new Error('SQLITE_ERROR: no such table: nope'));
   await assert.rejects(withRetries(broken, noWait).execute('SELECT 1'), /no such table/);
   assert.equal(broken.calls, 1);
+});
+
+test('a database Turso blocks for the month is told apart from other failures', async () => {
+  const failing = (error) => ({ execute: async () => Promise.reject(error) });
+  const blocked = Object.assign(new Error('BLOCKED: Operation was blocked: SQL read operations are forbidden'), { code: 'BLOCKED' });
+  assert.equal(await databaseBlocked(failing(blocked)), true);
+  assert.equal(await databaseBlocked({ execute: async () => ({ rows: [] }) }), false);
+  await assert.rejects(databaseBlocked(failing(new Error('fetch failed'))), /fetch failed/);
 });
