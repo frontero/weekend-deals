@@ -43,7 +43,6 @@ const SCHEMA = `
     booking_url TEXT,
     PRIMARY KEY (scan_id, park_code, arrival)
   );
-  CREATE INDEX IF NOT EXISTS prices_by_weekend ON prices (arrival, park_code);
   CREATE TABLE IF NOT EXISTS facilities (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -106,7 +105,48 @@ const SCHEMA = `
     summary TEXT NOT NULL,
     stats TEXT
   );
-  CREATE INDEX IF NOT EXISTS prices_by_park ON prices (park_code, scan_id);
+  -- Prices are read per round, through their primary key. Two more indexes cost a write per price each.
+  DROP INDEX IF EXISTS prices_by_weekend;
+  DROP INDEX IF EXISTS prices_by_park;
+  CREATE INDEX IF NOT EXISTS scans_by_group ON scans (group_key);
+  CREATE INDEX IF NOT EXISTS scans_by_start ON scans (started_at);
+  -- Per party size, weekend, park and accommodation: its latest price and how its price went over all rounds, kept
+  -- up to date with each price saved. The screen reads this instead of every round's prices again.
+  CREATE TABLE IF NOT EXISTS price_stats (
+    group_key TEXT NOT NULL,
+    arrival TEXT NOT NULL,
+    park_code TEXT NOT NULL,
+    -- Empty when the provider names none, as part of the key.
+    accommodation_code TEXT NOT NULL,
+    departure TEXT NOT NULL,
+    price_cents INTEGER NOT NULL,
+    booking_url TEXT,
+    scan_id INTEGER NOT NULL,
+    observed_at TEXT NOT NULL,
+    first_cents INTEGER NOT NULL,
+    first_observed_at TEXT NOT NULL,
+    observations INTEGER NOT NULL,
+    total_cents INTEGER NOT NULL,
+    highest_cents INTEGER NOT NULL,
+    lowest_cents INTEGER NOT NULL,
+    -- Since when the latest price holds, and the price before it.
+    since_at TEXT NOT NULL,
+    previous_cents INTEGER,
+    PRIMARY KEY (group_key, arrival, park_code, accommodation_code)
+  ) WITHOUT ROWID;
+  -- Per party size, weekend and provider: how many parks it offered in its first and in its latest round.
+  CREATE TABLE IF NOT EXISTS weekend_availability (
+    group_key TEXT NOT NULL,
+    arrival TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    first_scan_id INTEGER NOT NULL,
+    first_at TEXT NOT NULL,
+    first_count INTEGER NOT NULL,
+    latest_scan_id INTEGER NOT NULL,
+    latest_at TEXT NOT NULL,
+    latest_count INTEGER NOT NULL,
+    PRIMARY KEY (group_key, arrival, provider)
+  ) WITHOUT ROWID;
   CREATE TABLE IF NOT EXISTS watch_runs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     at TEXT NOT NULL UNIQUE,
@@ -159,44 +199,22 @@ const SCHEMA = `
     days TEXT NOT NULL,
     fetched_at TEXT NOT NULL
   );
+  CREATE INDEX IF NOT EXISTS watch_changes_by_run ON watch_changes (run_id);
+  CREATE INDEX IF NOT EXISTS clicks_by_time ON clicks (at);
 `;
 
-// Latest price per park and weekend, plus how that weekend's price behaved over all scans. The reference is the
-// latest observation from before a cut-off (a few days ago), to see which way the price went since.
+// Latest price per park and weekend, from its accommodation's running stats, plus the price at a cut-off (a few days
+// ago), to see which way it went since. Which accommodation is cheapest shifts with availability, at times back and
+// forth between rounds; a price only counts as moving when that same accommodation changed price.
 const PRICE_SUMMARIES = `
-  WITH scoped AS (
-    SELECT prices.*, scans.started_at AS observed_at
-    FROM prices
-    JOIN scans ON scans.id = prices.scan_id
-    -- Through the size's scans, so only its own prices are read, not those of every size.
-    WHERE prices.scan_id IN (SELECT id FROM scans WHERE group_key = ?) AND prices.arrival >= ?
-  ),
-  -- The accommodation behind the latest price. Which accommodation is cheapest shifts with availability, at times
-  -- back and forth between rounds; a price only counts as moving when that same accommodation changed price.
-  latest AS (
+  WITH ranked AS (
     SELECT *,
-      ROW_NUMBER() OVER weekend_history AS position,
-      FIRST_VALUE(accommodation_code) OVER weekend_history AS latest_code
-    FROM scoped
-    WINDOW weekend_history AS (PARTITION BY park_code, arrival ORDER BY scan_id DESC)
-  ),
-  ranked AS (
-    SELECT *,
-      MAX(CASE WHEN accommodation_code IS latest_code THEN price_cents END) OVER weekend AS highest_cents,
-      MIN(CASE WHEN accommodation_code IS latest_code THEN price_cents END) OVER weekend AS lowest_cents,
-      CAST(ROUND(AVG(price_cents) OVER weekend) AS INTEGER) AS typical_cents,
-      COUNT(CASE WHEN accommodation_code IS latest_code THEN 1 END) OVER weekend AS observations,
-      MIN(observed_at) OVER weekend AS first_observed_at,
-      MAX(CASE WHEN observed_at <= ? AND accommodation_code IS latest_code THEN scan_id END) OVER weekend
-        AS reference_scan_id
-    FROM latest
-    WINDOW weekend AS (PARTITION BY park_code, arrival)
-  ),
-  referenced AS (
-    SELECT *,
-      MAX(CASE WHEN scan_id = reference_scan_id THEN price_cents END) OVER weekend AS reference_cents,
-      MAX(CASE WHEN scan_id = reference_scan_id THEN observed_at END) OVER weekend AS reference_at
-    FROM ranked
+      ROW_NUMBER() OVER (PARTITION BY park_code, arrival ORDER BY scan_id DESC) AS position,
+      SUM(total_cents) OVER weekend AS weekend_cents,
+      SUM(observations) OVER weekend AS weekend_observations,
+      MIN(first_observed_at) OVER weekend AS weekend_first_at
+    FROM price_stats
+    WHERE group_key = ?1 AND arrival >= ?2
     WINDOW weekend AS (PARTITION BY park_code, arrival)
   )
   SELECT
@@ -205,40 +223,43 @@ const PRICE_SUMMARIES = `
     arrival,
     departure,
     price_cents AS priceCents,
-    typical_cents AS typicalCents,
+    CAST(ROUND(1.0 * weekend_cents / weekend_observations) AS INTEGER) AS typicalCents,
     highest_cents AS highestCents,
     lowest_cents AS lowestCents,
-    accommodation_code AS accommodationCode,
+    NULLIF(accommodation_code, '') AS accommodationCode,
     booking_url AS bookingUrl,
     observations,
     observed_at AS observedAt,
-    first_observed_at AS firstObservedAt,
-    reference_cents AS referenceCents,
-    reference_at AS referenceAt,
+    weekend_first_at AS firstObservedAt,
+    -- Unchanged since before the cut-off, or else the price before the latest change: two changes since the cut-off
+    -- are not told apart.
+    CASE WHEN first_observed_at > ?3 THEN NULL WHEN since_at <= ?3 THEN price_cents ELSE previous_cents END
+      AS referenceCents,
+    CASE WHEN first_observed_at <= ?3 THEN MIN(observed_at, ?3) END AS referenceAt,
     scan_id AS scanId
-  FROM referenced
-  JOIN parks ON parks.code = referenced.park_code
+  FROM ranked
+  JOIN parks ON parks.code = ranked.park_code
   WHERE position = 1
 `;
 
+// Through the size's rounds, each finding its price by its primary key.
 const PRICE_HISTORY = `
   SELECT scans.started_at AS observedAt, prices.price_cents AS priceCents
-  FROM prices
-  JOIN scans ON scans.id = prices.scan_id
-  WHERE scans.group_key = ? AND prices.park_code = ? AND prices.arrival = ?
-  ORDER BY prices.scan_id
+  FROM scans
+  JOIN prices ON prices.scan_id = scans.id AND prices.park_code = ?2 AND prices.arrival = ?3
+  WHERE scans.group_key = ?1
+  ORDER BY scans.id
 `;
 
-// How many parks each provider offered for each weekend in each scan; fewer over time means it is filling up.
+// How many parks each provider offered for each weekend in its first and in its latest round; fewer over time means
+// it is filling up.
 const AVAILABILITY = `
-  SELECT parks.provider, prices.arrival, prices.scan_id AS scanId, scans.started_at AS observedAt,
-    COUNT(*) AS parkCount
-  FROM prices
-  JOIN scans ON scans.id = prices.scan_id
-  JOIN parks ON parks.code = prices.park_code
-  WHERE prices.scan_id IN (SELECT id FROM scans WHERE group_key = ?) AND prices.arrival >= ?
-  GROUP BY parks.provider, prices.arrival, prices.scan_id
-  ORDER BY prices.scan_id
+  SELECT provider, arrival, first_scan_id AS scanId, first_at AS observedAt, first_count AS parkCount
+  FROM weekend_availability WHERE group_key = ?1 AND arrival >= ?2
+  UNION ALL
+  SELECT provider, arrival, latest_scan_id, latest_at, latest_count
+  FROM weekend_availability WHERE group_key = ?1 AND arrival >= ?2 AND latest_scan_id > first_scan_id
+  ORDER BY scanId
 `;
 
 const WRITE_SETTING = `INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value`;
@@ -253,6 +274,11 @@ const UPSERT_PARK = `
     image_url = COALESCE(excluded.image_url, parks.image_url),
     lat = COALESCE(excluded.lat, parks.lat), lng = COALESCE(excluded.lng, parks.lng),
     brand_code = COALESCE(excluded.brand_code, parks.brand_code)
+  WHERE (parks.provider, parks.name, parks.region, parks.city, parks.country, parks.url, parks.prices_url,
+      parks.review_score, parks.image_url, parks.lat, parks.lng, parks.brand_code)
+    IS NOT (excluded.provider, excluded.name, excluded.region, excluded.city, excluded.country, excluded.url,
+      excluded.prices_url, excluded.review_score, COALESCE(excluded.image_url, parks.image_url),
+      COALESCE(excluded.lat, parks.lat), COALESCE(excluded.lng, parks.lng), COALESCE(excluded.brand_code, parks.brand_code))
 `;
 
 const INSERT_PRICE = `
@@ -260,13 +286,97 @@ const INSERT_PRICE = `
   VALUES (?, ?, ?, ?, ?, ?, ?)
 `;
 
+// The same values as INSERT_PRICE. A round saved again (a retried request) counts once.
+const UPSERT_PRICE_STATS = `
+  INSERT INTO price_stats (group_key, arrival, park_code, accommodation_code, departure, price_cents, booking_url,
+    scan_id, observed_at, first_cents, first_observed_at, observations, total_cents, highest_cents, lowest_cents, since_at)
+  SELECT group_key, ?3, ?2, COALESCE(?6, ''), ?4, ?5, ?7, id, started_at, ?5, started_at, 1, ?5, ?5, ?5, started_at
+  FROM scans WHERE id = ?1
+  ON CONFLICT DO UPDATE SET
+    departure = excluded.departure, booking_url = excluded.booking_url, price_cents = excluded.price_cents,
+    scan_id = excluded.scan_id, observed_at = excluded.observed_at,
+    observations = observations + 1, total_cents = total_cents + excluded.price_cents,
+    highest_cents = MAX(highest_cents, excluded.price_cents), lowest_cents = MIN(lowest_cents, excluded.price_cents),
+    since_at = CASE WHEN price_cents = excluded.price_cents THEN since_at ELSE excluded.observed_at END,
+    previous_cents = CASE WHEN price_cents = excluded.price_cents THEN previous_cents ELSE price_cents END
+  WHERE excluded.scan_id > price_stats.scan_id
+`;
+
+const UPSERT_AVAILABILITY = `
+  INSERT INTO weekend_availability (group_key, arrival, provider, first_scan_id, first_at, first_count,
+    latest_scan_id, latest_at, latest_count)
+  SELECT group_key, ?2, ?3, id, started_at, ?4, id, started_at, ?4 FROM scans WHERE id = ?1
+  ON CONFLICT DO UPDATE SET
+    first_count = CASE WHEN first_scan_id = excluded.first_scan_id THEN excluded.first_count ELSE first_count END,
+    latest_scan_id = excluded.latest_scan_id, latest_at = excluded.latest_at, latest_count = excluded.latest_count
+  WHERE excluded.latest_scan_id >= weekend_availability.latest_scan_id
+`;
+
+// Both from the rounds kept before price_stats and weekend_availability existed, one party size at a time.
+const FILL_PRICE_STATS = `
+  WITH observed AS (
+    SELECT scans.group_key, prices.arrival, prices.park_code, COALESCE(prices.accommodation_code, '') AS accommodation_code,
+      prices.departure, prices.price_cents, prices.booking_url, prices.scan_id, scans.started_at AS observed_at
+    FROM scans JOIN prices ON prices.scan_id = scans.id
+    WHERE scans.group_key = ?
+  ),
+  ordered AS (
+    SELECT *,
+      ROW_NUMBER() OVER newest_first AS from_last,
+      LAG(price_cents) OVER oldest_first AS before_cents,
+      FIRST_VALUE(price_cents) OVER oldest_first AS first_cents,
+      FIRST_VALUE(observed_at) OVER oldest_first AS first_observed_at,
+      COUNT(*) OVER stay AS observations,
+      SUM(price_cents) OVER stay AS total_cents,
+      MAX(price_cents) OVER stay AS highest_cents,
+      MIN(price_cents) OVER stay AS lowest_cents
+    FROM observed
+    WINDOW stay AS (PARTITION BY arrival, park_code, accommodation_code),
+      oldest_first AS (stay ORDER BY scan_id),
+      newest_first AS (stay ORDER BY scan_id DESC)
+  ),
+  -- Where each price began; the latest start is since when the current price holds.
+  changes AS (
+    SELECT arrival, park_code, accommodation_code, observed_at AS since_at, before_cents AS previous_cents,
+      ROW_NUMBER() OVER (PARTITION BY arrival, park_code, accommodation_code ORDER BY scan_id DESC) AS from_last
+    FROM ordered WHERE before_cents IS NOT price_cents
+  )
+  INSERT OR IGNORE INTO price_stats (group_key, arrival, park_code, accommodation_code, departure, price_cents,
+    booking_url, scan_id, observed_at, first_cents, first_observed_at, observations, total_cents, highest_cents,
+    lowest_cents, since_at, previous_cents)
+  SELECT group_key, arrival, park_code, accommodation_code, departure, price_cents, booking_url, scan_id, observed_at,
+    first_cents, first_observed_at, observations, total_cents, highest_cents, lowest_cents, since_at, previous_cents
+  FROM ordered JOIN changes USING (arrival, park_code, accommodation_code)
+  WHERE ordered.from_last = 1 AND changes.from_last = 1
+`;
+
+const FILL_AVAILABILITY = `
+  WITH counted AS (
+    SELECT scans.group_key, prices.arrival, parks.provider, prices.scan_id, scans.started_at, COUNT(*) AS park_count,
+      ROW_NUMBER() OVER (PARTITION BY prices.arrival, parks.provider ORDER BY prices.scan_id) AS from_first,
+      ROW_NUMBER() OVER (PARTITION BY prices.arrival, parks.provider ORDER BY prices.scan_id DESC) AS from_last
+    FROM scans
+    JOIN prices ON prices.scan_id = scans.id
+    JOIN parks ON parks.code = prices.park_code
+    WHERE scans.group_key = ?
+    GROUP BY prices.arrival, parks.provider, prices.scan_id
+  )
+  INSERT OR IGNORE INTO weekend_availability (group_key, arrival, provider, first_scan_id, first_at, first_count,
+    latest_scan_id, latest_at, latest_count)
+  SELECT earliest.group_key, arrival, provider, earliest.scan_id, earliest.started_at, earliest.park_count,
+    latest.scan_id, latest.started_at, latest.park_count
+  FROM counted AS earliest JOIN counted AS latest USING (arrival, provider)
+  WHERE earliest.from_first = 1 AND latest.from_last = 1
+`;
+
 // The party sizes that rounds collect ahead of time. Parties chosen before there were fixed sizes stay in the
 // table (price alerts and history refer to them) but are no longer collected.
 const FOLLOWED_PARTIES = `
   SELECT group_key AS key, party, standard,
-    (SELECT MAX(started_at) FROM scans WHERE scans.group_key = parties.group_key) AS lastStartedAt,
-    (SELECT MAX(started_at) FROM scans
-      WHERE scans.group_key = parties.group_key AND scans.finished_at IS NOT NULL AND scans.error IS NULL) AS lastSucceededAt,
+    (SELECT started_at FROM scans WHERE scans.group_key = parties.group_key ORDER BY id DESC LIMIT 1) AS lastStartedAt,
+    (SELECT started_at FROM scans
+      WHERE scans.group_key = parties.group_key AND scans.finished_at IS NOT NULL AND scans.error IS NULL
+      ORDER BY id DESC LIMIT 1) AS lastSucceededAt,
     EXISTS (SELECT 1 FROM scans WHERE scans.group_key = parties.group_key AND scans.finished_at IS NOT NULL) AS collected
   FROM parties
   WHERE standard = 1
@@ -383,6 +493,26 @@ async function seedParties(client) {
   await client.batch(insertRows('INSERT OR IGNORE', 'parties', ['group_key', 'party', 'standard', 'used_at'], rows), 'write');
 }
 
+/**
+ * price_stats and weekend_availability came later: they are filled once from the rounds kept before them, by the job
+ * that claims it first. Tried once only: a failure would otherwise read every price again ten minutes later, and the
+ * rounds after it count in any case.
+ */
+async function fillPriceStats(client) {
+  const claim = await client.execute({
+    sql: `INSERT INTO settings (key, value) VALUES ('priceStatsFilledAt', ?) ON CONFLICT DO NOTHING`,
+    args: [new Date().toISOString()],
+  });
+  if (!claim.rowsAffected) return;
+  for (const { key } of (await client.execute('SELECT DISTINCT group_key AS key FROM scans')).rows) {
+    try {
+      await client.batch([{ sql: FILL_PRICE_STATS, args: [key] }, { sql: FILL_AVAILABILITY, args: [key] }], 'write');
+    } catch (error) {
+      console.warn(`price stats of ${key} not filled: ${error.message}`);
+    }
+  }
+}
+
 /** Creates missing tables and columns; only the Mac does this, the cloud app expects them to be there. */
 export async function migrate(client) {
   if (client.protocol === 'file') {
@@ -394,6 +524,7 @@ export async function migrate(client) {
   await client.executeMultiple(SCHEMA);
   await addLaterColumns(client);
   await seedParties(client);
+  await fillPriceStats(client);
 }
 
 const parkRow = (park) => ({
@@ -696,7 +827,8 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
         FROM scans LEFT JOIN scan_changes ON scan_changes.scan_id = scans.id
         WHERE scans.started_at >= ? AND scans.finished_at IS NOT NULL AND scans.error IS NULL
           AND (scan_changes.scan_id IS NULL OR scan_changes.stats IS NULL)
-        ORDER BY scans.id DESC LIMIT ?`,
+        -- By start, so scans_by_start stops at \`since\` instead of every round being read.
+        ORDER BY scans.started_at DESC LIMIT ?`,
         since,
         limit,
       );
@@ -722,13 +854,27 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       return rows.map(({ summary, stats, ...round }) => ({ ...round, changes: JSON.parse(summary), stats: JSON.parse(stats) }));
     },
 
-    /** How many rounds ran and prices were kept, over all party sizes. */
+    /** How many rounds ran and prices were kept, over all party sizes, as of the last summarised rounds. */
     async adminTotals() {
-      return first(
+      return parseJson(await readSetting('adminTotals'), { rounds: 0, prices: null, since: null });
+    },
+
+    async refreshAdminTotals() {
+      const totals = await first(
         `SELECT COUNT(*) AS rounds, SUM(json_extract(scan_changes.summary, '$.prices')) AS prices,
           MIN(scans.started_at) AS since
         FROM scans LEFT JOIN scan_changes ON scan_changes.scan_id = scans.id`,
       );
+      await writeSetting('adminTotals', JSON.stringify(totals));
+    },
+
+    /** Ids of the latest rounds whose accommodations were looked at. */
+    async accommodationsCheckedScans() {
+      return parseJson(await readSetting('accommodationsCheckedScans'), []);
+    },
+
+    async saveAccommodationsCheckedScans(scanIds) {
+      await writeSetting('accommodationsCheckedScans', JSON.stringify(scanIds));
     },
 
     /** Where the price watch stands: its last run, a run another process started, and the prices to compare with. */
@@ -866,8 +1012,8 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
             sql: `SELECT json_group_array(json_array(startedAt, arrival, priceCents, accommodationCode)) AS json FROM (
                 SELECT scans.started_at AS startedAt, prices.arrival, prices.price_cents AS priceCents,
                   prices.accommodation_code AS accommodationCode
-                FROM prices JOIN scans ON scans.id = prices.scan_id
-                WHERE prices.park_code = ? AND scans.group_key = ? AND scans.started_at >= ?
+                FROM scans JOIN prices ON prices.scan_id = scans.id AND prices.park_code = ?
+                WHERE scans.group_key = ? AND scans.started_at >= ?
                   AND scans.finished_at IS NOT NULL AND scans.error IS NULL
                 ORDER BY scans.id, prices.arrival)`,
             args: [code, key, since],
@@ -879,12 +1025,12 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
     },
 
     /**
-     * Per park, how one weekend's price went for a party size since `since`: the first and the latest price seen,
+     * Per park, how one weekend's price went for a party size, from price_stats: the first and the latest price seen,
      * the lowest and highest, and how often it was seen. Put together as JSON by Turso, like parkHistory.
      * @returns { latestAt, parks } as JSON texts; parks are [parkCode, firstCents, firstAt, lastCents, lastAt,
      *   lowCents, highCents, observations]
      */
-    async weekendHistory(arrival, key, since) {
+    async weekendHistory(arrival, key) {
       const [latest, parks] = await client.batch(
         [
           {
@@ -893,23 +1039,20 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
             args: [key],
           },
           {
-            sql: `WITH seen AS (
-                SELECT prices.park_code AS park, scans.id AS scan, scans.started_at AS at, prices.price_cents AS price
-                FROM prices JOIN scans ON scans.id = prices.scan_id
-                WHERE prices.arrival = ? AND scans.group_key = ? AND scans.started_at >= ?
-                  AND scans.finished_at IS NOT NULL AND scans.error IS NULL
-              ), ranked AS (
-                SELECT *, ROW_NUMBER() OVER (PARTITION BY park ORDER BY scan) AS fromFirst,
-                  ROW_NUMBER() OVER (PARTITION BY park ORDER BY scan DESC) AS fromLast
-                FROM seen
+            sql: `WITH ranked AS (
+                SELECT *, ROW_NUMBER() OVER (PARTITION BY park_code ORDER BY first_observed_at) AS fromFirst,
+                  ROW_NUMBER() OVER (PARTITION BY park_code ORDER BY scan_id DESC) AS fromLast
+                FROM price_stats WHERE group_key = ? AND arrival = ?
               )
               SELECT json_group_array(json_array(park, firstCents, firstAt, lastCents, lastAt, low, high, n)) AS json FROM (
-                SELECT park,
-                  MAX(CASE WHEN fromFirst = 1 THEN price END) AS firstCents, MAX(CASE WHEN fromFirst = 1 THEN at END) AS firstAt,
-                  MAX(CASE WHEN fromLast = 1 THEN price END) AS lastCents, MAX(CASE WHEN fromLast = 1 THEN at END) AS lastAt,
-                  MIN(price) AS low, MAX(price) AS high, COUNT(*) AS n
-                FROM ranked GROUP BY park)`,
-            args: [arrival, key, since],
+                SELECT park_code AS park,
+                  MAX(CASE WHEN fromFirst = 1 THEN first_cents END) AS firstCents,
+                  MAX(CASE WHEN fromFirst = 1 THEN first_observed_at END) AS firstAt,
+                  MAX(CASE WHEN fromLast = 1 THEN price_cents END) AS lastCents,
+                  MAX(CASE WHEN fromLast = 1 THEN observed_at END) AS lastAt,
+                  MIN(lowest_cents) AS low, MAX(highest_cents) AS high, SUM(observations) AS n
+                FROM ranked GROUP BY park_code)`,
+            args: [key, arrival],
           },
         ],
         'read',
@@ -943,9 +1086,12 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
     /** @returns group key → id of its last finished scan, whose prices the screen shows */
     async lastFinishedScans() {
       const rows = await all(
-        `SELECT group_key AS key, MAX(id) AS scanId FROM scans WHERE finished_at IS NOT NULL GROUP BY group_key`,
+        `SELECT group_key AS key,
+          (SELECT id FROM scans WHERE scans.group_key = parties.group_key AND finished_at IS NOT NULL ORDER BY id DESC LIMIT 1)
+            AS scanId
+        FROM parties`,
       );
-      return new Map(rows.map(({ key, scanId }) => [key, Number(scanId)]));
+      return new Map(rows.filter(({ scanId }) => scanId !== null).map(({ key, scanId }) => [key, Number(scanId)]));
     },
 
     /** Includes scans that are still running, possibly in another process. */
@@ -1035,23 +1181,29 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       const accommodations = offers
         .filter((offer) => offer.accommodation?.code)
         .map((offer) => accommodationRow(offer.park.code, offer.accommodation, fetchedAt));
+      const parksPerProvider = Map.groupBy(offers, (offer) => parkRow(offer.park).provider);
       await client.batch(
         [
-          ...offers.flatMap((offer) => [
-            { sql: UPSERT_PARK, args: parkRow(offer.park) },
-            {
-              sql: INSERT_PRICE,
-              args: [
-                scanId,
-                offer.park.code,
-                weekend.arrival,
-                weekend.departure,
-                offer.priceCents,
-                offer.accommodationCode,
-                offer.bookingUrl ?? null,
-              ],
-            },
-          ]),
+          ...offers.flatMap((offer) => {
+            const price = [
+              scanId,
+              offer.park.code,
+              weekend.arrival,
+              weekend.departure,
+              offer.priceCents,
+              offer.accommodationCode,
+              offer.bookingUrl ?? null,
+            ];
+            return [
+              { sql: UPSERT_PARK, args: parkRow(offer.park) },
+              { sql: INSERT_PRICE, args: price },
+              { sql: UPSERT_PRICE_STATS, args: price },
+            ];
+          }),
+          ...[...parksPerProvider].map(([provider, list]) => ({
+            sql: UPSERT_AVAILABILITY,
+            args: [scanId, weekend.arrival, provider, new Set(list.map((offer) => offer.park.code)).size],
+          })),
           ...insertRows('INSERT OR REPLACE', 'accommodations', ACCOMMODATION_COLUMNS, accommodations),
         ],
         'write',

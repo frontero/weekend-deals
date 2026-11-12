@@ -8,7 +8,7 @@ import { isPagePath, servePage } from '../server/pages.mjs';
 
 // Routes where each call costs something: a provider's or Google's quota, or a message sent. RATE_LIMITER in
 // wrangler.jsonc caps them per visitor.
-const LIMITED = new Set(['POST /api/quote', 'GET /api/reviews', 'POST /api/geocode', 'POST /api/alerts', 'POST /api/alerts/test']);
+const LIMITED = new Set(['POST /api/quote', 'GET /api/history', 'GET /api/reviews', 'POST /api/geocode', 'POST /api/alerts', 'POST /api/alerts/test']);
 
 // The built app's stylesheet, whose name changes with every build; read once per Worker instance.
 let stylesheet;

@@ -62,7 +62,8 @@ export function useOverview() {
     } catch {
       failed.value = true;
     }
-    timer = setTimeout(load, overview.value?.scan.running ? POLL_WHILE_SCANNING_MS : POLL_IDLE_MS);
+    // Only admins follow a round's progress closely; for visitors a minute is plenty.
+    timer = setTimeout(load, overview.value?.scan.running && overview.value.admin ? POLL_WHILE_SCANNING_MS : POLL_IDLE_MS);
   }
 
   async function startScan() {

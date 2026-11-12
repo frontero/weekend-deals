@@ -200,7 +200,7 @@ export function createApiHandler(
       const [key] = await partiesOf(request);
       const arrival = new URL(request.url).searchParams.get('arrival') ?? '';
       if (!ISO_DATE.test(arrival)) return json({ error: 'Invalid weekend' }, 400);
-      const history = await db.weekendHistory(arrival, key, adminWindowStart());
+      const history = await db.weekendHistory(arrival, key);
       return jsonText(`{"arrival":"${arrival}","latestAt":${history.latestAt},"parks":${history.parks}}`);
     }),
 

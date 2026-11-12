@@ -162,7 +162,7 @@ test('a price only moves when the same accommodation changed price, not when ano
   assert.equal(summary.observations, 3);
   // Compared with the same accommodation a few days earlier, not with the other one.
   assert.equal(summary.referenceCents, 29500);
-  assert.equal(summary.referenceAt, '2026-10-25T08:00:00Z');
+  assert.equal(summary.referenceAt, '2026-10-27T08:00:00Z');
   db.close();
 });
 
@@ -183,7 +183,7 @@ test('tells per weekend how its price moved and returns its history', async () =
   assert.equal(summary.firstObservedAt, '2026-10-20T08:00:00Z');
   assert.equal(summary.observedAt, '2026-10-30T08:00:00Z');
   assert.equal(summary.referenceCents, 32000);
-  assert.equal(summary.referenceAt, '2026-10-25T08:00:00Z');
+  assert.equal(summary.referenceAt, '2026-10-27T08:00:00Z');
 
   assert.deepEqual(
     (await db.priceHistory('a2-c0', 'HDL', '2026-12-11')).map((point) => point.priceCents),
@@ -191,13 +191,58 @@ test('tells per weekend how its price moved and returns its history', async () =
   );
   assert.deepEqual(
     (await db.availability('a2-c0', '2026-01-01')).map((row) => [row.provider, row.arrival, row.parkCount]),
+    // The first and the latest round.
     [
-      ['landal', '2026-12-11', 1],
       ['landal', '2026-12-11', 1],
       ['landal', '2026-12-11', 1],
     ],
   );
   db.close();
+});
+
+test('a round saved again counts once in the price stats', async () => {
+  const db = await open('retried.db');
+  const weekend = { arrival: '2026-12-11', departure: '2026-12-14' };
+  const scanId = await db.startScan('a2-c0', '2026-10-20T08:00:00Z');
+  await db.savePrices(scanId, weekend, [{ ...offer('HDL', 52.9), priceCents: 30000 }]);
+  await db.savePrices(scanId, weekend, [{ ...offer('HDL', 52.9), priceCents: 30000 }]);
+  assert.equal((await db.priceSummaries('a2-c0', '2026-01-01'))[0].observations, 1);
+  db.close();
+});
+
+test('fills the price stats once from the rounds kept before them, as saving them does', async () => {
+  const name = 'filled.db';
+  const db = await open(name);
+  const weekend = { arrival: '2027-01-15', departure: '2027-01-18' };
+  const scan = async (startedAt, prices) => {
+    const scanId = await db.startScan('a2-c0', startedAt);
+    await db.savePrices(scanId, weekend, prices.map(([code, accommodationCode, priceCents]) => ({ ...offer(code, 52.9), accommodationCode, priceCents })));
+  };
+  await scan('2026-10-20T08:00:00Z', [['FKT', 'a', 29500], ['HDL', null, 40000]]);
+  await scan('2026-10-21T08:00:00Z', [['FKT', 'b', 35500], ['HDL', null, 41000]]);
+  await scan('2026-10-25T08:00:00Z', [['FKT', 'a', 31000], ['HDL', null, 41000]]);
+  await scan('2026-10-30T08:00:00Z', [['FKT', 'a', 28000]]);
+  const summaries = async (opened) => {
+    const rows = await opened.priceSummaries('a2-c0', '2026-01-01', '2026-10-27T08:00:00Z');
+    return rows.sort((a, b) => a.parkCode.localeCompare(b.parkCode));
+  };
+  const saved = await summaries(db);
+  const availability = await db.availability('a2-c0', '2026-01-01');
+  db.close();
+
+  const client = clientFor(name);
+  await client.batch(['DELETE FROM price_stats', 'DELETE FROM weekend_availability', `DELETE FROM settings WHERE key = 'priceStatsFilledAt'`], 'write');
+  const filled = await openDatabase(client);
+  assert.deepEqual(await summaries(filled), saved);
+  assert.deepEqual(await filled.availability('a2-c0', '2026-01-01'), availability);
+  assert.deepEqual(
+    saved.map((row) => [row.parkCode, row.priceCents, row.referenceCents, row.highestCents, row.observations, row.typicalCents]),
+    [
+      ['FKT', 28000, 31000, 31000, 3, 31000],
+      ['HDL', 41000, 41000, 41000, 3, 40667],
+    ],
+  );
+  filled.close();
 });
 
 test('counts Google requests per month', async () => {
@@ -325,7 +370,7 @@ test("puts a park's and a weekend's price history together as JSON", async () =>
   ]);
   assert.equal((await db.parkHistory('NOPE', 'a2-c0', since)).park, null);
 
-  const weekend = await db.weekendHistory('2026-11-13', 'a2-c0', since);
+  const weekend = await db.weekendHistory('2026-11-13', 'a2-c0');
   assert.equal(JSON.parse(weekend.latestAt), '2026-10-22T18:00:00Z');
   const parks = Object.fromEntries(JSON.parse(weekend.parks).map(([code, ...rest]) => [code, rest]));
   assert.deepEqual(parks.HRK, [30000, '2026-10-22T06:45:00Z', 27000, '2026-10-22T18:00:00Z', 27000, 30000, 2]);

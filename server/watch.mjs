@@ -106,7 +106,9 @@ export function createWatcher(db, { log = () => {} } = {}) {
       const sample = await sampleWatch(watchWeekends(), log);
       const { summary, changes } = compareWatch(state.snapshot, sample);
       await db.saveWatchRun({ at, summary, changes, snapshot: nextSnapshot(state.snapshot, sample) });
-      await refreshStats();
+      // Once a day: the analysis reads all runs in the window, too much to do every half hour.
+      const computedAt = await db.adminStatsComputedAt(WATCH_STATS_KEY);
+      if (!computedAt || localToday(new Date(computedAt)) !== localToday()) await refreshStats();
       log(`watch: ${changes.length} price changes`);
       return true;
     } catch (error) {

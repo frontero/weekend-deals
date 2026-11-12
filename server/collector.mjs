@@ -218,6 +218,19 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
   }
 
   /**
+   * The jobs of the latest rounds not looked at yet. Each round is looked at once: reading the latest rounds' prices
+   * every ten minutes cost more than the database allows. Details that fail now wait for the next round.
+   */
+  async function newAccommodationJobs() {
+    const latest = await latestScans();
+    const checked = new Set(await db.accommodationsCheckedScans());
+    const unchecked = latest.filter(({ scanId }) => !checked.has(scanId));
+    if (!unchecked.length) return [];
+    await db.saveAccommodationsCheckedScans(latest.map(({ scanId }) => scanId));
+    return accommodationJobs(unchecked);
+  }
+
+  /**
    * Names, facts and photos of the accommodations behind the shown prices, for providers that list them apart.
    * They hardly change, so each is fetched once; details a stopped round missed are fetched by the next one.
    * Extra, like the ratings: a failing park is only logged.
@@ -239,7 +252,8 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
           const accommodations = await provider.fetchAccommodations(parkCode, { ...party, arrival, departure });
           throwIfCancelled();
           await db.saveAccommodations(parkCode, accommodations);
-          detailsAdded ||= accommodations.length > 0;
+          // Only a wanted one is new to the overviews; the others the search listed were known already.
+          detailsAdded ||= accommodations.some((accommodation) => wanted.has(accommodation.code));
           for (const accommodation of accommodations) {
             wanted.delete(accommodation.code);
             found.add(`${parkCode}|${accommodation.code}`);
@@ -368,6 +382,7 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
       throwIfCancelled();
       await db.saveAdminStats(key, { computedAt: stats.computedAt, data: gzipSync(JSON.stringify(stats)) });
     }
+    if (rebuild || (await db.adminTotals()).since === null) await db.refreshAdminTotals();
   }
 
   /**
@@ -441,7 +456,7 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
       await refreshFacilityNames().catch((error) => log(`facility pages failed: ${error.message}`));
       throwIfCancelled();
       if (parties.length) await collectPrices(parties);
-      await refreshAccommodations(await accommodationJobs(await latestScans())).catch((error) =>
+      await refreshAccommodations(await newAccommodationJobs()).catch((error) =>
         log(`accommodations failed: ${error.message}`),
       );
       throwIfCancelled();
@@ -464,7 +479,7 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
     let jobs;
     try {
       if (cancelled || progress.running) return;
-      jobs = await accommodationJobs(await latestScans());
+      jobs = await newAccommodationJobs();
     } catch (error) {
       log(`accommodations check failed: ${error.message}`);
       return;
