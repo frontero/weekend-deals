@@ -31,5 +31,5 @@ export const router = createRouter({
 });
 
 router.afterEach((to) => {
-  document.title = `${to.meta.title} – Beheer – Weekendje weg`;
+  document.title = `${to.meta.title} – Beheer – Parkje weg`;
 });

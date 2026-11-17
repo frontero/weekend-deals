@@ -236,7 +236,7 @@ async function switchTopic() {
                   type="text"
                   autocomplete="off"
                   spellcheck="false"
-                  placeholder="weekendjeweg-…"
+                  placeholder="parkjeweg-…"
                   class="w-full rounded-lg bg-surface px-3 py-2 font-mono text-xs ring-1 ring-field focus:ring-2 focus:ring-accent focus:outline-none"
                 />
               </label>

@@ -26,7 +26,7 @@ const palette = usePalette();
 const arrival = computed(() => String(route.params.arrival ?? ''));
 const weekend = computed(() => ({ arrival: arrival.value, departure: shiftDays(arrival.value, WEEKEND_NIGHTS) }));
 const title = computed(() => formatWeekend(weekend.value));
-watch(title, (value) => (document.title = `${value} – Beheer – Weekendje weg`), { immediate: true });
+watch(title, (value) => (document.title = `${value} – Beheer – Parkje weg`), { immediate: true });
 
 const daysAway = computed(() => Math.round((Date.parse(`${arrival.value}T00:00:00`) - Date.parse(`${localToday()}T00:00:00`)) / DAY_MS));
 const when = computed(() => {

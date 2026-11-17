@@ -232,7 +232,7 @@ TOTAL_STAGES=6
 ENV_FILE="$(cd "$(dirname "$0")/.." && pwd)/.env.local"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-banner "Turso: de prijzen van Weekendje weg in de cloud"
+banner "Turso: de prijzen van Parkje weg in de cloud"
 
 stage "Turso-opdrachtregeltool"
 say "Met deze tool maakt het script je database en sleutel aan, zodat je niets hoeft over te typen."

@@ -42,7 +42,7 @@ const status = computed(() => {
         <Icon name="home" class="size-5" />
       </span>
       <span class="leading-tight">
-        Weekendje weg
+        Parkje weg
         <span class="block text-xs font-medium text-ink-secondary">Beheer</span>
       </span>
     </a>

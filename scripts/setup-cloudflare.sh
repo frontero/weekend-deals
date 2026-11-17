@@ -256,7 +256,7 @@ TOTAL_STAGES=6
 ENV_FILE="$(cd "$(dirname "$0")/.." && pwd)/.env.local"
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-banner "Cloudflare: Weekendje weg in de cloud, alleen voor jou"
+banner "Cloudflare: Parkje weg in de cloud, alleen voor jou"
 
 stage "Turso klaar?"
 say "De cloud-app leest de prijzen uit Turso. Die gegevens staan na scripts/setup-turso.sh in .env.local."

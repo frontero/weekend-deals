@@ -5,7 +5,7 @@ import { request } from '../lib/api.js';
 const TOPIC_STORAGE_KEY = 'weekend-deals:ntfy-topic';
 const TOPIC_PATTERN = /^[A-Za-z0-9_-]{16,64}$/;
 
-export const newTopic = () => `weekendjeweg-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
+export const newTopic = () => `parkjeweg-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
 export const isTopic = (value) => TOPIC_PATTERN.test(value);
 
 function loadTopic() {

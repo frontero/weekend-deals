@@ -50,7 +50,7 @@ const progressLabel = computed(() =>
         <span class="grid size-9 -rotate-6 place-items-center rounded-full bg-sun text-on-sun shadow-sm">
           <Icon name="home" class="size-5" />
         </span>
-        Weekendje weg
+        Parkje weg
       </a>
 
       <button

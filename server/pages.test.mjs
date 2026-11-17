@@ -375,7 +375,7 @@ test('parks clicked through to often this week are marked popular, with what tha
   const built = buildPages({ parks: [gulpen, hoogduin], allParks, computedAt: '2026-10-29T06:39:10.572Z', details: { ...details, popular: new Map([['GPN', 7]]) } });
   const park = built.find((page) => page.path === '/park/vakantiepark-gulpen').body;
   assert.match(park, /Populair deze week/);
-  assert.match(park, /title="Veel aangeklikt op Weekendje weg in de afgelopen 7 dagen\."/);
+  assert.match(park, /title="Veel aangeklikt op Parkje weg in de afgelopen 7 dagen\."/);
   const quiet = built.find((page) => page.path === '/park/hoogduin-b').body;
   assert.doesNotMatch(quiet, /Populair/);
   assert.doesNotMatch(quiet, /<\/span>0<\/p>/, 'no stray zero after the rating');

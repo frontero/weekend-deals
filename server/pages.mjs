@@ -35,7 +35,7 @@ const LAST_MINUTE_CARDS = 6;
 const MONTH_GAP = 0.1;
 // Under this many percent from the park's normal price a weekend costs the normal price: no news.
 const NOTEWORTHY_PERCENT = 5;
-const SITE_NAME = 'Weekendje weg';
+const SITE_NAME = 'Parkje weg';
 
 const PAGE_PATH =
   /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|regio\/[a-z0-9-]+|thema\/[a-z0-9-]+|land\/[a-z0-9-]+|last-minute|privacy|sitemap\.xml|robots\.txt)$/;
@@ -459,7 +459,7 @@ function compared(weekend) {
 const photoSticker = (weekend) =>
   weekend && discountPercent(weekend) >= NOTEWORTHY_PERCENT && html`<span class="${sticker} absolute top-3 left-3">${discountPercent(weekend)}% voordeliger</span>`;
 
-const POPULAR_NOTE = 'Veel aangeklikt op Weekendje weg in de afgelopen 7 dagen.';
+const POPULAR_NOTE = `Veel aangeklikt op ${SITE_NAME} in de afgelopen 7 dagen.`;
 /** Parks visitors clicked through to most this week (see popularParks in server/overview.mjs). */
 const popularBadge = (park, classes = '') =>
   park.popular > 0 && html`<span class="rounded-full bg-cta-wash px-2.5 py-0.5 text-xs font-extrabold whitespace-nowrap text-ink ${classes}" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair</span>`;

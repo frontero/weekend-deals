@@ -222,7 +222,7 @@ run_wizard() {
 TOTAL_STAGES=7
 ENV_FILE="$(cd "$(dirname "$0")/.." && pwd)/.env.local"
 
-banner "Google-scores: Places API-sleutel voor Weekendje weg"
+banner "Google-scores: Places API-sleutel voor Parkje weg"
 
 stage "Google Cloud-project"
 say "Alle Google-instellingen horen bij een project. Maak er een of kies een bestaand project."

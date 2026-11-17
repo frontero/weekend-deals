@@ -471,7 +471,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
 
   <footer class="border-t border-line bg-surface">
     <p class="mx-auto max-w-7xl px-4 py-6 text-sm text-ink-secondary sm:px-6">
-      Weekendje weg vergelijkt prijzen van Landal, Topparken en Molecaten. Links naar een aanbieder zijn
+      Parkje weg vergelijkt prijzen van Landal, Topparken en Molecaten. Links naar een aanbieder zijn
       affiliate-links: boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra,
       en het bepaalt niet welke parken je hier ziet.
     </p>

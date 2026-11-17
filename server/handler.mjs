@@ -271,7 +271,7 @@ export function createApiHandler(
       const { topic } = await readJson(request);
       if (!validTopic(topic)) return json({ error: 'Invalid topic' }, 400);
       await sendNotification(topic, {
-        title: 'Weekendje weg',
+        title: 'Parkje weg',
         message: 'Testmelding: je prijsalarm kan je bereiken.',
         tags: ['white_check_mark'],
       });

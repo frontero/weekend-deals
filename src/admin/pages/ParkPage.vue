@@ -52,7 +52,7 @@ watch([() => route.params.code, size], load, { immediate: true });
 
 const park = computed(() => history.value?.park ?? null);
 watch(park, (value) => {
-  if (value) document.title = `${value.name} – Beheer – Weekendje weg`;
+  if (value) document.title = `${value.name} – Beheer – Parkje weg`;
 });
 
 const weekendOf = (arrival) => ({ arrival, departure: shiftDays(arrival, WEEKEND_NIGHTS) });
