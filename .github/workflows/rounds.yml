@@ -1,7 +1,8 @@
 # Price rounds without the Mac: every ten minutes GitHub makes the same check as the background job on the Mac
 # (npm run background:on), and runs a round when one is due or the app asked for one.
 # Needs these repository secrets (Settings → Secrets and variables → Actions), with the values from .env.local:
-# TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, GOOGLE_PLACES_API_KEY and WORKER_URL.
+# TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, GOOGLE_PLACES_API_KEY and WORKER_URL. With TURSO_API_TOKEN (a Turso platform
+# token) rounds hold back before the free plan's monthly limit is reached (server/budget.mjs).
 name: Price rounds
 
 on:
@@ -47,5 +48,7 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
           WORKER_URL: ${{ secrets.WORKER_URL }}
+          TURSO_API_TOKEN: ${{ secrets.TURSO_API_TOKEN }}
+          TURSO_ORG: weekenddeals
           # The round times (06:45 and 18:00) are Dutch time.
           TZ: Europe/Amsterdam

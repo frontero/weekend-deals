@@ -74,3 +74,11 @@ test('stopping mid-round leaves "interrupted" for other screens instead of a rou
   await collector.cancel();
   assert.equal(db.saved.length, 1);
 });
+
+test("with the month's database budget low, only the default party size is collected", async () => {
+  const other = { ...followed(null), key: 'a4-c0', party: { ...party, adults: 4 } };
+  const db = fakeDb({ parties: [other] });
+  assert.equal(await createCollector(db).isDue(), true);
+  assert.equal(await createCollector(db, { essentialOnly: true }).isDue(), false);
+  assert.equal(await createCollector(fakeDb({ parties: [followed(null)] }), { essentialOnly: true }).isDue(), true);
+});

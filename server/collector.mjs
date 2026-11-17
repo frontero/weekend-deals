@@ -1,6 +1,7 @@
 import { gzipSync } from 'node:zlib';
 import { adminWindowStart, buildAdminStats } from '../shared/admin-stats.mjs';
 import { scanChanges } from '../shared/scan-changes.mjs';
+import { groupKey } from '../shared/party.mjs';
 import { scanStats } from '../shared/scan-stats.mjs';
 import { lastScheduledRound, roundFor } from '../shared/schedule.mjs';
 import { localToday, upcomingWeekends } from '../shared/weekends.mjs';
@@ -10,6 +11,7 @@ import { fetchGoogleRating, MONTHLY_GOOGLE_BUDGET } from './google.mjs';
 import { sleep } from './http.mjs';
 import { fetchParksWithFacility } from './landal.mjs';
 import { overviewIsStale, refreshOverview } from './overview.mjs';
+import { PAGE_PARTY } from './pages.mjs';
 import { activeProviders, PROVIDERS, providerBrand } from './providers.mjs';
 import { roundInProgress } from './status.mjs';
 import { fetchSurroundings } from './surroundings.mjs';
@@ -43,7 +45,7 @@ const MAX_ACCOMMODATION_SEARCHES_PER_PARK = 2;
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 
 /** @param appUrl where a price alert's message leads, e.g. the cloud app; without it the message has no link */
-export function createCollector(db, { log = () => {}, googleApiKey = null, appUrl = null } = {}) {
+export function createCollector(db, { log = () => {}, googleApiKey = null, appUrl = null, essentialOnly = false } = {}) {
   const progress = { running: false, phase: null, done: 0, total: 0, startedAt: null, error: null };
   let rerunRequested = false;
   // Set when the server stops; the database is closed by then, so no more writes.
@@ -78,6 +80,7 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
    * The party sizes a round collects: all of them when someone asked for a round, otherwise the ones someone named,
    * the ones never tried, and the ones without a successful round since the last scheduled round time (or ever, when
    * rounds only run on request) that may be tried again. New sizes first: the screen has nothing to show for them yet.
+   * With essentialOnly (the month's database budget runs low) only the size the site shows by default.
    */
   async function partiesToCollect({ everything, requested = [], now = Date.now() }) {
     const { rounds } = await db.getSettings();
@@ -91,7 +94,8 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
       (attempts[party.key] ?? 0) < MAX_ATTEMPTS_PER_ROUND && now - Date.parse(party.lastStartedAt) >= RETRY_AFTER_MS;
     const due = (party) =>
       everything || requested.includes(party.key) || !party.lastStartedAt || (needsPrices(party) && mayTryAgain(party));
-    return (await followedParties()).filter(due).sort((a, b) => Number(a.collected) - Number(b.collected));
+    const allowed = (party) => !essentialOnly || party.key === groupKey(PAGE_PARTY);
+    return (await followedParties()).filter((party) => allowed(party) && due(party)).sort((a, b) => Number(a.collected) - Number(b.collected));
   }
 
   /** One request: the names of all park facilities and accommodation features. */
