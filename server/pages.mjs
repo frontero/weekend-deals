@@ -8,7 +8,7 @@
 import { reasonText, verdictLabel } from '../src/lib/advice.js';
 import { brandName } from '../src/lib/brands.js';
 import { countryName, formatEuros, formatWeekend, nights } from '../src/lib/format.js';
-import { providerName, trackedBookingUrl } from '../src/lib/providers.js';
+import { providerHomeLinks, providerName, trackedBookingUrl } from '../src/lib/providers.js';
 import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
@@ -1341,20 +1341,13 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
   ];
 }
 
-// The providers' own sites, so a visitor can still book while our prices are out of reach.
-const PROVIDER_HOMES = [
-  ['Landal', 'https://www.landal.nl/'],
-  ['Topparken', 'https://www.topparken.nl/'],
-  ['Molecaten', 'https://www.molecaten.nl/'],
-];
-
 const UNAVAILABLE = {
   title: 'Even geen prijzen',
   description: 'De prijzen zijn op dit moment niet bereikbaar.',
   image: null,
   body: html`<h1 class="text-3xl font-bold tracking-tight">Even geen prijzen</h1>
     <p class="mt-3 text-ink-secondary">We kunnen de prijzen nu niet ophalen. Probeer het over een tijdje opnieuw, of kijk direct bij een aanbieder.</p>
-    <div class="mt-6 flex flex-wrap gap-3">${PROVIDER_HOMES.map(([name, url]) => ctaLink(`/api/go?${new URLSearchParams({ url, from: 'storing' })}`, `Naar ${name}`, name))}</div>`.text,
+    <div class="mt-6 flex flex-wrap gap-3">${providerHomeLinks('storing').map(({ name, href }) => ctaLink(href, `Naar ${name}`, name))}</div>`.text,
 };
 
 const NOT_FOUND = {

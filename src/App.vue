@@ -24,6 +24,7 @@ import { useOverview } from './composables/useOverview.js';
 import { useQueryState } from './composables/useQueryState.js';
 import { countFacilities, filterParks, onePerPark, searchDeals, sortDeals, withinDates } from './lib/deals.js';
 import { countryName, formatRating, formatShortDate, formatWeekend } from './lib/format.js';
+import { providerHomeLinks } from './lib/providers.js';
 import { weekendLevels } from './lib/insights.js';
 import { writeQuery } from './lib/urlState.js';
 import { brandDot, brandName } from './lib/brands.js';
@@ -224,6 +225,7 @@ const openPark = (park, arrival = '', reviews = false) => {
 };
 
 const isLoading = computed(() => !overview.value && !failed.value);
+const homeLinks = providerHomeLinks('storing');
 const hasPrices = computed(() => parks.value.length > 0);
 const isScanning = computed(() => overview.value?.scan.running ?? false);
 </script>
@@ -267,7 +269,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
 
   <main class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:gap-6 sm:px-6 sm:py-8">
     <StatusNotices
-      :failed="failed"
+      :failed="failed && Boolean(overview)"
       :scan="overview?.scan ?? null"
       :google="overview?.google ?? null"
       :providers="overview?.providers ?? []"
@@ -316,8 +318,11 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
       <div class="flex min-w-0 flex-col gap-4">
         <div class="flex flex-wrap items-center gap-3">
           <h2 class="text-2xl font-black" aria-live="polite">
-            {{ cards.length }} {{ cards.length === 1 ? 'park' : 'parken' }}
-            <template v-if="filters.minDiscountPercent">met een buitenkansje</template>
+            <template v-if="overview">
+              {{ cards.length }} {{ cards.length === 1 ? 'park' : 'parken' }}
+              <template v-if="filters.minDiscountPercent">met een buitenkansje</template>
+            </template>
+            <template v-else>Vakantieparken</template>
             <span v-if="periodLabel" class="font-normal text-ink-secondary">· {{ periodLabel }}</span>
           </h2>
           <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
@@ -447,7 +452,26 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
           </section>
         </template>
 
-        <div v-else-if="overview" class="flex flex-col items-center gap-3 rounded-3xl bg-surface px-6 py-12 text-center ring-1 ring-line">
+        <div v-else-if="!overview" class="flex flex-col items-center gap-3 rounded-3xl bg-surface px-6 py-12 text-center ring-1 ring-line">
+          <p class="text-lg font-extrabold">Even geen prijzen</p>
+          <p class="max-w-md text-sm text-ink-secondary">
+            We kunnen de prijzen nu niet ophalen. Probeer het over een tijdje opnieuw, of kijk direct bij een aanbieder.
+          </p>
+          <div class="flex flex-wrap justify-center gap-2">
+            <a
+              v-for="link in homeLinks"
+              :key="link.name"
+              :href="link.href"
+              target="_blank"
+              rel="sponsored noopener"
+              class="rounded-full bg-cta px-4 py-2 font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover"
+            >
+              Naar {{ link.name }}<span class="sr-only"> (opent {{ link.name }} in een nieuw tabblad)</span>
+            </a>
+          </div>
+        </div>
+
+        <div v-else class="flex flex-col items-center gap-3 rounded-3xl bg-surface px-6 py-12 text-center ring-1 ring-line">
           <template v-if="isScanning || overview.partyPending">
             <Icon name="refresh" class="size-8 animate-spin text-accent [animation-direction:reverse]" />
             <p class="font-semibold">De eerste prijzen voor dit gezelschap komen binnen</p>

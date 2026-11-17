@@ -49,6 +49,13 @@ const providerOf = (id) => PROVIDERS[id ?? 'landal'];
 
 export const providerName = (id) => providerOf(id)?.name ?? id;
 
+// The providers' own sites, so a visitor can still book while our prices are out of reach.
+const HOMES = { landal: 'https://www.landal.nl/', topparken: 'https://www.topparken.nl/', molecaten: 'https://www.molecaten.nl/' };
+
+/** Every provider's home page through /api/go, for when there are no prices to show. */
+export const providerHomeLinks = (source) =>
+  Object.entries(HOMES).map(([id, url]) => ({ name: providerName(id), href: `/api/go?${new URLSearchParams({ url, from: source })}` }));
+
 /**
  * Where to book this weekend for this party: the provider's own link to that weekend's cheapest accommodation when
  * it gave one, else that accommodation's page with the dates, else a link built for the park and dates, else the
