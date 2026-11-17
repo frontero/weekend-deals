@@ -21,14 +21,34 @@ test('holds back early when the pace would reach the stop share before the month
   assert.equal(budgetLevel(reads(30_000_000), new Date('2026-12-01T12:00:00Z')), 'normal');
 });
 
-test('reads the organisation usage from Turso and leaves it out without a token', async () => {
+test("uses the plan's own limits and billing period", () => {
+  const paid = { ...reads(505_000_000), limits: { rowsRead: 2_500_000_000, rowsWritten: 25_000_000 } };
+  const period = { periodStart: '2026-11-17T10:00:00Z', periodEnd: '2026-12-17T10:00:00Z' };
+  // Over the free limit, but a fifth of a paid plan's, early in its period.
+  assert.equal(budgetLevel({ ...paid, ...period }, new Date('2026-11-18T10:00:00Z')), 'normal');
+  // Half the paid limit a fifth into the period heads for 250%.
+  assert.equal(budgetLevel({ ...paid, rowsRead: 1_250_000_000, ...period }, new Date('2026-11-23T10:00:00Z')), 'essential');
+});
+
+test('reads the usage, plan and period from Turso, and leaves them out without a token', async () => {
+  const answers = {
+    usage: { organization: { uuid: 'x', usage: { rows_read: 12, rows_written: 3 } } },
+    subscription: { subscription: { plan: 'developer', current_billing_period_start: '2026-11-17T10:00:00Z', current_billing_period_end: '2026-12-17T10:00:00Z' } },
+    plans: { plans: [{ name: 'starter', quotas: { rowsRead: 5, rowsWritten: 1 } }, { name: 'developer', quotas: { rowsRead: 2_500_000_000, rowsWritten: 25_000_000 } }] },
+  };
   const calls = [];
   const fetchImpl = async (url, options) => {
-    calls.push({ url, auth: options.headers.Authorization });
-    return Response.json({ organization: { uuid: 'x', usage: { rows_read: 12, rows_written: 3 } } });
+    calls.push(options.headers.Authorization);
+    return Response.json(answers[url.split('/').at(-1)]);
   };
-  assert.deepEqual(await tursoUsage({ org: 'weekenddeals', token: 't' }, fetchImpl), { rowsRead: 12, rowsWritten: 3 });
-  assert.deepEqual(calls, [{ url: 'https://api.turso.tech/v1/organizations/weekenddeals/usage', auth: 'Bearer t' }]);
+  assert.deepEqual(await tursoUsage({ org: 'weekenddeals', token: 't' }, fetchImpl), {
+    rowsRead: 12,
+    rowsWritten: 3,
+    limits: { rowsRead: 2_500_000_000, rowsWritten: 25_000_000 },
+    periodStart: '2026-11-17T10:00:00Z',
+    periodEnd: '2026-12-17T10:00:00Z',
+  });
+  assert.deepEqual(calls, ['Bearer t', 'Bearer t', 'Bearer t']);
   assert.equal(await tursoUsage({ org: 'weekenddeals', token: '' }, fetchImpl), null);
   await assert.rejects(tursoUsage({ org: 'o', token: 't' }, async () => new Response('', { status: 401 })), /401/);
 });
