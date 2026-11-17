@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildPages, isPagePath, servePage } from './pages.mjs';
+import { buildPages, isPagePath, servePage, serveUnavailable } from './pages.mjs';
 
 const weekend = (arrival, departure, priceCents, discount, extra = {}) => ({
   arrival,
@@ -382,4 +382,21 @@ test('parks clicked through to often this week are marked popular, with what tha
   const hub = built.find((page) => page.path === '/parken').body;
   assert.match(hub, /id="popular"[^]*Vakantiepark Gulpen[^]*from=populair/);
   assert.doesNotMatch(pageAt('/parken').body, /Populair deze week/, 'no popular parks, no section');
+});
+
+test('a page while the database is out of reach says so and still links to the providers', async () => {
+  const response = serveUnavailable(new Request('https://parkjeweg.test/park/x'), { stylesheet: null });
+  assert.equal(response.status, 503);
+  assert.equal(response.headers.get('Retry-After'), '3600');
+  const text = await response.text();
+  assert.match(text, /Even geen prijzen/);
+  assert.match(text, /href="\/api\/go\?url=https%3A%2F%2Fwww\.landal\.nl%2F&#38;from=storing" target="_blank" rel="sponsored noopener"/);
+});
+
+test('a page tells search engines its trail, ending at the page itself', () => {
+  const json = pageAt('/park/vakantiepark-gulpen').body.match(/<script type="application\/ld\+json">(.*?)<\/script>/)[1];
+  const items = JSON.parse(json).itemListElement;
+  assert.deepEqual(items[0], { '@type': 'ListItem', position: 1, name: 'Alle parken', item: 'https://parkjeweg.nl/parken' });
+  assert.equal(items.at(-1).item, undefined);
+  assert.match(items.at(-1).name, /Gulpen/);
 });

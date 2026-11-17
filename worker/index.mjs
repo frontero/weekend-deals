@@ -4,7 +4,7 @@ import { createApiHandler } from '../server/handler.mjs';
 import { parseAffiliateLinks } from '../server/affiliate.mjs';
 import { isAdminEmail, verifyAccess } from './access.mjs';
 import { startWorkflows } from './clock.mjs';
-import { isPagePath, servePage } from '../server/pages.mjs';
+import { isPagePath, servePage, serveUnavailable } from '../server/pages.mjs';
 
 // Routes where each call costs something: a provider's or Google's quota, or a message sent. RATE_LIMITER in
 // wrangler.jsonc caps them per visitor.
@@ -34,12 +34,19 @@ export default {
     if (!env.TURSO_DATABASE_URL || !env.TURSO_AUTH_TOKEN) return new Response('Turso is not set up', { status: 503 });
     const client = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
     const db = await openDatabase(client, { runMigrations: false });
-    if (page) return servePage(db, request, { stylesheet: await appStylesheet(env, request) });
+    try {
+      if (page) return await servePage(db, request, { stylesheet: await appStylesheet(env, request) });
 
-    let access;
-    const isAdmin = async () => isAdminEmail((await (access ??= verifyAccess(request, env)))?.email, env.ADMIN_EMAILS);
-    const options = { isAdmin, googleApiKey: env.GOOGLE_PLACES_API_KEY ?? null, affiliateLinks: parseAffiliateLinks(env.AFFILIATE_LINKS) };
-    return createApiHandler(db, options)(request);
+      let access;
+      const isAdmin = async () => isAdminEmail((await (access ??= verifyAccess(request, env)))?.email, env.ADMIN_EMAILS);
+      const options = { isAdmin, googleApiKey: env.GOOGLE_PLACES_API_KEY ?? null, affiliateLinks: parseAffiliateLinks(env.AFFILIATE_LINKS) };
+      return await createApiHandler(db, options)(request);
+    } catch (error) {
+      // Turso blocks the database for the rest of the month once a free limit is reached: a short page, not a crash.
+      console.error(error);
+      if (page) return serveUnavailable(request, { stylesheet: await appStylesheet(env, request) });
+      return Response.json({ error: 'Database unavailable' }, { status: 503 });
+    }
   },
 
   // Every ten minutes (the cron trigger in wrangler.jsonc): start the GitHub workflows that collect prices.

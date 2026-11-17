@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { databaseBlocked, withRetries } from './connect.mjs';
+import { blockedAlarmDue, databaseBlocked, withRetries } from './connect.mjs';
 
 const capacity = new Error('SQLITE_UNKNOWN: Server database capacity temporarily exceeded, please try again later');
 
@@ -53,4 +53,10 @@ test('a database Turso blocks for the month is told apart from other failures', 
   assert.equal(await databaseBlocked(failing(blocked)), true);
   assert.equal(await databaseBlocked({ execute: async () => ({ rows: [] }) }), false);
   await assert.rejects(databaseBlocked(failing(new Error('fetch failed'))), /fetch failed/);
+});
+
+test('a blocked database raises the alarm once a day, in the 07:00 UTC round', () => {
+  assert.equal(blockedAlarmDue(new Date('2026-11-18T07:00:30Z')), true);
+  assert.equal(blockedAlarmDue(new Date('2026-11-18T07:10:00Z')), false);
+  assert.equal(blockedAlarmDue(new Date('2026-11-18T19:05:00Z')), false);
 });

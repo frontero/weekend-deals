@@ -1,5 +1,5 @@
 import { createCollector } from './collector.mjs';
-import { connect, databaseBlocked } from './connect.mjs';
+import { blockedAlarmDue, connect, databaseBlocked } from './connect.mjs';
 import { openDatabase } from './db.mjs';
 import { createWatcher } from './watch.mjs';
 
@@ -10,8 +10,9 @@ const log = (line) => console.log(`${new Date().toISOString()} ${line}`);
 
 const { client, where } = connect();
 if (await databaseBlocked(client)) {
-  console.log('::warning::Turso blocks the database until its monthly limit resets; no round.');
-  process.exit(0);
+  const alarm = blockedAlarmDue();
+  console.log(`::${alarm ? 'error' : 'warning'}::Turso blocks the database until its monthly limit resets; no round.`);
+  process.exit(alarm ? 1 : 0);
 }
 const db = await openDatabase(client);
 const collector = createCollector(db, {

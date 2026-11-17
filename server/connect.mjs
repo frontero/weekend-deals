@@ -48,6 +48,9 @@ export async function databaseBlocked(client) {
   }
 }
 
+// Once a day a blocked database fails the price round, so GitHub mails the owner; the other runs skip quietly.
+export const blockedAlarmDue = (now = new Date()) => now.getUTCHours() === 7 && now.getUTCMinutes() < 10;
+
 export const LOCAL_DATABASE_FILE =fileURLToPath(new URL('../data/prices.db', import.meta.url));
 
 /**

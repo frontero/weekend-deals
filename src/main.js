@@ -6,5 +6,7 @@ import './style.css';
 if (window.location.pathname.startsWith('/beheer')) {
   import('./admin/main.js').then(({ mountAdmin }) => mountAdmin('#app'));
 } else {
+  // An unknown address falls back to this page; search engines should not list it as a page of its own.
+  if (window.location.pathname !== '/') document.head.append(Object.assign(document.createElement('meta'), { name: 'robots', content: 'noindex' }));
   createApp(App).mount('#app');
 }

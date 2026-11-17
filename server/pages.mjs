@@ -36,6 +36,8 @@ const MONTH_GAP = 0.1;
 // Under this many percent from the park's normal price a weekend costs the normal price: no news.
 const NOTEWORTHY_PERCENT = 5;
 const SITE_NAME = 'Parkje weg';
+// Where the pages live, for the links search engines read from the structured data.
+const SITE_URL = 'https://parkjeweg.nl';
 
 const PAGE_PATH =
   /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|regio\/[a-z0-9-]+|thema\/[a-z0-9-]+|land\/[a-z0-9-]+|last-minute|privacy|sitemap\.xml|robots\.txt)$/;
@@ -528,9 +530,22 @@ const bestBar = (parks, options) => {
   return park ? bookingBar(park, featuredWeekend(park), { ...options, named: true }) : '';
 };
 
-/** @param trail [href, label] pairs leading up to the page */
-const breadcrumb = (...trail) =>
-  html`<nav aria-label="Kruimelpad" class="text-sm font-semibold text-ink-secondary">${trail.map(([href, label]) => html`<a href="${href}" class="${link}">${label}</a> › `)}</nav>`;
+/**
+ * The trail above a page, also as structured data so search results can show it.
+ * @param current the page's own name, last in the trail
+ * @param trail [href, label] pairs leading up to the page
+ */
+function breadcrumb(current, ...trail) {
+  const items = [...trail.map(([href, name]) => ({ name, item: `${SITE_URL}${href}` })), { name: current }];
+  const data = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, index) => ({ '@type': 'ListItem', position: index + 1, ...item })),
+  };
+  // JSON inside a script tag: no HTML escaping, but no "<" that could close the tag either.
+  const json = JSON.stringify(data).replaceAll('<', '\\u003c');
+  return html`<nav aria-label="Kruimelpad" class="text-sm font-semibold text-ink-secondary">${trail.map(([href, label]) => html`<a href="${href}" class="${link}">${label}</a> › `)}</nav><script type="application/ld+json">${new Html(json)}</script>`;
+}
 
 function rating(park) {
   const { rating: score, ratingCount } = park.googleRating ?? {};
@@ -800,7 +815,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
   };
 
   const body = html`
-    ${breadcrumb(['/parken', 'Alle parken'], ...regionPages.slice(0, 1).map((name) => [regionPath(name), name]))}
+    ${breadcrumb(name, ['/parken', 'Alle parken'], ...regionPages.slice(0, 1).map((region) => [regionPath(region), region]))}
     ${park.imageUrl && html`<div class="relative mt-3"><img src="${largePhoto(park.imageUrl)}" alt="${name}" class="aspect-[16/9] w-full rounded-[2rem] bg-line object-cover sm:aspect-[5/2]" />${photoSticker(cheapest)}</div>`}
     <h1 class="mt-5 text-4xl font-black tracking-tight sm:text-5xl">${name}</h1>
     <p class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-semibold text-ink-secondary">${place && html`<span><span aria-hidden="true">📍</span> ${place}</span>`}<span>bij ${providerName(park.provider)}</span>${rating(park)}${park.popular > 0 && html`<span class="rounded-full bg-cta-wash px-3 py-1 text-sm font-extrabold text-ink" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair deze week</span>`}</p>
@@ -920,7 +935,7 @@ function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes,
     other && html`<a href="${weekendPath(other.arrival)}" class="${chip}">${label} ${formatWeekend(other)}</a>`;
 
   const body = html`
-    ${breadcrumb(['/weekenden', 'Alle weekenden'])}
+    ${breadcrumb(range, ['/weekenden', 'Alle weekenden'])}
     <div class="mt-3 rounded-[2rem] bg-accent-wash p-6 sm:p-8">
       <h1 class="text-3xl font-black tracking-tight sm:text-5xl">Weekendje weg <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">${range}</span></h1>
       <p class="mt-3 max-w-2xl font-semibold text-ink-secondary">${offers.length} vakantieparken hebben nog plek van ${formatWeekend(weekend)} voor ${partyLabel(PAGE_PARTY)}, vanaf ${from}. ${deals.length > 0 && `${dealCount} minstens ${Math.round(DEAL_SHARE * 100)}% goedkoper dan normaal.`}</p>
@@ -1032,7 +1047,7 @@ function placePage(name, parks, { path, place, emoji, pathOf, surroundings, link
   const intro = PLACE_INTROS[name] ?? `Alle vakantieparken ${place}, met de prijs van elk komend weekend.`;
   const preposition = place.slice(0, place.length - name.length).trim();
   const body = html`
-    ${breadcrumb(['/parken', 'Alle parken'])}
+    ${breadcrumb(name, ['/parken', 'Alle parken'])}
     <div class="mt-3">${banner(emoji, html`Vakantieparken ${preposition} <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">${name}</span>`, html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${intro}</p>${statTiles(parks)}`)}</div>
     ${links.length > 0 && html`<ul class="mt-6 flex flex-wrap gap-2">${links.map(([href, label, number]) => html`<li><a href="${href}" class="${chip}"><span aria-hidden="true">📍</span> ${label} <span class="text-ink-muted">${number}</span></a></li>`)}</ul>`}
     ${parkList(parks, { pathOf, source: 'regiopagina' })}
@@ -1065,7 +1080,7 @@ function themePage(theme, parks, { pathOf, themes, party }) {
     .map(([region]) => region);
   const where = regions.length > 0 && html`<p class="mt-3 text-sm font-semibold text-ink-secondary">De meeste liggen in ${joinAnd(regions)}.</p>`;
   const body = html`
-    ${breadcrumb(['/parken', 'Alle parken'])}
+    ${breadcrumb(theme.name, ['/parken', 'Alle parken'])}
     <div class="mt-3">${banner(themeIcon(theme), theme.name, html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${theme.intro}</p>${statTiles(parks, { party, details: false })}${where}`, 'bg-sun-wash')}</div>
     ${parkList(parks, { pathOf, source: 'themapagina', party, showStay: theme.showStay })}
     <nav aria-labelledby="other-themes" class="mt-10">${sectionTitle('other-themes', '✨', "Andere thema's")}<ul class="mt-4 flex flex-wrap gap-2">${themes.filter((other) => other !== theme).map(
@@ -1326,6 +1341,22 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
   ];
 }
 
+// The providers' own sites, so a visitor can still book while our prices are out of reach.
+const PROVIDER_HOMES = [
+  ['Landal', 'https://www.landal.nl/'],
+  ['Topparken', 'https://www.topparken.nl/'],
+  ['Molecaten', 'https://www.molecaten.nl/'],
+];
+
+const UNAVAILABLE = {
+  title: 'Even geen prijzen',
+  description: 'De prijzen zijn op dit moment niet bereikbaar.',
+  image: null,
+  body: html`<h1 class="text-3xl font-bold tracking-tight">Even geen prijzen</h1>
+    <p class="mt-3 text-ink-secondary">We kunnen de prijzen nu niet ophalen. Probeer het over een tijdje opnieuw, of kijk direct bij een aanbieder.</p>
+    <div class="mt-6 flex flex-wrap gap-3">${PROVIDER_HOMES.map(([name, url]) => ctaLink(`/api/go?${new URLSearchParams({ url, from: 'storing' })}`, `Naar ${name}`, name))}</div>`.text,
+};
+
 const NOT_FOUND = {
   title: 'Pagina niet gevonden',
   description: 'Deze pagina bestaat niet (meer).',
@@ -1384,7 +1415,8 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
     <meta property="og:title" content="${title}" />
     <meta property="og:description" content="${description}" />
     <meta property="og:url" content="${url}" />
-    ${image && html`<meta property="og:image" content="${image}" />`}
+    <meta property="og:image" content="${image ?? `${new URL(url).origin}/og.png`}" />
+    <meta name="twitter:card" content="summary_large_image" />
     ${stylesheet && html`<link rel="stylesheet" href="${stylesheet}" />`}
     <script>
       // A theme chosen in the app (see src/composables/useTheme.js), applied before the first paint.
@@ -1451,5 +1483,14 @@ export async function servePage(db, request, { stylesheet }) {
   return new Response(pageDocument(page ?? NOT_FOUND, { url: `${origin}${pathname}`, stylesheet }), {
     status: page ? 200 : 404,
     headers: headers('text/html'),
+  });
+}
+
+/** A short page instead of an error when the database is out of reach; 503 tells search engines to come back later. */
+export function serveUnavailable(request, { stylesheet }) {
+  const { origin, pathname } = new URL(request.url);
+  return new Response(pageDocument(UNAVAILABLE, { url: `${origin}${pathname}`, stylesheet }), {
+    status: 503,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '3600' },
   });
 }
