@@ -14,8 +14,9 @@
   },
   // Per visitor, the calls that cost something (live prices, Google reviews, address lookups, alerts): see worker/index.mjs.
   "ratelimits": [{ "name": "RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 20, "period": 60 } }],
-  "workers_dev": true,
-  // The site's own address. shortcut: www.parkjeweg.nl has no record yet; add it with a redirect rule to the bare domain.
+  // Only the site's own address: a workers.dev copy would be a second entrance and duplicate content for search engines.
+  // www.parkjeweg.nl goes to the bare domain through a redirect rule in the Cloudflare zone.
+  "workers_dev": false,
   "routes": [{ "pattern": "parkjeweg.nl", "custom_domain": true }],
   // The clock that starts the price rounds and the price watch on GitHub (worker/clock.mjs). Its token is the secret
   // GITHUB_DISPATCH_TOKEN.
