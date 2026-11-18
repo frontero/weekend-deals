@@ -993,6 +993,14 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       return { days: plain(days), providers: plain(providers), sources: plain(sources), parks: plain(parks), total: plain(total)[0] };
     },
 
+    /** Park code → name, for the codes given. */
+    async parkNames(codes) {
+      const unique = [...new Set(codes)].slice(0, 100);
+      if (!unique.length) return {};
+      const rows = await all(`SELECT code, name FROM parks WHERE code IN (${unique.map(() => '?').join(', ')})`, ...unique);
+      return Object.fromEntries(rows.map((row) => [row.code, row.name]));
+    },
+
     /**
      * Parks at least `minimum` visitors clicked through to a provider since `since`: park code → visitors, most first.
      * A visitor counts once a day, so one person clicking again and again makes nothing popular.

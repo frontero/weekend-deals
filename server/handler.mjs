@@ -9,6 +9,8 @@ import { WATCH_STATS_KEY } from '../shared/watch.mjs';
 import { clampSettings, groupKey } from './settings.mjs';
 import { PROVIDERS } from './providers.mjs';
 import { scanStatus, statusBody } from './status.mjs';
+import { clientEventPoints, countsAsVisit, eventPoint } from './events.mjs';
+import { trafficReport } from './traffic.mjs';
 
 const JSON_TYPE = 'application/json; charset=utf-8';
 // Group keys are short; anything longer is not one.
@@ -39,6 +41,15 @@ export function clientNetwork(ip) {
   return `${groups.slice(0, 4).map((group) => group.replace(/^0+(?=.)/, '')).join(':')}::/64`;
 }
 
+/** Who it is, as a code that holds for one day: a visitor counts once a day, and no IP address is kept. */
+export async function visitorOf(db, request) {
+  const network = clientNetwork(request.headers.get('CF-Connecting-IP'));
+  if (!network) return null;
+  const salt = await db.clickSalt(new Date().toISOString().slice(0, 10));
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}|${network}`));
+  return Array.from(new Uint8Array(digest).slice(0, 4), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
 const validTopic = (topic) => typeof topic === 'string' && TOPIC_PATTERN.test(topic);
 const publicAlert = ({ id, partyKey, party, label, createdAt }) => ({ id, partyKey, party, label, createdAt });
 
@@ -64,10 +75,20 @@ const jsonText = (text) => new Response(text, { headers: { 'Content-Type': JSON_
  * @param isAdmin whether the request comes from someone who may see the admin page
  * @param googleApiKey for the Google reviews of a park; without it they link to Google Maps only
  * @param affiliateLinks per provider the affiliate deep-link template, see server/affiliate.mjs
+ * @param recordEvent stores one count from server/events.mjs; without it nothing is counted
+ * @param queryEvents runs SQL on those counts for the admin's Bezoekers page (server/traffic.mjs)
  */
 export function createApiHandler(
   db,
-  { live = () => null, onScanRequested = () => {}, isAdmin = () => false, googleApiKey = null, affiliateLinks = {} } = {},
+  {
+    live = () => null,
+    onScanRequested = () => {},
+    isAdmin = () => false,
+    googleApiKey = null,
+    affiliateLinks = {},
+    recordEvent = null,
+    queryEvents = null,
+  } = {},
 ) {
   /** The party size the screen shows, as `?party=` names it. */
   async function partiesOf(request) {
@@ -83,15 +104,6 @@ export function createApiHandler(
     ...statusBody(await db.statusInputs(), { live: live(), parties: await partiesOf(request) }),
     admin: await isAdmin(request),
   });
-
-  /** Who clicked, as a code that holds for one day: a visitor clicking again counts once, and no IP address is kept. */
-  async function visitorOf(request) {
-    const network = clientNetwork(request.headers.get('CF-Connecting-IP'));
-    if (!network) return null;
-    const salt = await db.clickSalt(new Date().toISOString().slice(0, 10));
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}|${network}`));
-    return Array.from(new Uint8Array(digest).slice(0, 4), (byte) => byte.toString(16).padStart(2, '0')).join('');
-  }
 
   /** @param parties group keys of the sizes to collect; none means all of them */
   async function requestScan(parties = []) {
@@ -129,20 +141,34 @@ export function createApiHandler(
       const text = (name, length) => params.get(name)?.slice(0, length) || null;
       // Loaded by another site's page (an image, say) it is nobody's click.
       if (request.headers.get('Sec-Fetch-Site') !== 'cross-site') {
-        await visitorOf(request)
-          .then((visitor) =>
-            db.saveClick({
+        await visitorOf(db, request)
+          .then((visitor) => {
+            if (recordEvent && countsAsVisit(request)) {
+              const place = { key: provider, value: text('park', 64) ?? '', path: text('from', 32) ?? '' };
+              recordEvent(eventPoint(request, visitor, { name: 'click', ...place }));
+            }
+            return db.saveClick({
               provider,
               parkCode: text('park', 64),
               arrival: ISO_DATE.test(params.get('arrival') ?? '') ? params.get('arrival') : null,
               source: text('from', 32),
               partyKey: text('party', MAX_KEY_LENGTH),
               visitor,
-            }),
-          )
+            });
+          })
           .catch(() => {});
       }
       return Response.redirect(affiliateUrl(provider, url, affiliateLinks), 302);
+    },
+
+    // What visitors use on the site, in batches from src/lib/track.js. A beacon reads no answer, so there is no error.
+    'POST /events': async (request) => {
+      const sameSite = request.headers.get('Sec-Fetch-Site') !== 'cross-site';
+      if (recordEvent && sameSite && countsAsVisit(request)) {
+        const visitor = await visitorOf(db, request).catch(() => null);
+        for (const point of clientEventPoints(request, visitor, await request.text())) recordEvent(point);
+      }
+      return new Response(null, { status: 204 });
     },
 
     // A park's Google reviews, asked for live: Google's terms do not allow keeping them.
@@ -216,6 +242,21 @@ export function createApiHandler(
     'GET /admin/clicks': forAdmins(async (request) => {
       const days = Math.min(365, Math.max(1, Number(new URL(request.url).searchParams.get('days')) || 30));
       return json(await db.clickStats(new Date(Date.now() - days * DAY_MS).toISOString()));
+    }),
+
+    // Visitors, where they came from and what they used: the counts from POST /events, /go and the pages.
+    'GET /admin/traffic': forAdmins(async (request) => {
+      if (!queryEvents) return json({ configured: false });
+      const days = Math.min(90, Math.max(1, Number(new URL(request.url).searchParams.get('days')) || 30));
+      let report;
+      try {
+        report = await trafficReport(queryEvents, { days });
+      } catch (error) {
+        // For the admin only: what Analytics Engine said, so a failing query can be put right.
+        return json({ configured: true, error: error.message }, 502);
+      }
+      const codes = report.choices.filter((row) => row.name === 'park' || row.name === 'click').map((row) => row.value);
+      return json({ configured: true, ...report, parkNames: await db.parkNames(codes) });
     }),
 
     // One park's prices per round and weekend for a party size.

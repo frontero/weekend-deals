@@ -27,6 +27,7 @@ import { countFacilities, filterParks, onePerPark, searchDeals, sortDeals, withi
 import { countryName, formatRating, formatShortDate, formatWeekend } from './lib/format.js';
 import { providerHomeLinks } from './lib/providers.js';
 import { weekendLevels } from './lib/insights.js';
+import { track } from './lib/track.js';
 import { writeQuery } from './lib/urlState.js';
 import { brandDot, brandName } from './lib/brands.js';
 
@@ -201,6 +202,40 @@ function openParkAlert({ park, weekend }) {
   alertsOpen.value = true;
 }
 
+// What visitors use, counted anonymously for the admin's Bezoekers page. A filter counts when it is set, not when it
+// goes back to its default; a search counts without its text.
+for (const key of FILTER_KEYS.filter((key) => key !== 'from' && key !== 'to')) {
+  watch(
+    () => JSON.stringify(filters[key]),
+    (value) => {
+      if (value !== JSON.stringify(DEFAULTS[key])) track('filter', key, key === 'search' ? '' : [filters[key]].flat().join(','));
+    },
+  );
+}
+watch(
+  () => home.maxDistanceKm,
+  (km) => km && track('filter', 'distance', km),
+);
+watch(
+  () => filters.from,
+  (from) => from && track('weekend', calendarOpen.value ? 'calendar' : 'strip', from),
+);
+watch(view, (mode) => track('mode', mode));
+watch(
+  () => filters.sort,
+  (sort) => track('sort', sort),
+);
+watch(alertsOpen, (isOpen) => isOpen && track('alert', parkAlert.value ? 'park' : 'search'));
+
+function saveStay(settings) {
+  track('party', 'save', `${settings.adults}-${settings.children}-${settings.pets}`);
+  saveSettings(settings);
+}
+function showMore() {
+  visibleCount.value += PAGE_SIZE;
+  track('more', 'cards', '', visibleCount.value);
+}
+
 function removeChip(key) {
   if (key.startsWith('facility:')) {
     filters.facilities = filters.facilities.filter((id) => `facility:${id}` !== key);
@@ -215,6 +250,7 @@ function removeChip(key) {
   }
 }
 function clearFilters() {
+  track('filter', 'clear');
   reset(FILTER_KEYS);
   home.maxDistanceKm = null;
 }
@@ -223,6 +259,8 @@ const openedPark = computed(() => parks.value.find((park) => park.code === opene
 /** @param reviews open the park panel at its Google reviews, as the rating on a card does */
 const openPark = (park, arrival = '', reviews = false) => {
   opened.value = { code: park.code, arrival, reviews };
+  // Where in the list it stood: whether visitors look past the first few.
+  track('park', view.value, park.code, cards.value.findIndex((deal) => deal.park.code === park.code) + 1);
 };
 
 const isLoading = computed(() => !overview.value && !failed.value);
@@ -440,7 +478,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
             v-if="view === 'cards' && cards.length > shownDeals.length"
             type="button"
             class="self-center rounded-lg bg-surface px-5 py-2.5 text-sm font-medium ring-1 ring-line hover:ring-field"
-            @click="visibleCount += PAGE_SIZE"
+            @click="showMore"
           >
             Toon meer ({{ cards.length - shownDeals.length }} over)
           </button>
@@ -538,7 +576,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
     :settings="overview.settings"
     :accommodation-groups="overview.accommodationGroups"
     :admin="overview.admin"
-    @save="saveSettings"
+    @save="saveStay"
   />
 
   <ParkDrawer

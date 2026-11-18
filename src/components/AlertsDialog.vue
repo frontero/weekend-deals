@@ -4,6 +4,7 @@ import { groupKey, partyLabel, seriesFor } from '../../shared/party.mjs';
 import { isTopic, useAlerts } from '../composables/useAlerts.js';
 import { formatEuros, formatShortDate } from '../lib/format.js';
 import { describeTravelParty } from '../lib/stay.js';
+import { track } from '../lib/track.js';
 import Icon from './Icon.vue';
 
 /** Price alerts on the current search, sent to a phone through the free ntfy app. */
@@ -98,6 +99,7 @@ async function setAlert() {
   createError.value = '';
   try {
     await create(finalDraft.value);
+    track('alert', 'create');
   } catch {
     createError.value = 'Het alarm kon niet worden bewaard. Probeer het zo nog eens.';
   } finally {
