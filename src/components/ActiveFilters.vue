@@ -9,7 +9,8 @@ const emit = defineEmits(['remove', 'clear']);
 </script>
 
 <template>
-  <ul v-if="chips.length" class="flex flex-wrap items-center gap-2 text-sm" aria-label="Actieve filters">
+  <ul v-if="chips.length || $slots.default" class="flex flex-wrap items-center gap-2 text-sm" aria-label="Actieve filters">
+    <li v-if="$slots.default" class="max-w-full"><slot /></li>
     <li v-for="chip in chips" :key="chip.key">
       <button
         type="button"
@@ -21,7 +22,7 @@ const emit = defineEmits(['remove', 'clear']);
         <Icon name="x" class="size-3.5" />
       </button>
     </li>
-    <li>
+    <li v-if="chips.length">
       <button type="button" class="px-1 font-medium text-accent hover:underline" @click="emit('clear')">Wis alles</button>
     </li>
   </ul>

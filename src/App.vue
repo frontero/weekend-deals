@@ -17,6 +17,7 @@ import Icon from './components/Icon.vue';
 import ParkDrawer from './components/ParkDrawer.vue';
 import ParkTable from './components/ParkTable.vue';
 import SettingsDialog from './components/SettingsDialog.vue';
+import StaySummary from './components/StaySummary.vue';
 import StatusNotices from './components/StatusNotices.vue';
 import WeekendStrip from './components/WeekendStrip.vue';
 import { useHomeLocation } from './composables/useHomeLocation.js';
@@ -233,11 +234,8 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
 <template>
   <AppBar
     v-if="overview"
-    :settings="overview.settings"
     :scan="overview.scan"
-    :accommodation-groups="overview.accommodationGroups"
     :admin="overview.admin"
-    @open-settings="settingsOpen = true"
     @refresh="startScan"
   />
   <div v-else class="h-[61px] border-b border-line bg-surface" />
@@ -368,7 +366,14 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
           </div>
         </div>
 
-        <ActiveFilters :chips="chips" @remove="removeChip" @clear="clearFilters" />
+        <ActiveFilters :chips="chips" @remove="removeChip" @clear="clearFilters">
+          <StaySummary
+            v-if="overview"
+            :settings="overview.settings"
+            :accommodation-groups="overview.accommodationGroups"
+            @edit="settingsOpen = true"
+          />
+        </ActiveFilters>
 
         <div v-if="isLoading" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Laden">
           <div v-for="index in 6" :key="index" class="animate-pulse overflow-hidden rounded-3xl bg-surface ring-1 ring-line">
