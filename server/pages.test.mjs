@@ -89,6 +89,7 @@ const pageAt = (path) => pages.find((page) => page.path === path);
 
 test('one page per park with something to tell, per weekend, per country, region and theme with three parks, and the lists', () => {
   assert.deepEqual(pages.map((page) => page.path).sort(), [
+    '/feestdag/carnaval',
     '/feestdag/kerst',
     '/feestdag/oud-en-nieuw',
     '/land/nederland',
@@ -100,6 +101,7 @@ test('one page per park with something to tell, per weekend, per country, region
     '/park/valkenburg-heuvelland',
     '/parken',
     '/regio/limburg',
+    '/vakantie/voorjaarsvakantie',
     '/weekend/2026-11-06',
     '/weekend/2026-11-13',
     '/weekend/2026-12-04',
@@ -182,7 +184,7 @@ test("providers' names are escaped", () => {
 });
 
 test('only page paths go to the pages', () => {
-  for (const path of ['/parken', '/weekenden', '/park/vakantiepark-gulpen', '/weekend/2026-11-06', '/regio/limburg', '/thema/aan-zee', '/feestdag/kerst', '/privacy', '/sitemap.xml', '/robots.txt']) {
+  for (const path of ['/parken', '/weekenden', '/park/vakantiepark-gulpen', '/weekend/2026-11-06', '/regio/limburg', '/thema/aan-zee', '/feestdag/kerst', '/vakantie/voorjaarsvakantie', '/privacy', '/sitemap.xml', '/robots.txt']) {
     assert.ok(isPagePath(path), path);
   }
   for (const path of ['/', '/beheer', '/park/', '/park/Gulpen', '/weekend/6-november', '/api/go', '/parken/x']) {
@@ -287,6 +289,49 @@ test('a holiday page keeps its address: before its prices are in, when no park h
   assert.match(pathAt(after, '/feestdag/kerst').body, /vr 24 dec – ma 27 dec, 3 nachten/);
   assert.doesNotMatch(pathAt(after, '/feestdag/kerst').body, /Zo verhuren/, 'a stay from Friday to Monday is the usual weekend');
   assert.equal(pathAt(after, '/feestdag/oud-en-nieuw').title, 'Oud en nieuw 2026 op een vakantiepark: parken met plek en prijzen');
+});
+
+test('the spring holiday and carnival pages show their weekends, region by region, and those weekends point to them', () => {
+  const february = {
+    ...gulpen,
+    weekends: [
+      weekend('2027-02-05', '2027-02-08', 39000, null),
+      weekend('2027-02-12', '2027-02-15', 45000, null),
+      weekend('2027-02-19', '2027-02-22', 47000, null),
+      weekend('2027-02-26', '2027-03-01', 41000, null),
+    ],
+  };
+  const OCCASIONS = {
+    '2027-02-05': [{ label: 'Carnaval', text: 'Het is carnaval: in Limburg en Brabant is het feest, elders is het juist rustig.' }],
+    '2027-02-12': [{ label: 'Voorjaarsvakantie Zuid', text: 'Het is voorjaarsvakantie in regio Zuid.' }],
+    '2027-02-19': [{ label: 'Voorjaarsvakantie Noord/Midden', text: 'Het is voorjaarsvakantie in regio Noord en Midden.' }],
+  };
+  const built = buildPages({
+    parks: [february, { ...hoogduin, weekends: [{ ...weekend('2027-02-12', '2027-02-15', 33000, null), bookingUrl: null }] }],
+    allParks,
+    computedAt: '2026-11-18T06:00:00.000Z',
+    details: { ...details, occasionsOf: ({ arrival }) => OCCASIONS[arrival] ?? [] },
+  });
+  const at = (path) => built.find((page) => page.path === path);
+
+  const spring = at('/vakantie/voorjaarsvakantie');
+  assert.equal(spring.title, 'Vakantiepark voorjaarsvakantie 2027: parken met plek en prijzen');
+  assert.match(spring.body, /2 vakantieparken hebben plek in 2 weekenden van vrijdag tot maandag voor 2 personen, vanaf €\s330\./);
+  assert.match(spring.body, /vr 12 feb – ma 15 feb[^]*>Voorjaarsvakantie Zuid</, 'each weekend says which region is free');
+  assert.match(spring.body, /vr 19 feb – ma 22 feb/);
+  assert.doesNotMatch(spring.body, /vr 26 feb/);
+  assert.match(spring.body, /from=vakantiepagina/);
+
+  const carnival = at('/feestdag/carnaval');
+  assert.equal(carnival.title, 'Vakantiepark met carnaval 2027: parken met plek en prijzen');
+  assert.match(carnival.body, /1 vakantiepark heeft nog plek van vr 5 feb – ma 8 feb voor 2 personen, vanaf €\s390\./);
+  assert.match(carnival.body, /href="\/vakantie\/voorjaarsvakantie"/);
+
+  assert.match(at('/weekend/2027-02-12').body, /href="\/vakantie\/voorjaarsvakantie"/);
+  assert.match(at('/weekend/2027-02-05').body, /href="\/feestdag\/carnaval"/);
+  assert.doesNotMatch(at('/weekend/2027-02-26').body, /vakantie\/|feestdag\//);
+  assert.match(at('/weekenden').body, /href="\/feestdag\/carnaval"/);
+  assert.match(pageAt('/vakantie/voorjaarsvakantie').body, /De weekenden van de voorjaarsvakantie 2027 komen hier zodra we de prijzen ervan ophalen/);
 });
 
 test('the rounds collect the stay of each coming holiday: from its eve to the Monday after, three nights at least', () => {
