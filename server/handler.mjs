@@ -26,6 +26,19 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // A live quote is for a short stay; longer ones are no weekend.
 const MAX_QUOTE_NIGHTS = 7;
 
+/**
+ * The network a visitor comes from: an IPv4 address as it is, an IPv6 address cut to its /64, the block one home or
+ * phone usually holds. Limits and visitor counts go by this, so a client cannot pose as many by switching addresses.
+ */
+export function clientNetwork(ip) {
+  if (!ip?.includes(':')) return ip;
+  const [head, tail] = ip.toLowerCase().split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const groups = tail === undefined ? left : [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right];
+  return `${groups.slice(0, 4).map((group) => group.replace(/^0+(?=.)/, '')).join(':')}::/64`;
+}
+
 const validTopic = (topic) => typeof topic === 'string' && TOPIC_PATTERN.test(topic);
 const publicAlert = ({ id, partyKey, party, label, createdAt }) => ({ id, partyKey, party, label, createdAt });
 
@@ -71,16 +84,12 @@ export function createApiHandler(
     admin: await isAdmin(request),
   });
 
-  /**
-   * Who clicked, as a code that holds for one day: a visitor clicking again counts once, and no IP address is kept.
-   * shortcut: keyed on the whole address, so one IPv6 client can pass for several visitors; key on its /64 if that
-   * gets abused.
-   */
+  /** Who clicked, as a code that holds for one day: a visitor clicking again counts once, and no IP address is kept. */
   async function visitorOf(request) {
-    const ip = request.headers.get('CF-Connecting-IP');
-    if (!ip) return null;
+    const network = clientNetwork(request.headers.get('CF-Connecting-IP'));
+    if (!network) return null;
     const salt = await db.clickSalt(new Date().toISOString().slice(0, 10));
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}|${ip}`));
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}|${network}`));
     return Array.from(new Uint8Array(digest).slice(0, 4), (byte) => byte.toString(16).padStart(2, '0')).join('');
   }
 
@@ -325,7 +334,9 @@ export function createApiHandler(
     try {
       return await route(request);
     } catch (error) {
-      return json({ error: error.message }, 500);
+      // The details go to the log; a visitor learns nothing about databases or providers from them.
+      console.error(error);
+      return json({ error: 'Something went wrong' }, 500);
     }
   };
 }

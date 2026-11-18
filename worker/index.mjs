@@ -1,6 +1,6 @@
 import { createClient } from '@libsql/client/web';
 import { openDatabase } from '../server/db.mjs';
-import { createApiHandler } from '../server/handler.mjs';
+import { clientNetwork, createApiHandler } from '../server/handler.mjs';
 import { parseAffiliateLinks } from '../server/affiliate.mjs';
 import { isAdminEmail, verifyAccess } from './access.mjs';
 import { startWorkflows } from './clock.mjs';
@@ -37,7 +37,7 @@ export default {
     const page = isPagePath(pathname);
     if (!page && !pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
     if (LIMITED.has(`${request.method} ${pathname}`)) {
-      const { success } = await env.RATE_LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') ?? 'unknown' });
+      const { success } = await env.RATE_LIMITER.limit({ key: clientNetwork(request.headers.get('CF-Connecting-IP')) ?? 'unknown' });
       if (!success) return Response.json({ error: 'Too many requests' }, { status: 429 });
     }
     if (!env.TURSO_DATABASE_URL || !env.TURSO_AUTH_TOKEN) return new Response('Turso is not set up', { status: 503 });

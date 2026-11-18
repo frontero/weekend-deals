@@ -1,0 +1,6 @@
+# Cloudflare adds these to every file it serves from dist/ (the app and /beheer); the Worker's own pages set the same
+# in server/pages.mjs. No other site may show ours in a frame, and browsers take each file as the type it says it is.
+/*
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff

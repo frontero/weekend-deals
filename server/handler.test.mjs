@@ -6,7 +6,7 @@ import { gunzipSync, gzipSync } from 'node:zlib';
 import { after, test } from 'node:test';
 import { connectFile } from './connect.mjs';
 import { openDatabase } from './db.mjs';
-import { createApiHandler } from './handler.mjs';
+import { clientNetwork, createApiHandler } from './handler.mjs';
 
 const directory = mkdtempSync(join(tmpdir(), 'weekend-deals-api-'));
 after(() => rmSync(directory, { recursive: true, force: true }));
@@ -279,6 +279,15 @@ test('a tracked link counts the click and goes on to the provider, through its a
   assert.equal(stats.total.clicks, 1);
   assert.equal((await call(handle, 'GET', '/admin/clicks')).status, 403);
   db.close();
+});
+
+test('a visitor is known by its network: an IPv4 address as it is, an IPv6 address by its /64', () => {
+  assert.equal(clientNetwork('198.51.100.7'), '198.51.100.7');
+  assert.equal(clientNetwork('2001:db8:1:2::1'), '2001:db8:1:2::/64');
+  assert.equal(clientNetwork('2001:0DB8:0001:0002:abcd:0:0:5'), '2001:db8:1:2::/64');
+  assert.equal(clientNetwork('2001:db8::1'), '2001:db8:0:0::/64');
+  assert.equal(clientNetwork('::1'), '0:0:0:0::/64');
+  assert.equal(clientNetwork(null), null);
 });
 
 test('one visitor clicking again and again makes no park popular, and clicks from other sites do not count', async () => {

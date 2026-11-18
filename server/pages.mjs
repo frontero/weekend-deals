@@ -1462,7 +1462,9 @@ ${[{ path: '/' }, ...pages].map(entry)}
 `.text;
 }
 
-const headers = (type) => ({ 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'public, max-age=600' });
+// The same as public/_headers gives the app: no other site may show these pages in a frame.
+const SECURITY_HEADERS = { 'Content-Security-Policy': "frame-ancestors 'none'", 'X-Frame-Options': 'DENY', 'X-Content-Type-Options': 'nosniff' };
+const headers = (type) => ({ 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'public, max-age=600', ...SECURITY_HEADERS });
 
 /**
  * Serves a page path (see isPagePath), the sitemap or robots.txt.
@@ -1484,6 +1486,6 @@ export function serveUnavailable(request, { stylesheet }) {
   const { origin, pathname } = new URL(request.url);
   return new Response(pageDocument(UNAVAILABLE, { url: `${origin}${pathname}`, stylesheet }), {
     status: 503,
-    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '3600' },
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '3600', ...SECURITY_HEADERS },
   });
 }

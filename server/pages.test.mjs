@@ -198,6 +198,8 @@ test('serves a stored page in the site frame, a 404 page, the sitemap and robots
 
   const page = await serve('/parken');
   assert.equal(page.status, 200);
+  // No other site may show the page in a frame.
+  assert.equal(page.headers.get('Content-Security-Policy'), "frame-ancestors 'none'");
   const text = await page.text();
   assert.match(text, /<link rel="stylesheet" href="\/assets\/index-abc.css" \/>/);
   assert.match(text, /<link rel="canonical" href="https:\/\/weekendjeweg.test\/parken" \/>/);

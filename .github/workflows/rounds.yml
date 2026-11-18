@@ -33,14 +33,18 @@ jobs:
       - if: env.READY != 'true'
         run: echo "::warning::Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN under Settings → Secrets and variables → Actions."
       - if: env.READY == 'true'
-        uses: actions/checkout@v4
+        # Pinned to a commit: a moved tag cannot change what runs next to the secrets.
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - if: env.READY == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
       - if: env.READY == 'true'
-        run: npm ci --omit=dev
+        # No install scripts: the jobs need none, and they would run next to the secrets.
+        run: npm ci --omit=dev --ignore-scripts
       - if: env.READY == 'true'
         run: node server/collect-cli.mjs --if-due
         env:
