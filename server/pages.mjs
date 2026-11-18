@@ -1364,14 +1364,14 @@ const listing = 'mt-2 list-disc space-y-1 pl-5';
 /** What the site keeps and who else sees something. Questions go to contact@ the site's own domain (Email Routing). */
 const privacyPage = (hostname) => ({
   title: 'Privacy',
-  description: `Wat ${SITE_NAME} bewaart en wie er verder iets ziet: geen account, geen trackingcookies, geen persoonsgegevens bij klikken.`,
+  description: `Wat ${SITE_NAME} bewaart en wie er verder iets ziet: geen account, geen trackingcookies, geen IP-adressen bij klikken.`,
   image: null,
   body: html`<h1 class="text-3xl font-bold tracking-tight">Privacy</h1>
     <div class="mt-3 max-w-2xl text-ink-secondary">
       <p>${SITE_NAME} is een website van een particulier. Je hebt geen account nodig. We gebruiken geen trackingcookies en geen bezoekersstatistieken.</p>
       <h2 class="${heading} text-ink">Wat we bewaren</h2>
       <ul class="${listing}">
-        <li>Klik je door naar een aanbieder, dan bewaren we welk park, welk weekend, vanaf welke pagina, voor hoeveel personen en wanneer. Niet wie je bent en niet je IP-adres.</li>
+        <li>Klik je door naar een aanbieder, dan bewaren we welk park, welk weekend, vanaf welke pagina, voor hoeveel personen en wanneer. Niet wie je bent en niet je IP-adres. Zodat dezelfde bezoeker een park maar één keer per dag populairder maakt, bewaren we een korte code die we maken uit je IP-adres en een sleutel van die dag. Die sleutel vervangen we elke dag; daarna valt de code niet meer terug te leiden.</li>
         <li>Zet je een prijsalarm aan, dan bewaren we je zoekopdracht, je gezelschap en de willekeurige code van je meldingen. Zoek je op afstand, dan ook je plek, afgerond op ongeveer een kilometer. Verwijder je het alarm, dan is het weg.</li>
       </ul>
       <h2 class="${heading} text-ink">Wat in je browser blijft</h2>

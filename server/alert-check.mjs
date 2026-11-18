@@ -33,9 +33,10 @@ export async function checkAlerts(db, { appUrl = null, send = sendNotification, 
       if (!news.length) continue;
       await send(alert.topic, alertMessage(alert, news, appUrl));
       await db.recordDeliveries(alert.id, dealRows(news));
-      log(`alert "${alert.label}": ${news.length} deals sent`);
+      // The id, not the label: a visitor's text has no place in the job's log.
+      log(`alert ${alert.id}: ${news.length} deals sent`);
     } catch (error) {
-      log(`alert "${alert.label}" failed: ${error.message}`);
+      log(`alert ${alert.id} failed: ${error.message}`);
     }
   }
 }

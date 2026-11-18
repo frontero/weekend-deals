@@ -123,6 +123,26 @@ test('a phone sets, lists and removes its own price alerts; its topic is the key
   db.close();
 });
 
+test('alerts stay one line, keep only well-formed seen deals, and stop at the daily ceiling for everyone', async () => {
+  const db = await open('alert-limits.db');
+  const handle = createApiHandler(db);
+  const post = (topic, extra = {}) => call(handle, 'POST', '/alerts', { topic, primed: true, ...extra });
+  const seen = [
+    { parkCode: 'HDL', arrival: '2026-11-13', priceCents: 40000 },
+    { parkCode: 'x'.repeat(65), arrival: '2026-11-13', priceCents: 1 },
+    { parkCode: 'HDL', arrival: 'soon', priceCents: 1 },
+  ];
+  const created = await (await post('weekendjeweg-limits000000001', { label: 'Mijn alarm\n::error::nep', seen })).json();
+  assert.equal(created.label, 'Mijn alarm ::error::nep');
+  assert.equal((await db.alertDeliveries(created.id)).size, 1);
+
+  // Close to the day's ceiling: one more alert fits, the next one not, whatever its topic.
+  await db.takeBudget(`alertRows:${new Date().toISOString().slice(0, 10)}`, 47_000, 50_000);
+  assert.equal((await post('weekendjeweg-limits000000002')).status, 201);
+  assert.equal((await post('weekendjeweg-limits000000003')).status, 503);
+  db.close();
+});
+
 test('sends a test message to the phone on request', async (t) => {
   const db = await open('alert-test.db');
   const handle = createApiHandler(db);
@@ -258,5 +278,21 @@ test('a tracked link counts the click and goes on to the provider, through its a
   assert.equal(stats.parks[0].parkCode, 'HVS');
   assert.equal(stats.total.clicks, 1);
   assert.equal((await call(handle, 'GET', '/admin/clicks')).status, 403);
+  db.close();
+});
+
+test('one visitor clicking again and again makes no park popular, and clicks from other sites do not count', async () => {
+  const db = await open('click-visitors.db');
+  const handle = createApiHandler(db);
+  const go = (ip, headers = {}) =>
+    handle(new Request(`http://localhost/api/go?${new URLSearchParams({ url: 'https://www.landal.nl/', park: 'HOT' })}`, { headers: { 'CF-Connecting-IP': ip, ...headers } }));
+  const popular = async () => [...(await db.popularParks('2000-01-01', { minimum: 5, limit: 12 }))];
+
+  for (let i = 0; i < 5; i += 1) assert.equal((await go('198.51.100.1')).status, 302);
+  assert.deepEqual(await popular(), []);
+  for (let i = 2; i <= 5; i += 1) await go(`198.51.100.${i}`, { 'Sec-Fetch-Site': 'cross-site' });
+  assert.deepEqual(await popular(), []);
+  for (let i = 2; i <= 5; i += 1) await go(`198.51.100.${i}`);
+  assert.deepEqual(await popular(), [['HOT', 5]]);
   db.close();
 });

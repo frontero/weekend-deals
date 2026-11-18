@@ -456,12 +456,48 @@ test('replaces all public pages at once, so a weekend gone by loses its page', a
   db.close();
 });
 
-test('a park is popular from five clicks this week; older clicks do not count', async () => {
+test('a park is popular from five visitors this week; older clicks and repeat clicks do not count', async () => {
   const db = await open('popular.db');
-  for (let i = 0; i < 5; i += 1) await db.saveClick({ provider: 'landal', parkCode: 'HOT' }, '2026-10-28T10:00:00Z');
-  for (let i = 0; i < 4; i += 1) await db.saveClick({ provider: 'landal', parkCode: 'MILD' }, '2026-10-28T10:00:00Z');
-  for (let i = 0; i < 6; i += 1) await db.saveClick({ provider: 'landal', parkCode: 'OLD' }, '2026-10-01T10:00:00Z');
+  const click = (parkCode, visitor, at = '2026-10-28T10:00:00Z') => db.saveClick({ provider: 'landal', parkCode, visitor }, at);
+  for (let i = 0; i < 5; i += 1) await click('HOT', `v${i}`);
+  for (let i = 0; i < 4; i += 1) await click('MILD', `v${i}`);
+  for (let i = 0; i < 6; i += 1) await click('OLD', `v${i}`, '2026-10-01T10:00:00Z');
+  for (let i = 0; i < 9; i += 1) await click('SAME', 'v0');
+  for (let i = 0; i < 9; i += 1) await click('NOBODY', null);
   const popular = await db.popularParks('2026-10-22T00:00:00Z', { minimum: 5, limit: 10 });
   assert.deepEqual([...popular], [['HOT', 5]]);
+  db.close();
+});
+
+test("a visitor code's salt holds for one day, and a new day gets a new one", async () => {
+  const db = await open('salt.db');
+  const first = await db.clickSalt('2026-11-18');
+  assert.equal(await db.clickSalt('2026-11-18'), first);
+  const next = await db.clickSalt('2026-11-19');
+  assert.notEqual(next, first);
+  assert.ok(next.startsWith('2026-11-19|'));
+  db.close();
+});
+
+test('a budget counter never passes its limit, also for requests at the same time', async () => {
+  const db = await open('budget.db');
+  const granted = await Promise.all(Array.from({ length: 10 }, () => db.takeBudget('counter:2026-11', 1, 5)));
+  assert.equal(granted.filter(Boolean).length, 5);
+  assert.equal(await db.googleRequests('2026-11', 'counter'), 5);
+  assert.equal(await db.takeBudget('other:2026-11', 6, 5), false);
+  db.close();
+});
+
+test('removing an alert takes only its own deliveries along', async () => {
+  const db = await open('alert-delete.db');
+  const alert = (id) => ({ id, topic: `topic-${id}-0000000000`, partyKey: 'a2-c0', search: {}, query: '', label: 'x', primed: true });
+  const seen = [{ parkCode: 'A', arrival: '2026-11-13', priceCents: 100 }];
+  await db.saveAlert(alert('one'), seen);
+  await db.saveAlert(alert('two'), seen);
+  assert.equal(await db.deleteAlert('one', 'topic-two-0000000000'), false);
+  assert.equal(await db.deleteAlert('one', 'topic-one-0000000000'), true);
+  assert.equal((await db.alertDeliveries('one')).size, 0);
+  assert.equal((await db.alertDeliveries('two')).size, 1);
+  assert.equal(await db.alertCount(), 1);
   db.close();
 });

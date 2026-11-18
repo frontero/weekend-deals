@@ -168,7 +168,8 @@ const SCHEMA = `
     park_code TEXT,
     arrival TEXT,
     source TEXT,
-    party_key TEXT
+    party_key TEXT,
+    visitor TEXT
   );
   CREATE TABLE IF NOT EXISTS admin_stats (
     group_key TEXT PRIMARY KEY,
@@ -201,6 +202,12 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS watch_changes_by_run ON watch_changes (run_id);
   CREATE INDEX IF NOT EXISTS clicks_by_time ON clicks (at);
+  CREATE INDEX IF NOT EXISTS alerts_by_topic ON alerts (topic);
+  -- A removed alert takes only its own deliveries along: no sweep over everyone's.
+  CREATE TRIGGER IF NOT EXISTS alert_deliveries_cleanup AFTER DELETE ON alerts
+  BEGIN
+    DELETE FROM alert_deliveries WHERE alert_id = OLD.id;
+  END;
 `;
 
 // Latest price per park and weekend, from its accommodation's running stats, plus the price at a cut-off (a few days
@@ -477,12 +484,14 @@ async function addLaterColumns(client) {
   const columns = await columnNames(client, 'parks');
   const priceColumns = await columnNames(client, 'prices');
   const scanChangeColumns = await columnNames(client, 'scan_changes');
+  const clickColumns = await columnNames(client, 'clicks');
   const changes = [];
   if (!columns.includes('lat')) changes.push('ALTER TABLE parks ADD COLUMN lat REAL', 'ALTER TABLE parks ADD COLUMN lng REAL');
   if (!columns.includes('provider')) changes.push(`ALTER TABLE parks ADD COLUMN provider TEXT NOT NULL DEFAULT 'landal'`);
   if (!columns.includes('brand_code')) changes.push('ALTER TABLE parks ADD COLUMN brand_code TEXT');
   if (!priceColumns.includes('booking_url')) changes.push('ALTER TABLE prices ADD COLUMN booking_url TEXT');
   if (!scanChangeColumns.includes('stats')) changes.push('ALTER TABLE scan_changes ADD COLUMN stats TEXT');
+  if (!clickColumns.includes('visitor')) changes.push('ALTER TABLE clicks ADD COLUMN visitor TEXT');
   if (changes.length) await client.batch(changes, 'write');
 }
 
@@ -704,6 +713,20 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
 
     async googleRequests(month, counter = 'googleRequests') {
       return Number((await readSetting(`${counter}:${month}`)) ?? 0);
+    },
+
+    /**
+     * Adds `amount` to the counter under `key` unless that would pass `limit`; false, and nothing added, otherwise.
+     * One statement, so requests at the same time cannot all slip under the limit.
+     */
+    async takeBudget(key, amount, limit) {
+      const { rowsAffected } = await client.execute({
+        sql: `INSERT INTO settings (key, value) SELECT ?1, ?2 WHERE ?2 <= ?3
+              ON CONFLICT (key) DO UPDATE SET value = CAST(settings.value AS INTEGER) + ?2
+              WHERE CAST(settings.value AS INTEGER) + ?2 <= ?3`,
+        args: [key, amount, limit],
+      });
+      return rowsAffected > 0;
     },
 
     async googlePlaceId(code) {
@@ -929,12 +952,24 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       );
     },
 
-    /** A visitor going to a provider through a tracked link. */
-    async saveClick({ provider, parkCode = null, arrival = null, source = null, partyKey = null }, at = new Date().toISOString()) {
+    /** A visitor going to a provider through a tracked link; `visitor` is a code that holds for one day only. */
+    async saveClick({ provider, parkCode = null, arrival = null, source = null, partyKey = null, visitor = null }, at = new Date().toISOString()) {
       await client.execute({
-        sql: `INSERT INTO clicks (at, provider, park_code, arrival, source, party_key) VALUES (?, ?, ?, ?, ?, ?)`,
-        args: [at, provider, parkCode, arrival, source, partyKey],
+        sql: `INSERT INTO clicks (at, provider, park_code, arrival, source, party_key, visitor) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        args: [at, provider, parkCode, arrival, source, partyKey, visitor],
       });
+    },
+
+    /** The day's random salt for visitor codes; replaced the next day, so older codes cannot be traced back. */
+    async clickSalt(day) {
+      const current = await readSetting('clickSalt');
+      if (current?.startsWith(`${day}|`)) return current;
+      const { rows } = await client.execute({
+        sql: `INSERT INTO settings (key, value) VALUES ('clickSalt', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value
+              WHERE substr(settings.value, 1, 10) <> substr(excluded.value, 1, 10) RETURNING value`,
+        args: [`${day}|${crypto.randomUUID()}`],
+      });
+      return rows[0]?.value ?? readSetting('clickSalt');
     },
 
     /** Clicks since `since` per day (UTC), provider, place on the page and park, and the total ever. */
@@ -958,12 +993,15 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       return { days: plain(days), providers: plain(providers), sources: plain(sources), parks: plain(parks), total: plain(total)[0] };
     },
 
-    /** Parks clicked through to a provider at least `minimum` times since `since`: park code → clicks, most first. */
+    /**
+     * Parks at least `minimum` visitors clicked through to a provider since `since`: park code → visitors, most first.
+     * A visitor counts once a day, so one person clicking again and again makes nothing popular.
+     */
     async popularParks(since, { minimum, limit }) {
       const rows = await all(
-        `SELECT park_code AS parkCode, COUNT(*) AS clicks FROM clicks
-          WHERE at >= ? AND park_code IS NOT NULL
-          GROUP BY park_code HAVING COUNT(*) >= ? ORDER BY clicks DESC LIMIT ?`,
+        `SELECT park_code AS parkCode, COUNT(DISTINCT visitor) AS clicks FROM clicks
+          WHERE at >= ? AND park_code IS NOT NULL AND visitor IS NOT NULL
+          GROUP BY park_code HAVING COUNT(DISTINCT visitor) >= ? ORDER BY clicks DESC LIMIT ?`,
         since,
         minimum,
         limit,
@@ -1119,24 +1157,21 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
 
     /** @param topic only that phone's alerts; omitted, every alert */
     async alerts(topic = null) {
-      const rows = await all(
-        `SELECT ${ALERT_COLUMNS} FROM alerts LEFT JOIN parties ON parties.group_key = alerts.party_key
-         WHERE ? IS NULL OR alerts.topic = ? ORDER BY alerts.created_at`,
-        topic,
-        topic,
-      );
+      const select = `SELECT ${ALERT_COLUMNS} FROM alerts LEFT JOIN parties ON parties.group_key = alerts.party_key`;
+      const rows =
+        topic === null
+          ? await all(`${select} ORDER BY alerts.created_at`)
+          : await all(`${select} WHERE alerts.topic = ? ORDER BY alerts.created_at`, topic);
       return rows.map(alertOf);
     },
 
-    /** Only with the topic it belongs to, so nobody removes another phone's alerts. */
+    async alertCount() {
+      return Number((await first(`SELECT COUNT(*) AS count FROM alerts`)).count);
+    },
+
+    /** Only with the topic it belongs to, so nobody removes another phone's alerts; a trigger removes its deliveries. */
     async deleteAlert(id, topic) {
-      const [removed] = await client.batch(
-        [
-          { sql: `DELETE FROM alerts WHERE id = ? AND topic = ?`, args: [id, topic] },
-          { sql: `DELETE FROM alert_deliveries WHERE alert_id NOT IN (SELECT id FROM alerts)`, args: [] },
-        ],
-        'write',
-      );
+      const removed = await client.execute({ sql: `DELETE FROM alerts WHERE id = ? AND topic = ?`, args: [id, topic] });
       return removed.rowsAffected > 0;
     },
 

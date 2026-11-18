@@ -15,6 +15,11 @@ const JSON_TYPE = 'application/json; charset=utf-8';
 const MAX_KEY_LENGTH = 300;
 const MAX_ALERTS_PER_TOPIC = 20;
 const MAX_SEEN_DEALS = 1000;
+// Topics cost nothing, so everyone's alerts together have a ceiling too: on how many there are (each round checks
+// them all), and on the database rows new ones may write per day, well below what Turso allows a month.
+// shortcut: fixed for a young site; raise both when real use comes near.
+const MAX_ALERTS_TOTAL = 500;
+const DAILY_ALERT_ROWS = 50_000;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -27,7 +32,7 @@ const publicAlert = ({ id, partyKey, party, label, createdAt }) => ({ id, partyK
 /** The deals an alert matched when it was set: plain { parkCode, arrival, priceCents } rows. */
 const seenDeals = (rows) =>
   (Array.isArray(rows) ? rows : [])
-    .filter((row) => typeof row?.parkCode === 'string' && typeof row?.arrival === 'string' && Number.isFinite(row?.priceCents))
+    .filter((row) => typeof row?.parkCode === 'string' && row.parkCode.length <= 64 && ISO_DATE.test(row?.arrival) && Number.isInteger(row?.priceCents))
     .slice(0, MAX_SEEN_DEALS)
     .map(({ parkCode, arrival, priceCents }) => ({ parkCode, arrival, priceCents }));
 
@@ -66,6 +71,19 @@ export function createApiHandler(
     admin: await isAdmin(request),
   });
 
+  /**
+   * Who clicked, as a code that holds for one day: a visitor clicking again counts once, and no IP address is kept.
+   * shortcut: keyed on the whole address, so one IPv6 client can pass for several visitors; key on its /64 if that
+   * gets abused.
+   */
+  async function visitorOf(request) {
+    const ip = request.headers.get('CF-Connecting-IP');
+    if (!ip) return null;
+    const salt = await db.clickSalt(new Date().toISOString().slice(0, 10));
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${salt}|${ip}`));
+    return Array.from(new Uint8Array(digest).slice(0, 4), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
   /** @param parties group keys of the sizes to collect; none means all of them */
   async function requestScan(parties = []) {
     await db.requestScan({ parties });
@@ -100,15 +118,21 @@ export function createApiHandler(
       const provider = providerOfUrl(url);
       if (!provider) return json({ error: 'Not a provider link' }, 400);
       const text = (name, length) => params.get(name)?.slice(0, length) || null;
-      await db
-        .saveClick({
-          provider,
-          parkCode: text('park', 64),
-          arrival: ISO_DATE.test(params.get('arrival') ?? '') ? params.get('arrival') : null,
-          source: text('from', 32),
-          partyKey: text('party', MAX_KEY_LENGTH),
-        })
-        .catch(() => {});
+      // Loaded by another site's page (an image, say) it is nobody's click.
+      if (request.headers.get('Sec-Fetch-Site') !== 'cross-site') {
+        await visitorOf(request)
+          .then((visitor) =>
+            db.saveClick({
+              provider,
+              parkCode: text('park', 64),
+              arrival: ISO_DATE.test(params.get('arrival') ?? '') ? params.get('arrival') : null,
+              source: text('from', 32),
+              partyKey: text('party', MAX_KEY_LENGTH),
+              visitor,
+            }),
+          )
+          .catch(() => {});
+      }
       return Response.redirect(affiliateUrl(provider, url, affiliateLinks), 302);
     },
 
@@ -118,8 +142,7 @@ export function createApiHandler(
       if (!placeId) return json({ error: 'No Google place for this park' }, 404);
       if (!googleApiKey) return json({ error: 'Google is not set up' }, 503);
       const month = new Date().toISOString().slice(0, 7);
-      if ((await db.googleRequests(month, REVIEW_COUNTER)) >= MONTHLY_REVIEW_BUDGET) return json({ error: 'Monthly budget used' }, 429);
-      await db.countGoogleRequest(month, REVIEW_COUNTER);
+      if (!(await db.takeBudget(`${REVIEW_COUNTER}:${month}`, 1, MONTHLY_REVIEW_BUDGET))) return json({ error: 'Monthly budget used' }, 429);
       return json(await fetchPlaceReviews(placeId, googleApiKey));
     },
 
@@ -244,6 +267,10 @@ export function createApiHandler(
       const input = await readJson(request);
       if (!validTopic(input.topic)) return json({ error: 'Invalid topic' }, 400);
       if ((await db.alerts(input.topic)).length >= MAX_ALERTS_PER_TOPIC) return json({ error: 'Too many alerts' }, 409);
+      // Charged at its most: the seen deals now, or what the first check takes in later.
+      const today = `alertRows:${new Date().toISOString().slice(0, 10)}`;
+      if (!(await db.takeBudget(today, 1 + MAX_SEEN_DEALS, DAILY_ALERT_ROWS))) return json({ error: 'Too many alerts today' }, 503);
+      if ((await db.alertCount()) >= MAX_ALERTS_TOTAL) return json({ error: 'Too many alerts' }, 503);
       const party = partyOf(clampSettings(input.party));
       const alert = {
         id: crypto.randomUUID(),
@@ -252,7 +279,8 @@ export function createApiHandler(
         partyKey: partyKey(seriesFor(party)),
         search: cleanSearch(input.search),
         query: new URLSearchParams(String(input.query ?? '').slice(0, 1000)).toString(),
-        label: String(input.label ?? '').slice(0, 200) || 'Alle buitenkansjes',
+        // One line of plain text: a line break or control character would leak into logs and messages.
+        label: String(input.label ?? '').replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ').slice(0, 200) || 'Alle buitenkansjes',
         // Deals seen on screen before the size had prices of its own are no baseline.
         primed: input.primed === true,
       };

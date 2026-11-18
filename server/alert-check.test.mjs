@@ -31,9 +31,12 @@ test('an alert tells only about what is new since it was set, and about clear pr
   assert.equal(sent.length, 0);
 
   await saveParks(db, [park('A', 40000), park('B', 30000)]);
-  await checkAlerts(db, { send });
+  const logged = [];
+  await checkAlerts(db, { send, log: (line) => logged.push(line) });
   await checkAlerts(db, { send });
   assert.equal(sent.length, 1);
+  // The log names the alert by id: a visitor's label could pass for a workflow command there.
+  assert.deepEqual(logged, ['alert one: 1 deals sent']);
   assert.equal(sent[0].topic, TOPIC);
   assert.equal(sent[0].message.title, 'Buitenkansje: Park B');
 
