@@ -251,6 +251,8 @@ test('a holiday page lists the stay the parks rent out for it, cheapest first, a
 
   const christmas = at('/feestdag/kerst');
   assert.equal(christmas.title, 'Vakantiepark met kerst 2026: parken met plek en prijzen');
+  assert.match(christmas.body, /style="background: linear-gradient\(160deg, #0d3b2c[^"]*; color: #ffffff"/, 'its own colours');
+  assert.match(christmas.body, /<svg aria-hidden="true"[^>]*viewBox="0 0 1200 120"/, 'and its own drawing');
   assert.match(
     christmas.body,
     /2 vakantieparken hebben nog plek van kerstavond tot de maandag erna \(do 24 dec – ma 28 dec, 4 nachten\) voor 2 personen, vanaf €\s510\. Zo verhuren de meeste parken het met kerst/,

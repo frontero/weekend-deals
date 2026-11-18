@@ -12,6 +12,7 @@ import { providerHomeLinks, providerName, trackedBookingUrl } from '../src/lib/p
 import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
+import { OCCASION_ART } from './occasion-art.mjs';
 import { groupKey, HOT_TUB_PARTY, parseGroupKey, partyLabel, PET_PARTY, STANDARD_PARTIES } from '../shared/party.mjs';
 import { shiftDays } from '../shared/weekends.mjs';
 
@@ -653,6 +654,23 @@ const banner = (emoji, title, intro, tint = 'bg-accent-wash') =>
   </div>`;
 
 /**
+ * The banner on top of a holiday's or season's page, in its own colours and drawing (server/occasion-art.mjs).
+ * @param status what the page found, under the intro
+ */
+function occasionBanner(occasion, { year, status }) {
+  const art = OCCASION_ART[occasion.slug];
+  return html`<div class="relative overflow-hidden rounded-[2rem] px-6 pt-6 sm:px-8 sm:pt-8" style="background: ${art.background}; color: ${art.ink}">
+    <svg aria-hidden="true" class="pointer-events-none absolute inset-0 h-full w-full"><defs><pattern id="occasion-pattern" width="120" height="120" patternUnits="userSpaceOnUse">${new Html(art.pattern)}</pattern></defs><rect width="100%" height="100%" fill="url(#occasion-pattern)" opacity="${art.patternOpacity}" /></svg>
+    <div class="relative">
+      <h1 class="text-3xl font-black tracking-tight sm:text-5xl">${occasion.heading} <span class="inline-block -rotate-1 rounded-2xl px-2" style="background: ${art.sticker.background}; color: ${art.sticker.ink}">${year}</span></h1>
+      <p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${occasion.intro}</p>
+      <p class="mt-3 max-w-3xl font-semibold opacity-90">${status}</p>
+    </div>
+    <svg aria-hidden="true" class="relative -mx-6 mt-6 block h-16 w-[calc(100%+3rem)] sm:-mx-8 sm:h-24 sm:w-[calc(100%+4rem)]" viewBox="0 0 1200 120" preserveAspectRatio="xMidYMax slice">${new Html(art.band)}</svg>
+  </div>`;
+}
+
+/**
  * Who took the outings' photos and under which license, as their CC BY-SA licenses ask: together at the end of the
  * page, folded away, rather than under every photo.
  */
@@ -1275,7 +1293,7 @@ function holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes,
 
   const body = html`
     ${breadcrumb(name, ['/weekenden', 'Alle weekenden'])}
-    <div class="mt-3">${banner(holiday.emoji, html`${holiday.heading} <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">${year}</span>`, html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${holiday.intro}</p><p class="mt-3 max-w-3xl font-semibold text-ink-secondary">${sentences.join(' ')}</p>`)}</div>
+    <div class="mt-3">${occasionBanner(holiday, { year, status: sentences.join(' ') })}</div>
     ${sorted.length > 0 && html`<section aria-labelledby="cheapest" class="mt-10">${sectionTitle('cheapest', holiday.emoji, 'Het goedkoopst')}${cards(sorted)}</section>`}
     ${
       quiet.length > 0 &&
@@ -1327,7 +1345,7 @@ function seasonPage(season, { year, matching, lastKnown, pathOf, occasionsOf, ot
 
   const body = html`
     ${breadcrumb(name, ['/weekenden', 'Alle weekenden'])}
-    <div class="mt-3">${banner(season.emoji, html`${season.heading} <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">${year}</span>`, html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${season.intro}</p><p class="mt-3 max-w-3xl font-semibold text-ink-secondary">${status}</p>`)}</div>
+    <div class="mt-3">${occasionBanner(season, { year, status })}</div>
     ${matching.map((entry, index) => weekendSection(entry, { id: `weekend-${index}`, emoji: season.emoji, title: formatWeekend(entry.weekend), source: 'vakantiepagina', pathOf, occasions: occasionsOf(entry.weekend) }))}
     <nav aria-labelledby="more" class="mt-10">${sectionTitle('more', '✨', 'Verder kijken')}<ul class="mt-4 flex flex-wrap gap-2">${more.map(
       ([href, emoji, label]) => html`<li><a href="${href}" class="${chip}"><span aria-hidden="true">${emoji}</span> ${label}</a></li>`,
