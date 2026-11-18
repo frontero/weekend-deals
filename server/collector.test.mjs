@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createCollector } from './collector.mjs';
+import { createCollector, fetchHolidayStays } from './collector.mjs';
 import { DEFAULT_SETTINGS } from './settings.mjs';
 
 const party = { adults: 2, children: 0, pets: 0, accommodationFeatures: [] };
@@ -81,4 +81,30 @@ test("with the month's database budget low, only the default party size is colle
   assert.equal(await createCollector(db).isDue(), true);
   assert.equal(await createCollector(db, { essentialOnly: true }).isDue(), false);
   assert.equal(await createCollector(fakeDb({ parties: [followed(null)] }), { essentialOnly: true }).isDue(), true);
+});
+
+test('a holiday stay keeps the prices found before when a provider fails on it, and keeps only what its page needs', async () => {
+  const stays = [
+    { slug: 'kerst', arrival: '2026-12-24', departure: '2026-12-28' },
+    { slug: 'oud-en-nieuw', arrival: '2026-12-31', departure: '2027-01-04' },
+  ];
+  const asked = [];
+  const steady = {
+    id: 'landal',
+    fetchWeekendOffers: async (query) => {
+      asked.push(query);
+      return [{ park: { code: 'GPN', name: 'Gulpen', city: 'Gulpen' }, priceCents: 72000, accommodationCode: 'A4' }];
+    },
+  };
+  const flaky = {
+    id: 'topparken',
+    fetchWeekendOffers: async ({ arrival }) => {
+      if (arrival === '2026-12-31') throw new Error('timeout');
+      return [];
+    },
+  };
+  const before = { ...stays[1], offers: [{ code: 'OLD', priceCents: 50000, accommodationCode: null, bookingUrl: null }] };
+  const found = await fetchHolidayStays([steady, flaky], party, stays, [before]);
+  assert.deepEqual(found, [{ ...stays[0], offers: [{ code: 'GPN', priceCents: 72000, accommodationCode: 'A4', bookingUrl: null }] }, before]);
+  assert.deepEqual(asked[0], { ...party, ...stays[0] });
 });

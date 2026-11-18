@@ -120,13 +120,14 @@ export async function buildOverview(db, { googleEnabled, party }) {
 async function pageDetails(db) {
   // Themes with prices of their own party, from that party's latest overview: four people, and the hot tub series.
   const themeKeys = [FAMILY_KEY, ...FEATURE_PARTIES.map(groupKey)];
-  const [landal, names, accommodations, surroundings, ratings, { holidays }, popular, ...themeOverviews] = await Promise.all([
+  const [landal, names, accommodations, surroundings, ratings, { holidays }, holidayStays, popular, ...themeOverviews] = await Promise.all([
     db.facilitiesByPark(),
     db.facilityNamesByPark(),
     db.accommodations(),
     db.surroundings(),
     db.googleRatings(),
     db.schoolHolidays(),
+    db.holidayStays(),
     popularParks(db),
     ...themeKeys.map((key) => db.overviewParks(key)),
   ]);
@@ -134,7 +135,7 @@ async function pageDetails(db) {
   const occasionsOf = (weekend) => weekendOccasions(weekend, holidays);
   const themeParks = new Map(themeKeys.map((key, index) => [key, themeOverviews[index] ? JSON.parse(gunzipSync(themeOverviews[index])) : null]));
   const parksOf = (key) => themeParks.get(key) ?? null;
-  return { facilitiesOf, accommodations, surroundings, ratings, occasionsOf, parksOf, popular };
+  return { facilitiesOf, accommodations, surroundings, ratings, occasionsOf, parksOf, popular, holidayStays };
 }
 
 export async function refreshOverview(db, { googleEnabled, party }) {

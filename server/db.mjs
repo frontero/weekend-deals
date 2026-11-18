@@ -679,6 +679,15 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       await writeSetting('schoolHolidays', JSON.stringify({ holidays, fetchedAt }));
     },
 
+    /** The holiday stays' prices of the last round (see fetchHolidayStays): [{ slug, arrival, departure, offers }]. */
+    async holidayStays() {
+      return parseJson(await readSetting('holidayStays'), []);
+    },
+
+    async saveHolidayStays(stays) {
+      await writeSetting('holidayStays', JSON.stringify(stays));
+    },
+
     /** Parks with coordinates whose surroundings are missing or were fetched before `fetchedBefore`, oldest first. */
     parksNeedingSurroundings(fetchedBefore) {
       return all(

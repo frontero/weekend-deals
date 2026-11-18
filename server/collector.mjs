@@ -11,7 +11,7 @@ import { fetchGoogleRating, MONTHLY_GOOGLE_BUDGET } from './google.mjs';
 import { sleep } from './http.mjs';
 import { fetchParksWithFacility } from './landal.mjs';
 import { overviewIsStale, refreshOverview } from './overview.mjs';
-import { PAGE_PARTY } from './pages.mjs';
+import { PAGE_PARTY, upcomingHolidayStays } from './pages.mjs';
 import { activeProviders, PROVIDERS, providerBrand } from './providers.mjs';
 import { roundInProgress } from './status.mjs';
 import { fetchSurroundings } from './surroundings.mjs';
@@ -43,6 +43,35 @@ const SUMMARIES_PER_RUN = 60;
 const MAX_ACCOMMODATION_SEARCHES_PER_PARK = 2;
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
+
+/**
+ * Per holiday stay (see upcomingHolidayStays in server/pages.mjs), every provider's cheapest price per park. A stay a
+ * provider failed on keeps the prices found before, so a hiccup does not empty its page.
+ * @param previous the stays the last round saved
+ */
+export async function fetchHolidayStays(providers, party, stays, previous = [], { log = () => {} } = {}) {
+  const found = [];
+  for (const stay of stays) {
+    const offers = [];
+    let failed = false;
+    for (const provider of providers) {
+      try {
+        offers.push(...(await provider.fetchWeekendOffers({ ...party, ...stay })));
+      } catch (error) {
+        failed = true;
+        log(`holiday ${stay.arrival} ${provider.id} failed: ${error.message}`);
+      }
+    }
+    const before = previous.find((entry) => entry.arrival === stay.arrival && entry.departure === stay.departure);
+    if (failed && before) {
+      found.push(before);
+      continue;
+    }
+    const rows = offers.map(({ park, priceCents, accommodationCode, bookingUrl }) => ({ code: park.code, priceCents, accommodationCode, bookingUrl: bookingUrl ?? null }));
+    found.push({ ...stay, offers: rows });
+  }
+  return found;
+}
 
 /** @param appUrl where a price alert's message leads, e.g. the cloud app; without it the message has no link */
 export function createCollector(db, { log = () => {}, googleApiKey = null, appUrl = null, essentialOnly = false } = {}) {
@@ -199,6 +228,17 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
       const errors = [...tally.failures].map(([id, { error, failed }]) => [id, { error, failed, total: tally.attempts.get(id) }]);
       if (!cancelled) await db.setProviderErrors(Object.fromEntries(errors));
     }
+  }
+
+  /** The coming holidays' stays for their pages: two adults, like the other pages, within the weeks the rounds look ahead. */
+  async function collectHolidayStays() {
+    const { weeksAhead } = await db.getSettings();
+    const reach = upcomingWeekends(localToday(), weeksAhead).at(-1).arrival;
+    const stays = upcomingHolidayStays(localToday()).filter((stay) => stay.arrival <= reach);
+    const found = await fetchHolidayStays(activeProviders(PROVIDERS, PAGE_PARTY), PAGE_PARTY, stays, await db.holidayStays(), { log });
+    throwIfCancelled();
+    await db.saveHolidayStays(found);
+    log(`holiday stays: ${found.map((stay) => `${stay.arrival} ${stay.offers.length} parks`).join(', ') || 'none within reach'}`);
   }
 
   /** The latest finished scan of every followed party: the prices the screen shows. */
@@ -460,6 +500,10 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
       await refreshFacilityNames().catch((error) => log(`facility pages failed: ${error.message}`));
       throwIfCancelled();
       if (parties.length) await collectPrices(parties);
+      if (parties.some(({ key }) => key === groupKey(PAGE_PARTY))) {
+        await collectHolidayStays().catch((error) => log(`holiday stays failed: ${error.message}`));
+        throwIfCancelled();
+      }
       await refreshAccommodations(await newAccommodationJobs()).catch((error) =>
         log(`accommodations failed: ${error.message}`),
       );
