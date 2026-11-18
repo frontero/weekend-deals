@@ -13,6 +13,7 @@ import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
 import { groupKey, HOT_TUB_PARTY, parseGroupKey, partyLabel, PET_PARTY, STANDARD_PARTIES } from '../shared/party.mjs';
+import { shiftDays, upcomingWeekends } from '../shared/weekends.mjs';
 
 // Two adults, the app's own default: the most searched-for weekend away.
 export const PAGE_PARTY = STANDARD_PARTIES[0];
@@ -40,7 +41,7 @@ const SITE_NAME = 'Parkje weg';
 const SITE_URL = 'https://parkjeweg.nl';
 
 const PAGE_PATH =
-  /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|regio\/[a-z0-9-]+|thema\/[a-z0-9-]+|land\/[a-z0-9-]+|last-minute|privacy|sitemap\.xml|robots\.txt)$/;
+  /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|regio\/[a-z0-9-]+|thema\/[a-z0-9-]+|land\/[a-z0-9-]+|feestdag\/[a-z0-9-]+|last-minute|privacy|sitemap\.xml|robots\.txt)$/;
 /** Whether a path is one of these pages (or their sitemap and robots.txt) rather than the app. */
 export const isPagePath = (pathname) => PAGE_PATH.test(pathname);
 
@@ -204,6 +205,45 @@ const themeIcon = (theme) => theme.icon ?? FACILITY_ICONS[theme.facilities[0]];
 const fitsTheme = (theme, park) => theme.facilities.filter((id) => park.facilities.includes(id)).length >= (theme.minimum ?? 1);
 const themePath = (theme) => `/thema/${theme.slug}`;
 
+/**
+ * Holidays people look for a park for ("vakantiepark kerst"): a page each, at an address that stays from year to
+ * year, with the weekend closest to the coming one.
+ * @property date the day it is about; a weekend with its night in it is the holiday's own
+ */
+const HOLIDAYS = [
+  {
+    slug: 'kerst',
+    emoji: '🎄',
+    name: 'Kerst',
+    heading: 'Vakantiepark met kerst',
+    title: (year) => `Vakantiepark met kerst ${year}`,
+    day: 'Eerste kerstdag',
+    date: (year) => `${year}-12-25`,
+    intro: 'Kerst vieren in een huisje op een vakantiepark: samen aan tafel, en overdag een winterwandeling.',
+  },
+  {
+    slug: 'oud-en-nieuw',
+    emoji: '🎆',
+    name: 'Oud en nieuw',
+    heading: 'Oud en nieuw op een vakantiepark',
+    title: (year) => `Oud en nieuw ${year} op een vakantiepark`,
+    day: 'Oudejaarsavond',
+    date: (year) => `${year}-12-31`,
+    intro: 'Het nieuwe jaar beginnen op een vakantiepark: met familie of vrienden in een huisje, of juist rustig op een park zonder vuurwerk.',
+    theme: 'vuurwerkvrij',
+  },
+];
+const holidayPath = (holiday) => `/feestdag/${holiday.slug}`;
+// The weekend closest to a holiday: the one Friday within three days of it.
+const holidayWeekend = (holiday, year) => upcomingWeekends(shiftDays(holiday.date(year), -3), 1)[0];
+/** The coming holiday's year: this year's until its weekend has begun, then next year's. */
+const holidayYear = (holiday, today) => {
+  const year = Number(today.slice(0, 4));
+  return [year - 1, year, year + 1].find((candidate) => holidayWeekend(holiday, candidate).arrival >= today);
+};
+const holidayChip = (holiday) =>
+  html`<a href="${holidayPath(holiday)}" class="${chip}"><span aria-hidden="true">${holiday.emoji}</span> ${holiday.heading}</a>`;
+
 // Where a park lies, from Landal's tags, in the order a sentence names them.
 const SETTINGS = [
   ['kust', 'aan de kust'],
@@ -246,6 +286,7 @@ export const slugify = (text) =>
 
 const longDate = new Intl.DateTimeFormat('nl-NL', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 const monthName = new Intl.DateTimeFormat('nl-NL', { month: 'long', timeZone: 'UTC' });
+const dayName = new Intl.DateTimeFormat('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' });
 const updatedAt = new Intl.DateTimeFormat('nl-NL', {
   day: 'numeric',
   month: 'long',
@@ -661,7 +702,7 @@ const offerCard = ({ park, weekend: offer }, { pathOf, source }) =>
     <div class="flex flex-1 flex-col gap-2 p-4">
       <a href="${pathOf(park)}" class="text-lg font-extrabold hover:underline">${fullName(park)}</a>
       <span class="text-sm text-ink-secondary"><span aria-hidden="true">📍</span> ${placeOf(park)}</span>
-      <p class="mt-auto flex flex-wrap items-baseline gap-2"><span class="text-3xl font-black tabular-nums">${formatEuros(offer.priceCents)}</span>${park.baselineCents && html`<s class="text-sm text-ink-muted">${formatEuros(park.baselineCents)}</s>`}</p>
+      <p class="mt-auto flex flex-wrap items-baseline gap-2"><span class="text-3xl font-black tabular-nums">${formatEuros(offer.priceCents)}</span>${discountPercent(offer) >= NOTEWORTHY_PERCENT && park.baselineCents && html`<s class="text-sm text-ink-muted">${formatEuros(park.baselineCents)}</s>`}</p>
       ${offer.weather && html`<p>${weatherChip(offer.weather)}</p>`}
       ${bookButton(park, offer, source)}
     </div>
@@ -898,7 +939,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
   };
 }
 
-function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes, occasions }) {
+function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes, occasions, holidays }) {
   const sorted = [...offers].sort((a, b) => a.weekend.priceCents - b.weekend.priceCents);
   const deals = offers
     .filter(({ weekend: offer }) => (offer.discount ?? 0) >= DEAL_SHARE)
@@ -938,8 +979,9 @@ function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes,
     ${breadcrumb(range, ['/weekenden', 'Alle weekenden'])}
     <div class="mt-3 rounded-[2rem] bg-accent-wash p-6 sm:p-8">
       <h1 class="text-3xl font-black tracking-tight sm:text-5xl">Weekendje weg <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">${range}</span></h1>
-      <p class="mt-3 max-w-2xl font-semibold text-ink-secondary">${offers.length} vakantieparken hebben nog plek van ${formatWeekend(weekend)} voor ${partyLabel(PAGE_PARTY)}, vanaf ${from}. ${deals.length > 0 && `${dealCount} minstens ${Math.round(DEAL_SHARE * 100)}% goedkoper dan normaal.`}</p>
+      <p class="mt-3 max-w-2xl font-semibold text-ink-secondary">${count(offers.length, 'vakantiepark heeft', 'vakantieparken hebben')} nog plek van ${formatWeekend(weekend)} voor ${partyLabel(PAGE_PARTY)}, vanaf ${from}. ${deals.length > 0 && `${dealCount} minstens ${Math.round(DEAL_SHARE * 100)}% goedkoper dan normaal.`}</p>
       ${occasions.length > 0 && html`<p class="mt-4 flex flex-wrap items-center gap-2">${occasionChips(occasions, 'bg-surface')} <span class="font-semibold">${occasions.map((occasion) => occasion.text).join(' ')}</span>${fireworksFree && html` <a href="${themePath(fireworksFree)}" class="${link}">Vuurwerkvrije parken</a>`}</p>`}
+      ${holidays.length > 0 && html`<p class="mt-4 flex flex-wrap gap-2">${holidays.map(holidayChip)}</p>`}
       ${sunny > 0 && html`<p class="mt-3 flex flex-wrap items-center gap-2">${weatherChip({ maxTemp: Math.max(...offers.filter((offer) => offer.weekend.weather).map((offer) => offer.weekend.weather.maxTemp)) })} <span class="font-semibold">Bij ${count(sunny, 'park', 'parken')} wordt het een zonnig en droog weekend.</span> <span class="text-xs text-ink-muted">${WEATHER_CREDIT}</span></p>`}
     </div>
     ${
@@ -972,7 +1014,7 @@ function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes,
   return {
     path: weekendPath(weekend.arrival),
     title: `Weekendje weg ${range}: vakantieparken met plek`,
-    description: `${offers.length} vakantieparken van Landal, Topparken en Molecaten met plek van ${formatWeekend(weekend)}, voor ${partyLabel(PAGE_PARTY)} vanaf ${from}.${deals.length > 0 ? ` ${dealCount} minstens ${Math.round(DEAL_SHARE * 100)}% goedkoper dan normaal.` : ''}`,
+    description: `${count(offers.length, 'vakantiepark', 'vakantieparken')} van Landal, Topparken en Molecaten met plek van ${formatWeekend(weekend)}, voor ${partyLabel(PAGE_PARTY)} vanaf ${from}.${deals.length > 0 ? ` ${dealCount} minstens ${Math.round(DEAL_SHARE * 100)}% goedkoper dan normaal.` : ''}`,
     image: deals[0]?.park.imageUrl ?? null,
     body: body.text,
   };
@@ -1096,23 +1138,33 @@ function themePage(theme, parks, { pathOf, themes, party }) {
   };
 }
 
+/** One weekend's best offers as cards with a link to all of them: on the last-minute and holiday pages. */
+function weekendSection({ weekend, offers }, { id, emoji, title, source, pathOf, occasions }) {
+  // The biggest deals first, then the cheapest: a weekend without deals still shows its best prices.
+  const shown = [...offers]
+    .sort((a, b) => discountPercent(b.weekend) - discountPercent(a.weekend) || a.weekend.priceCents - b.weekend.priceCents)
+    .slice(0, LAST_MINUTE_CARDS);
+  const sunny = offers.filter((offer) => offer.weekend.weather).length;
+  return html`<section aria-labelledby="${id}" class="mt-10">
+    ${sectionTitle(id, emoji, title)}
+    <p class="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-ink-secondary">${count(offers.length, 'park', 'parken')} met plek, vanaf ${formatEuros(cheapestOf(offers.map((offer) => offer.weekend)).priceCents)}. ${occasionChips(occasions)}${sunny > 0 && html` <span>Bij ${count(sunny, 'park', 'parken')} zonnig verwacht.</span>`}</p>
+    <ul class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${shown.map((offer) => offerCard(offer, { pathOf, source }))}</ul>
+    <p class="mt-4"><a href="${weekendPath(weekend.arrival)}" class="${chip}">${offers.length === 1 ? 'Bekijk dit weekend' : `Alle ${offers.length} parken van dit weekend`} →</a></p>
+  </section>`;
+}
+
 /** The coming weekends with room, the biggest deals first: for whoever wants to go away now. */
 function lastMinutePage(weekends, { pathOf, occasionsOf, parks }) {
   const soon = weekends.slice(0, LAST_MINUTE_WEEKENDS);
-  const section = ({ weekend, offers }, index) => {
-    // The biggest deals first, then the cheapest: a weekend without deals still shows its best prices.
-    const shown = [...offers]
-      .sort((a, b) => discountPercent(b.weekend) - discountPercent(a.weekend) || a.weekend.priceCents - b.weekend.priceCents)
-      .slice(0, LAST_MINUTE_CARDS);
-    const sunny = offers.filter((offer) => offer.weekend.weather).length;
-    const occasions = occasionsOf(weekend);
-    return html`<section aria-labelledby="soon-${index}" class="mt-10">
-      ${sectionTitle(`soon-${index}`, index === 0 ? '⏰' : '📅', `${index === 0 ? 'Eerstvolgende weekend' : 'Het weekend daarna'}: ${formatWeekend(weekend)}`)}
-      <p class="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-ink-secondary">${offers.length} parken met plek, vanaf ${formatEuros(cheapestOf(offers.map((offer) => offer.weekend)).priceCents)}. ${occasionChips(occasions)}${sunny > 0 && html` <span>Bij ${count(sunny, 'park', 'parken')} zonnig verwacht.</span>`}</p>
-      <ul class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${shown.map((offer) => offerCard(offer, { pathOf, source: 'lastminute' }))}</ul>
-      <p class="mt-4"><a href="${weekendPath(weekend.arrival)}" class="${chip}">Alle ${offers.length} parken van dit weekend →</a></p>
-    </section>`;
-  };
+  const section = (entry, index) =>
+    weekendSection(entry, {
+      id: `soon-${index}`,
+      emoji: index === 0 ? '⏰' : '📅',
+      title: `${index === 0 ? 'Eerstvolgende weekend' : 'Het weekend daarna'}: ${formatWeekend(entry.weekend)}`,
+      source: 'lastminute',
+      pathOf,
+      occasions: occasionsOf(entry.weekend),
+    });
   const body = html`
     ${banner('⏰', html`Last minute <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">vakantiepark</span>`, html`<p class="mt-3 max-w-3xl leading-relaxed font-semibold text-ink-secondary">Zin om er snel tussenuit te gaan? Dit zijn de vakantieparken die de komende weekenden nog plek hebben voor ${partyLabel(PAGE_PARTY)}, de grootste buitenkansjes eerst. Bijgewerkt na elke prijsronde.</p>`)}
     ${soon.map(section)}
@@ -1131,7 +1183,68 @@ function lastMinutePage(weekends, { pathOf, occasionsOf, parks }) {
   };
 }
 
-function parksIndex(parks, { pathOf, regions, themes, countries: countryPages }) {
+/**
+ * A holiday's page: the weekend closest to its coming date with its best offers. Before that weekend's prices are in,
+ * or when no park has room, it says so and keeps its address.
+ * @param weekends every weekend with room, as on the weekend pages
+ */
+function holidayPage(holiday, weekends, { year, pathOf, occasionsOf, themes, holidays }) {
+  const target = holidayWeekend(holiday, year);
+  const date = holiday.date(year);
+  const found = weekends.find(({ weekend }) => weekend.arrival === target.arrival);
+  const offers = found?.offers ?? [];
+  const asParks = offers.map(({ park, weekend }) => ({ ...park, weekends: [weekend] }));
+  const from = found && formatEuros(cheapestOf(offers.map((offer) => offer.weekend)).priceCents);
+  const lastKnown = weekends.at(-1)?.weekend;
+  const name = `${holiday.name} ${year}`;
+  const theme = holiday.theme && THEMES.find((candidate) => candidate.slug === holiday.theme);
+  const quiet = theme ? offers.filter(({ park }) => fitsTheme(theme, park)).sort((a, b) => a.weekend.priceCents - b.weekend.priceCents) : [];
+
+  let status;
+  if (found) status = `${count(offers.length, 'vakantiepark heeft', 'vakantieparken hebben')} nog plek van ${formatWeekend(target)} voor ${partyLabel(PAGE_PARTY)}, vanaf ${from}.`;
+  else if (lastKnown && lastKnown.arrival > target.arrival) status = `Van ${formatWeekend(target)} vonden we bij de parken die we volgen geen plek meer voor ${partyLabel(PAGE_PARTY)}.`;
+  else status = `Het weekend van ${formatWeekend(target)} komt hier zodra we de prijzen ervan ophalen${lastKnown ? `; nu lopen ze tot en met ${formatWeekend(lastKnown)}` : ''}.`;
+  const sentences = [
+    status,
+    ...occasionsOf(target).map((occasion) => occasion.text),
+    // Its night outside the weekend: said so, rather than a weekend that only looks like it.
+    !(target.arrival <= date && date < target.departure) &&
+      `${holiday.day} valt dit jaar op ${dayName.format(day(date))}. We vergelijken weekenden van vrijdag tot maandag, en dit is het weekend dat er het dichtst bij ligt. Wil je er dan zelf zijn? Kies dan bij de aanbieder andere data.`,
+  ].filter(Boolean);
+  const more = [
+    ...holidays.filter((other) => other !== holiday).map((other) => [holidayPath(other), other.emoji, other.heading]),
+    theme && themes.includes(theme) && [themePath(theme), themeIcon(theme), theme.name],
+    ['/weekenden', '📅', 'Alle weekenden'],
+  ].filter(Boolean);
+
+  const body = html`
+    ${breadcrumb(name, ['/weekenden', 'Alle weekenden'])}
+    <div class="mt-3">${banner(holiday.emoji, html`${holiday.heading} <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">${year}</span>`, html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${holiday.intro}</p><p class="mt-3 max-w-3xl font-semibold text-ink-secondary">${sentences.join(' ')}</p>`)}</div>
+    ${found && weekendSection(found, { id: 'weekend', emoji: holiday.emoji, title: `Het weekend: ${formatWeekend(target)}`, source: 'feestdagpagina', pathOf, occasions: occasionsOf(target) })}
+    ${
+      quiet.length > 0 &&
+      html`<section aria-labelledby="quiet" class="mt-10">
+        ${sectionTitle('quiet', themeIcon(theme), theme.name)}
+        <p class="mt-1 text-sm text-ink-secondary">${theme.intro}</p>
+        <ul class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${quiet.slice(0, LAST_MINUTE_CARDS).map((offer) => offerCard(offer, { pathOf, source: 'feestdagpagina' }))}</ul>
+      </section>`
+    }
+    <nav aria-labelledby="more" class="mt-10">${sectionTitle('more', '✨', 'Verder kijken')}<ul class="mt-4 flex flex-wrap gap-2">${more.map(
+      ([href, emoji, label]) => html`<li><a href="${href}" class="${chip}"><span aria-hidden="true">${emoji}</span> ${label}</a></li>`,
+    )}</ul></nav>
+    ${bestBar(asParks, { source: 'feestdagbalk' })}`;
+  return {
+    path: holidayPath(holiday),
+    title: `${holiday.title(year)}: parken met plek en prijzen`,
+    description: found
+      ? `${name} op een vakantiepark: bij ${count(offers.length, 'park', 'parken')} van Landal, Topparken en Molecaten is nog plek van ${formatWeekend(target)}, voor ${partyLabel(PAGE_PARTY)} vanaf ${from}.`
+      : `${name} op een vakantiepark: welke parken van Landal, Topparken en Molecaten nog plek hebben van ${formatWeekend(target)}, en wat een weekend kost.`,
+    image: bestOf(asParks)?.imageUrl ?? null,
+    body: body.text,
+  };
+}
+
+function parksIndex(parks, { pathOf, regions, themes, countries: countryPages, holidays }) {
   const byCountry = Map.groupBy(parks, (park) => countryName(park.country) || 'Overig');
   const countries = [...byCountry].sort((a, b) => b[1].length - a[1].length);
   const parkRow = (park) => {
@@ -1141,7 +1254,7 @@ function parksIndex(parks, { pathOf, regions, themes, countries: countryPages })
   const chips = (items) =>
     html`<ul class="mt-4 flex flex-wrap gap-2">${items.map(([href, emoji, label, number]) => html`<li><a href="${href}" class="${chip}"><span aria-hidden="true">${emoji}</span> ${label} <span class="text-ink-muted">${number}</span></a></li>`)}</ul>`;
   const body = html`
-    ${banner('🏕️', 'Alle vakantieparken', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">${parks.length} parken van Landal, Topparken en Molecaten, met de laagste weekendprijs voor ${partyLabel(PAGE_PARTY)} (vrijdag tot maandag).</p><p class="mt-4"><a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a></p>`)}
+    ${banner('🏕️', 'Alle vakantieparken', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">${parks.length} parken van Landal, Topparken en Molecaten, met de laagste weekendprijs voor ${partyLabel(PAGE_PARTY)} (vrijdag tot maandag).</p><p class="mt-4 flex flex-wrap gap-2"><a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a>${holidays.map(holidayChip)}</p>`)}
     ${popularSection(parks, { pathOf })}
     <section aria-labelledby="themes" class="mt-10">${sectionTitle('themes', '✨', 'Per thema')}${chips(themes.map(([theme, list]) => [themePath(theme), themeIcon(theme), theme.label, list.length]))}</section>
     <section aria-labelledby="countries" class="mt-10">${sectionTitle('countries', '🌍', 'Per land')}${chips(countryPages.map(([country, list]) => [countryPath(country), '📍', countryName(country), list.length]))}</section>
@@ -1162,18 +1275,18 @@ function parksIndex(parks, { pathOf, regions, themes, countries: countryPages })
   };
 }
 
-function weekendsIndex(weekends, { parks, pathOf }) {
+function weekendsIndex(weekends, { parks, pathOf, holidays }) {
   const row = ({ weekend, offers }) => {
     const cheapest = cheapestOf(offers.map((offer) => offer.weekend));
     const deals = offers.filter((offer) => (offer.weekend.discount ?? 0) >= DEAL_SHARE).length;
     return html`<li class="flex flex-col gap-1 rounded-3xl bg-surface p-4 ring-1 ring-line transition hover:-translate-y-0.5 hover:shadow-lg">
       <a href="${weekendPath(weekend.arrival)}" class="text-lg font-extrabold hover:underline">${formatWeekend(weekend)}</a>
-      <p class="text-sm text-ink-secondary">${offers.length} parken met plek</p>
+      <p class="text-sm text-ink-secondary">${count(offers.length, 'park', 'parken')} met plek</p>
       <p class="mt-1 flex flex-wrap items-center gap-2"><span class="text-2xl font-black tabular-nums">vanaf ${formatEuros(cheapest.priceCents)}</span>${deals > 0 && html`<span class="rounded-full bg-sun px-2.5 py-0.5 text-xs font-black text-on-sun">${deals} ${deals === 1 ? 'buitenkansje' : 'buitenkansjes'}</span>`}</p>
     </li>`;
   };
   const body = html`
-    ${banner('📅', 'Alle weekenden', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">Elk komend weekend (vrijdag tot maandag) met het aantal vakantieparken dat nog plek heeft voor ${partyLabel(PAGE_PARTY)} en de laagste prijs.</p><p class="mt-4"><a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a></p>`)}
+    ${banner('📅', 'Alle weekenden', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">Elk komend weekend (vrijdag tot maandag) met het aantal vakantieparken dat nog plek heeft voor ${partyLabel(PAGE_PARTY)} en de laagste prijs.</p><p class="mt-4 flex flex-wrap gap-2"><a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a>${holidays.map(holidayChip)}</p>`)}
     ${popularSection(parks, { pathOf })}
     <ul class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${weekends.map(row)}</ul>
     ${bestBar(parks, { source: 'overzichtbalk' })}`;
@@ -1294,9 +1407,19 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
   const themeOf = new Map(themePages.filter((theme) => theme.facilities.length === 1).map((theme) => [theme.facilities[0], theme]));
   const partyOf = (key) => (key && parseGroupKey(key)) || PAGE_PARTY;
 
+  const today = computedAt.slice(0, 10);
+  const holidays = HOLIDAYS.map((holiday) => {
+    const year = holidayYear(holiday, today);
+    return { holiday, year, arrival: holidayWeekend(holiday, year).arrival };
+  });
+  const holidaysOn = (arrival) => holidays.filter((entry) => entry.arrival === arrival).map(({ holiday }) => holiday);
+  // The lists point to a holiday once its weekend has prices.
+  const upcoming = holidays.filter(({ arrival }) => offersByArrival.has(arrival)).map(({ holiday }) => holiday);
+
   return [
-    parksIndex(everyPark, { pathOf, regions, themes, countries }),
-    weekendsIndex(weekends, { parks: everyPark, pathOf }),
+    parksIndex(everyPark, { pathOf, regions, themes, countries, holidays: upcoming }),
+    weekendsIndex(weekends, { parks: everyPark, pathOf, holidays: upcoming }),
+    ...holidays.map(({ holiday, year }) => holidayPage(holiday, weekends, { year, pathOf, occasionsOf: details.occasionsOf, themes: themePages, holidays: HOLIDAYS })),
     lastMinutePage(weekends, { pathOf, occasionsOf: details.occasionsOf, parks: everyPark }),
     ...everyPark.map((park) =>
       parkPage(park, {
@@ -1320,6 +1443,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
         updated,
         themes: themePages,
         occasions: details.occasionsOf(weekend),
+        holidays: holidaysOn(weekend.arrival),
       }),
     ),
     ...regions.map(([region, list]) =>

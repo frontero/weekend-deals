@@ -89,6 +89,8 @@ const pageAt = (path) => pages.find((page) => page.path === path);
 
 test('one page per park with something to tell, per weekend, per country, region and theme with three parks, and the lists', () => {
   assert.deepEqual(pages.map((page) => page.path).sort(), [
+    '/feestdag/kerst',
+    '/feestdag/oud-en-nieuw',
     '/land/nederland',
     '/last-minute',
     '/park/hoogduin-b',
@@ -180,7 +182,7 @@ test("providers' names are escaped", () => {
 });
 
 test('only page paths go to the pages', () => {
-  for (const path of ['/parken', '/weekenden', '/park/vakantiepark-gulpen', '/weekend/2026-11-06', '/regio/limburg', '/thema/aan-zee', '/privacy', '/sitemap.xml', '/robots.txt']) {
+  for (const path of ['/parken', '/weekenden', '/park/vakantiepark-gulpen', '/weekend/2026-11-06', '/regio/limburg', '/thema/aan-zee', '/feestdag/kerst', '/privacy', '/sitemap.xml', '/robots.txt']) {
     assert.ok(isPagePath(path), path);
   }
   for (const path of ['/', '/beheer', '/park/', '/park/Gulpen', '/weekend/6-november', '/api/go', '/parken/x']) {
@@ -223,6 +225,57 @@ test('the last-minute page shows the coming weekends, the biggest deals first', 
   const first = page.body.slice(page.body.indexOf('Eerstvolgende'), page.body.indexOf('Het weekend daarna'));
   assert.ok(first.indexOf('Gulpen') < first.indexOf('Hoogduin'), 'the 25% deal before the cheaper park without one');
   assert.match(page.body, /from=lastminute/);
+});
+
+test('a holiday page shows the weekend closest to it, says when its night falls outside it, and that weekend links to it', () => {
+  const festive = {
+    ...gulpen,
+    facilities: [...gulpen.facilities, 'vuurwerkvrij'],
+    weekends: [weekend('2026-12-25', '2026-12-28', 61000, 0.1), weekend('2027-01-01', '2027-01-04', 48000, null), weekend('2027-01-08', '2027-01-11', 30000, null)],
+  };
+  const occasionsOf = ({ arrival }) => (arrival === '2026-12-25' ? [{ label: 'Kerst', text: 'Eerste kerstdag valt op vrijdag: daarvoor hoef je geen vrij te nemen.' }] : []);
+  const built = buildPages({
+    parks: [festive, { ...hoogduin, weekends: [weekend('2026-12-25', '2026-12-28', 55000, null)] }],
+    allParks,
+    computedAt: '2026-11-18T06:00:00.000Z',
+    details: { ...details, occasionsOf },
+  });
+  const at = (path) => built.find((page) => page.path === path);
+
+  const christmas = at('/feestdag/kerst');
+  assert.equal(christmas.title, 'Vakantiepark met kerst 2026: parken met plek en prijzen');
+  assert.match(christmas.body, /2 vakantieparken hebben nog plek van vr 25 dec – ma 28 dec voor 2 personen, vanaf €\s550\. Eerste kerstdag valt op vrijdag/);
+  assert.doesNotMatch(christmas.body, /dichtst bij/);
+  assert.match(christmas.body, /from=feestdagpagina/);
+  assert.match(christmas.body, /href="\/weekend\/2026-12-25"/);
+  assert.match(christmas.body, /href="\/feestdag\/oud-en-nieuw"/);
+
+  const newYear = at('/feestdag/oud-en-nieuw');
+  assert.equal(newYear.title, 'Oud en nieuw 2026 op een vakantiepark: parken met plek en prijzen');
+  assert.match(newYear.body, /Het weekend: vr 1 jan – ma 4 jan/);
+  assert.match(newYear.body, /Oudejaarsavond valt dit jaar op donderdag 31 december\./);
+  assert.match(newYear.body, /<\/span>Vuurwerkvrij vakantiepark<\/h2>/, 'the parks without fireworks');
+  assert.match(newYear.body, /1 park met plek/);
+  assert.doesNotMatch(newYear.body, /1 parken/);
+  assert.doesNotMatch(newYear.body, /<s /, 'no struck-through normal price without a deal');
+
+  assert.match(at('/weekend/2026-12-25').body, /href="\/feestdag\/kerst"/);
+  assert.doesNotMatch(at('/weekend/2027-01-08').body, /feestdag/);
+  assert.match(at('/weekenden').body, /href="\/feestdag\/oud-en-nieuw"/);
+});
+
+test('a holiday page keeps its address: before its prices are in, when no park has room, and after it', () => {
+  assert.match(pageAt('/feestdag/kerst').body, /Het weekend van vr 25 dec – ma 28 dec komt hier zodra we de prijzen ervan ophalen; nu lopen ze tot en met vr 4 dec – ma 7 dec\./);
+  assert.doesNotMatch(pageAt('/weekenden').body, /feestdag/, 'the lists point to it once it has prices');
+
+  const pathAt = (built, path) => built.find((page) => page.path === path);
+  const full = buildPages({ parks: [{ ...gulpen, weekends: [weekend('2027-01-08', '2027-01-11', 30000, null)] }], allParks, computedAt: '2026-11-18T06:00:00.000Z', details });
+  assert.match(pathAt(full, '/feestdag/kerst').body, /Van vr 25 dec – ma 28 dec vonden we bij de parken die we volgen geen plek meer/);
+
+  const after = buildPages({ parks: [gulpen], allParks, computedAt: '2026-12-26T06:00:00.000Z', details });
+  assert.equal(pathAt(after, '/feestdag/kerst').title, 'Vakantiepark met kerst 2027: parken met plek en prijzen');
+  assert.match(pathAt(after, '/feestdag/kerst').body, /vr 24 dec – ma 27 dec/);
+  assert.equal(pathAt(after, '/feestdag/oud-en-nieuw').title, 'Oud en nieuw 2026 op een vakantiepark: parken met plek en prijzen');
 });
 
 test('areas people search for get a page: Texel by its villages, the Veluwe by where it lies', () => {

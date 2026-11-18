@@ -37,7 +37,7 @@ test('counts people in browsers, not crawlers, empty user agents or the admin', 
 });
 
 test('tells page kinds and devices apart', () => {
-  assert.deepEqual(['/', '/park/hunzedal', '/weekend/2026-12-04', '/regio/veluwe', '/iets'].map(pageKind), ['home', 'park', 'weekend', 'regio', 'other']);
+  assert.deepEqual(['/', '/park/hunzedal', '/weekend/2026-12-04', '/regio/veluwe', '/feestdag/kerst', '/iets'].map(pageKind), ['home', 'park', 'weekend', 'regio', 'feestdag', 'other']);
   assert.equal(deviceOf(BROWSER), 'mobiel');
   assert.equal(deviceOf('Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X)'), 'tablet');
   assert.equal(deviceOf('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'), 'desktop');

@@ -13,7 +13,7 @@ const MAX_BODY = 8192;
 // Control names, park codes, dates and numbers; never free text such as a search or an address.
 const TEXT = /^[\p{L}\p{N} _.,:-]{0,64}$/u;
 const PATH = /^\/[a-z0-9/._-]{0,120}$/;
-const PAGE_KINDS = new Set(['park', 'parken', 'weekend', 'weekenden', 'regio', 'thema', 'land', 'last-minute', 'privacy']);
+const PAGE_KINDS = new Set(['park', 'parken', 'weekend', 'weekenden', 'regio', 'thema', 'land', 'feestdag', 'last-minute', 'privacy']);
 const BOT = /bot|crawl|spider|slurp|headless|lighthouse|preview|facebookexternalhit|python|curl|wget|httpclient|java\//i;
 const SOURCES = [
   ['google', /(^|\.)google\.[a-z.]+$/],
