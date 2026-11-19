@@ -3,7 +3,7 @@ import { computed } from 'vue';
 import { partyLabel, persons } from '../../shared/party.mjs';
 import { accommodationFor, accommodationSummary, photosFor } from '../lib/accommodations.js';
 import { reasonText } from '../lib/advice.js';
-import { formatEuros, formatPercent, formatWeekend, nights } from '../lib/format.js';
+import { formatEuros, formatPercent, formatTimestamp, formatWeekend, nights } from '../lib/format.js';
 import { providerName, trackedBookingUrl } from '../lib/providers.js';
 import AdviceBadge from './AdviceBadge.vue';
 import BrandBadge from './BrandBadge.vue';
@@ -120,6 +120,7 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
           </p>
           <p class="text-3xl leading-tight font-black tabular-nums"><span class="sr-only">Nu </span>{{ formatEuros(weekend.priceCents) }}</p>
           <p class="text-xs text-ink-secondary">{{ stay }}</p>
+          <p v-if="weekend.observedAt" class="text-xs text-ink-muted">Prijs gecontroleerd {{ formatTimestamp(weekend.observedAt) }}</p>
           <p v-if="belowNormal" class="mt-1 text-sm font-medium text-good-ink">{{ saving }} onder normaal</p>
         </div>
         <a

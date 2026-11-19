@@ -542,9 +542,10 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
       affiliate-links: boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra,
       en het bepaalt niet welke parken je hier ziet.
     </p>
-    <nav aria-label="Meer op de site" class="mx-auto flex max-w-7xl gap-4 px-4 pb-6 text-sm sm:px-6">
+    <nav aria-label="Meer op de site" class="mx-auto flex max-w-7xl flex-wrap gap-x-4 gap-y-2 px-4 pb-6 text-sm sm:px-6">
       <a href="/weekenden" class="font-medium text-accent hover:underline">Alle weekenden</a>
       <a href="/parken" class="font-medium text-accent hover:underline">Alle parken</a>
+      <a href="/zo-werkt-het" class="font-medium text-accent hover:underline">Zo werkt het</a>
       <a href="/privacy" class="font-medium text-accent hover:underline">Privacy</a>
     </nav>
   </footer>

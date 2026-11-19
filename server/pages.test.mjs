@@ -177,6 +177,15 @@ test('a weekend page lists the parks cheapest first, with the biggest deals on t
   assert.match(page.body, /href="\/weekend\/2026-11-13"/);
 });
 
+test('a card says when its price was last seen at the provider, in Dutch time', () => {
+  const seen = { ...gulpen, weekends: [weekend('2026-11-06', '2026-11-09', 30000, 0.25, { observedAt: '2026-10-29T05:57:00.000Z' })] };
+  const built = buildPages({ parks: [seen], allParks, computedAt: '2026-10-29T06:39:10.572Z', details });
+  const at = (path) => built.find((page) => page.path === path).body;
+  assert.match(at('/weekend/2026-11-06'), /Prijs gecontroleerd op 29 oktober[^<]*06:57/);
+  assert.match(at('/regio/limburg'), /Prijs gecontroleerd op 29 oktober/);
+  assert.doesNotMatch(pageAt('/weekend/2026-11-06').body, /Prijs gecontroleerd/, 'nothing without a time');
+});
+
 test("providers' names are escaped", () => {
   const body = pageAt('/weekend/2026-11-06').body;
   assert.match(body, /Hoogduin &#60;b&#62;/);
@@ -184,7 +193,7 @@ test("providers' names are escaped", () => {
 });
 
 test('only page paths go to the pages', () => {
-  for (const path of ['/parken', '/weekenden', '/park/vakantiepark-gulpen', '/weekend/2026-11-06', '/regio/limburg', '/thema/aan-zee', '/feestdag/kerst', '/vakantie/voorjaarsvakantie', '/privacy', '/sitemap.xml', '/robots.txt']) {
+  for (const path of ['/parken', '/weekenden', '/park/vakantiepark-gulpen', '/weekend/2026-11-06', '/regio/limburg', '/thema/aan-zee', '/feestdag/kerst', '/vakantie/voorjaarsvakantie', '/privacy', '/zo-werkt-het', '/sitemap.xml', '/robots.txt']) {
     assert.ok(isPagePath(path), path);
   }
   for (const path of ['/', '/beheer', '/park/', '/park/Gulpen', '/weekend/6-november', '/api/go', '/parken/x']) {
@@ -216,6 +225,10 @@ test('serves a stored page in the site frame, a 404 page, the sitemap and robots
   assert.match(privacy, /mailto:contact@weekendjeweg.test/);
   assert.match(await (await serve('/sitemap.xml')).text(), /<loc>https:\/\/weekendjeweg.test\/parken<\/loc><lastmod>2026-10-29<\/lastmod>/);
   assert.match(await (await serve('/robots.txt')).text(), /Disallow: \/api\//);
+  const how = await serve('/zo-werkt-het');
+  assert.equal(how.status, 200);
+  assert.match(await how.text(), /middelste weekendprijs[^]*minstens 20% onder de normale prijs[^]*affiliate-links/);
+  assert.match(await (await serve('/sitemap.xml')).text(), /<loc>https:\/\/weekendjeweg.test\/zo-werkt-het<\/loc>/);
 });
 
 test('the last-minute page shows the coming weekends, the biggest deals first', () => {

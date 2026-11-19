@@ -42,7 +42,7 @@ const SITE_NAME = 'Parkje weg';
 const SITE_URL = 'https://parkjeweg.nl';
 
 const PAGE_PATH =
-  /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|regio\/[a-z0-9-]+|thema\/[a-z0-9-]+|land\/[a-z0-9-]+|feestdag\/[a-z0-9-]+|vakantie\/[a-z0-9-]+|last-minute|privacy|sitemap\.xml|robots\.txt)$/;
+  /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|regio\/[a-z0-9-]+|thema\/[a-z0-9-]+|land\/[a-z0-9-]+|feestdag\/[a-z0-9-]+|vakantie\/[a-z0-9-]+|last-minute|privacy|zo-werkt-het|sitemap\.xml|robots\.txt)$/;
 /** Whether a path is one of these pages (or their sitemap and robots.txt) rather than the app. */
 export const isPagePath = (pathname) => PAGE_PATH.test(pathname);
 
@@ -342,6 +342,9 @@ const updatedAt = new Intl.DateTimeFormat('nl-NL', {
   timeZone: 'Europe/Amsterdam',
 });
 const day = (isoDate) => new Date(`${isoDate}T00:00:00Z`);
+/** When a price was last seen at its provider, as a small line under it; nothing for a price without a time. */
+const checkedLine = (offer) =>
+  offer?.observedAt && html`<p class="text-xs text-ink-muted">Prijs gecontroleerd op ${updatedAt.format(new Date(offer.observedAt))}</p>`;
 /** "6–9 november 2026", or "30 oktober – 2 november 2026" across months. */
 export const weekendRange = ({ arrival, departure }) => longDate.formatRange(day(arrival), day(departure));
 
@@ -751,6 +754,7 @@ function parkCard(park, { pathOf, source, party = PAGE_PARTY, showStay = false, 
         shown
           ? html`<p class="mt-auto flex flex-wrap items-baseline gap-2 pt-3"><span class="text-3xl font-black tabular-nums">${formatEuros(shown.priceCents)}</span>${discountPercent(shown) >= NOTEWORTHY_PERCENT && park.baselineCents && html`<s class="text-sm text-ink-muted">${formatEuros(park.baselineCents)}</s>`}</p>
             <p class="text-xs font-semibold text-ink-secondary">${formatWeekend(shown)} · ${partyLabel(party)}</p>
+            ${checkedLine(shown)}
             ${cheapest !== shown && html`<p class="text-xs font-bold text-ink-secondary">Of vanaf ${formatEuros(cheapest.priceCents)} op ${formatWeekend(cheapest)}</p>`}
             <div class="mt-3">${bookButton(park, shown, source, party)}</div>`
           : html`<p class="mt-auto pt-3 text-sm text-ink-secondary">Geen vrij weekend voor ${partyLabel(party)} in de komende maanden</p>`
@@ -767,6 +771,7 @@ const offerCard = ({ park, weekend: offer }, { pathOf, source }) =>
       <a href="${pathOf(park)}" class="text-lg font-extrabold hover:underline">${fullName(park)}</a>
       <span class="text-sm text-ink-secondary"><span aria-hidden="true">📍</span> ${placeOf(park)}</span>
       <p class="mt-auto flex flex-wrap items-baseline gap-2"><span class="text-3xl font-black tabular-nums">${formatEuros(offer.priceCents)}</span>${discountPercent(offer) >= NOTEWORTHY_PERCENT && park.baselineCents && html`<s class="text-sm text-ink-muted">${formatEuros(park.baselineCents)}</s>`}</p>
+      ${checkedLine(offer)}
       ${offer.weather && html`<p>${weatherChip(offer.weather)}</p>`}
       ${bookButton(park, offer, source)}
     </div>
@@ -1634,6 +1639,33 @@ const NOT_FOUND = {
 const heading = 'mt-8 text-lg font-semibold';
 const listing = 'mt-2 list-disc space-y-1 pl-5';
 
+/** How the prices come about, what "normal" means and how the site earns: what a careful visitor wants to know first. */
+const HOW_PATH = '/zo-werkt-het';
+const howPage = () => ({
+  title: 'Zo werkt het',
+  description: `Hoe ${SITE_NAME} de weekendprijzen van vakantieparken ophaalt, wat de normale prijs is, wanneer iets een buitenkansje heet en hoe de site geld verdient.`,
+  image: null,
+  body: html`<h1 class="text-3xl font-bold tracking-tight">Zo werkt het</h1>
+    <div class="mt-3 max-w-2xl text-ink-secondary">
+      <p>${SITE_NAME} vergelijkt wat een weekendje weg kost bij de vakantieparken van Landal, Topparken en Molecaten. Je boekt altijd bij de aanbieder zelf.</p>
+      <h2 class="${heading} text-ink">Waar de prijzen vandaan komen</h2>
+      <ul class="${listing}">
+        <li>Elke dag vragen we bij de aanbieders op wat elk komend weekend kost, van vrijdag tot maandag. Bij een prijs staat wanneer we die voor het laatst zagen.</li>
+        <li>Per park tonen we het goedkoopste huisje dat nog vrij is, voor je hele gezelschap en inclusief de verplichte toeslagen. Een park zonder vrij huisje laten we dat weekend weg.</li>
+        <li>De pagina's die je via Google vindt, rekenen met ${partyLabel(PAGE_PARTY)}. Op de <a href="/" class="${link}">zoekpagina</a> stel je je eigen gezelschap in.</li>
+        <li>Prijzen kunnen veranderen nadat wij ze zagen. De prijs bij de aanbieder geldt.</li>
+      </ul>
+      <h2 class="${heading} text-ink">Wat de normale prijs is</h2>
+      <p class="mt-2">De normale prijs van een park is de middelste weekendprijs die we er zelf voor zagen, over het afgelopen half jaar en de komende weekenden. Het is dus geen adviesprijs van de aanbieder. Van een park waarvan we nog te weinig weekenden kennen, tonen we geen normale prijs en geen korting.</p>
+      <h2 class="${heading} text-ink">Wanneer iets een buitenkansje is</h2>
+      <p class="mt-2">Een weekend heet een buitenkansje als het minstens ${Math.round(DEAL_SHARE * 100)}% onder de normale prijs van dat park ligt. Een doorgestreepte prijs is altijd die normale prijs. We tellen niet af en doen niet alsof iets bijna op is.</p>
+      <h2 class="${heading} text-ink">Hoe we geld verdienen</h2>
+      <p class="mt-2">Links naar een aanbieder zijn affiliate-links: boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra. Het bepaalt niet welke parken je ziet en ook niet in welke volgorde.</p>
+      <h2 class="${heading} text-ink">Meer weten</h2>
+      <p class="mt-2">Wat we bewaren staat op de pagina <a href="/privacy" class="${link}">Privacy</a>. Vragen? Mail naar het adres dat daar staat.</p>
+    </div>`.text,
+});
+
 /** What the site keeps and who else sees something. Questions go to contact@ the site's own domain (Email Routing). */
 const privacyPage = (hostname) => ({
   title: 'Privacy',
@@ -1712,7 +1744,7 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
         boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra, en het bepaalt
         niet welke parken je hier ziet.
       </p>
-      <nav aria-label="Over de site" class="mx-auto flex max-w-5xl gap-4 px-4 pb-8 text-sm sm:px-6"><a href="/weekenden" class="${link}">Alle weekenden</a><a href="/parken" class="${link}">Alle parken</a><a href="/last-minute" class="${link}">Last minute</a><a href="/privacy" class="${link}">Privacy</a></nav>
+      <nav aria-label="Over de site" class="mx-auto flex max-w-5xl flex-wrap gap-x-4 gap-y-2 px-4 pb-8 text-sm sm:px-6"><a href="/weekenden" class="${link}">Alle weekenden</a><a href="/parken" class="${link}">Alle parken</a><a href="/last-minute" class="${link}">Last minute</a><a href="${HOW_PATH}" class="${link}">Zo werkt het</a><a href="/privacy" class="${link}">Privacy</a></nav>
     </footer>
   </body>
 </html>
@@ -1731,7 +1763,7 @@ export function sitemap(origin, pages) {
     html`<url><loc>${origin}${path}</loc>${computedAt && html`<lastmod>${computedAt.slice(0, 10)}</lastmod>`}</url>`;
   return html`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${[{ path: '/' }, ...pages].map(entry)}
+${[{ path: '/' }, { path: HOW_PATH }, ...pages].map(entry)}
 </urlset>
 `.text;
 }
@@ -1748,7 +1780,7 @@ export async function servePage(db, request, { stylesheet }) {
   const { origin, hostname, pathname } = new URL(request.url);
   if (pathname === '/robots.txt') return new Response(robots(origin), { headers: headers('text/plain') });
   if (pathname === '/sitemap.xml') return new Response(sitemap(origin, await db.pagePaths()), { headers: headers('application/xml') });
-  const page = pathname === '/privacy' ? privacyPage(hostname) : await db.page(pathname);
+  const page = pathname === '/privacy' ? privacyPage(hostname) : pathname === HOW_PATH ? howPage() : await db.page(pathname);
   return new Response(pageDocument(page ?? NOT_FOUND, { url: `${origin}${pathname}`, stylesheet }), {
     status: page ? 200 : 404,
     headers: headers('text/html'),
