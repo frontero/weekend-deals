@@ -173,7 +173,7 @@ const segmentClass = (active) =>
         <button
           v-if="group.hiddenCount"
           type="button"
-          class="mt-1 px-1 font-medium text-accent hover:underline"
+          class="mt-1 min-h-6 px-1 font-medium text-accent hover:underline"
           @click="toggleGroup(group.name)"
         >
           {{ group.expanded ? 'Minder tonen' : `Toon alle ${group.options.length}` }}

@@ -27,7 +27,7 @@ const count = computed(() => props.rating?.ratingCount?.toLocaleString('nl-NL'))
     :is="asButton ? 'button' : 'a'"
     v-if="rating"
     v-bind="asButton ? { type: 'button' } : { href: rating.mapsUrl, target: '_blank', rel: 'noopener' }"
-    class="inline-flex items-center gap-1.5 text-sm hover:underline"
+    class="inline-flex min-h-6 items-center gap-1.5 text-sm hover:underline"
     :aria-label="`Google-score ${score} van 5, ${count} reviews${asButton ? ', recensies tonen' : ''}`"
     @click.stop="emit('select')"
   >

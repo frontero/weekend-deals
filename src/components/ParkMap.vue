@@ -49,7 +49,7 @@ function draw() {
     const icon = L.divIcon({
       className: '',
       iconSize: null,
-      html: `<span class="block -translate-x-1/2 -translate-y-1/2 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap shadow-md ring-2 ring-surface tabular-nums ${below ? 'bg-accent text-on-accent' : 'bg-surface text-ink'}">${formatEuros(weekend.priceCents)}</span>`,
+      html: `<span class="block -translate-x-1/2 -translate-y-1/2 rounded-full px-2 py-1 text-xs font-semibold whitespace-nowrap shadow-md ring-2 ring-surface tabular-nums ${below ? 'bg-accent text-on-accent' : 'bg-surface text-ink'}">${formatEuros(weekend.priceCents)}</span>`,
     });
     L.marker([park.lat, park.lng], { icon, title: park.name, riseOnHover: true })
       .bindTooltip(tooltip(deal), { direction: 'top', offset: [0, -12] })

@@ -131,7 +131,7 @@ const range = computed(() => `${page.value * PAGE_SIZE + 1}–${Math.min((page.v
       :href="mapsUrl"
       target="_blank"
       rel="noopener"
-      class="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
+      class="mt-3 inline-flex min-h-6 items-center gap-1.5 text-sm font-medium text-accent hover:underline"
     >
       Alle recensies op Google Maps
       <Icon name="external" class="size-4" />

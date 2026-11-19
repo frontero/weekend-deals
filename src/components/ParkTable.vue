@@ -111,7 +111,7 @@ const visibleRows = computed(() => (showAll.value ? rows.value : rows.value.slic
           @click="$emit('show-park', row.park)"
         >
           <td class="px-4 py-2.5">
-            <button type="button" class="text-left font-medium hover:underline" @click.stop="$emit('show-park', row.park)">
+            <button type="button" class="min-h-6 text-left font-medium hover:underline" @click.stop="$emit('show-park', row.park)">
               {{ row.park.name }}
             </button>
             <p class="text-xs text-ink-secondary">{{ row.park.region }}</p>

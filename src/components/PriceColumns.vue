@@ -197,11 +197,14 @@ const tooltipStyle = computed(() => {
       </g>
     </svg>
 
-    <!-- Hit targets span the full column slot so thin bars stay easy to hover. -->
+    <!-- Hit targets span the full column slot so thin bars stay easy to hover. On a phone a slot is narrower than
+         a finger: whoever uses this chart also lists the same choices as rows (data-also-in-list tells the house
+         rules in scripts/ux-rules.mjs so). -->
     <button
       v-for="(bar, index) in bars"
       :key="`hit-${bar.key}`"
       type="button"
+      data-also-in-list
       class="absolute cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-accent"
       :style="{ left: `${bar.slotX}px`, top: `${MARGIN.top}px`, width: `${slotWidth}px`, height: `${plotHeight}px` }"
       :aria-label="`${bar.title}: ${formatEuros(bar.valueCents)}${bar.note ? `, ${bar.note}` : ''}`"

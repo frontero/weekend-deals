@@ -52,7 +52,7 @@ function save() {
         </button>
       </header>
 
-      <div class="flex-1 overflow-y-auto px-5">
+      <div class="relative flex-1 overflow-y-auto px-5">
         <section class="divide-y divide-line border-b border-line py-2">
           <NumberStepper v-model="draft.adults" label="Volwassenen" hint="18 jaar en ouder" :min="1" :max="12" />
           <NumberStepper v-model="draft.children" label="Kinderen" hint="3 tot 18 jaar" :min="0" :max="10" />

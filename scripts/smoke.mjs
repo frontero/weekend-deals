@@ -5,6 +5,7 @@
 // Uses the Chrome installed on this Mac, without a window. Usage: node scripts/smoke.mjs
 import { chromium } from 'playwright-core';
 import { preview } from 'vite';
+import { axeFindings, dialogFindings, layoutFindings } from './ux-rules.mjs';
 
 const PORT = 5299;
 const TIMEOUT_MS = 20_000;
@@ -51,6 +52,25 @@ try {
         .first()
         .waitFor({ timeout: TIMEOUT_MS }),
     );
+    // The house rules (scripts/ux-rules.mjs): nothing axe objects to, nothing too small or too wide, and every panel
+    // closes the three ways a visitor tries.
+    const rules = (what, findings) =>
+      check(what, async () => {
+        const found = await findings();
+        if (found.length) throw new Error(found.join(' | '));
+      });
+    await page.goto(`http://localhost:${PORT}/`);
+    await page.locator('article').first().waitFor({ timeout: TIMEOUT_MS });
+    await rules('the search page keeps the house rules', async () => [...(await axeFindings(page)), ...(await layoutFindings(page))]);
+    const panels = {
+      park: () => page.locator('article h3 button').first().click(),
+      'price alert': () => page.getByRole('button', { name: 'Prijsalarm' }).first().click(),
+      dates: () => page.getByRole('button', { name: 'Kies datums' }).click(),
+      party: () => page.getByText('Wijzig').first().click(),
+      ...(viewport.width < 1024 ? { filters: () => page.getByRole('button', { name: /^Filters/ }).click() } : {}),
+    };
+    for (const [label, open] of Object.entries(panels)) await rules(`the ${label} panel keeps the house rules`, () => dialogFindings(page, label, open));
+
     await page.goto(`http://localhost:${PORT}/beheer`);
     await check('the admin dashboard shows its charts', () =>
       page.locator('main canvas').first().waitFor({ timeout: TIMEOUT_MS }),

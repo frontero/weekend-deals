@@ -556,6 +556,8 @@ const stay = (weekend) => `${nights(weekend)} nachten · ${partyLabel(PAGE_PARTY
 const providersOf = (parks) => joinAnd([...new Set(parks.map((park) => providerName(park.provider)))]);
 
 const link = 'font-bold text-accent hover:underline';
+// A link that stands on its own, in a menu or a row: high enough to hit (24 pixels, WCAG 2.5.8).
+const navLink = `${link} inline-flex min-h-6 items-center`;
 const chip = 'inline-flex items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 text-sm font-bold ring-2 ring-line transition hover:ring-accent';
 const card = 'overflow-hidden rounded-3xl bg-surface ring-1 ring-line';
 const sticker = 'inline-block -rotate-3 rounded-full bg-sun px-3 py-1 text-sm font-black whitespace-nowrap text-on-sun shadow-md';
@@ -836,7 +838,7 @@ function photoCredits(places) {
   const credited = places.filter((spot) => spot.image);
   if (!credited.length) return '';
   return html`<details class="mt-10 text-xs text-ink-muted">
-    <summary class="cursor-pointer font-semibold">Fotobronnen</summary>
+    <summary class="cursor-pointer py-1 font-semibold">Fotobronnen</summary>
     <ul class="mt-2 space-y-1">${credited.map(
       (spot) => html`<li>${spot.name}: <a href="${spot.image.page}" class="hover:underline" rel="nofollow">${[spot.image.author, spot.image.license].filter(Boolean).join(', ')}</a></li>`,
     )}</ul>
@@ -1057,7 +1059,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
 
   const facilityChip = (tint) => (option) => {
     const theme = themeOf.get(option.id);
-    return html`<li class="inline-flex items-center gap-2 rounded-full bg-surface py-1 pr-3.5 pl-1 text-sm font-bold ring-2 ring-line">${emojiDot(FACILITY_ICONS[option.id], tint)}${theme ? html`<a href="${themePath(theme)}" class="hover:text-accent hover:underline">${option.name}</a>` : option.name}</li>`;
+    return html`<li class="inline-flex items-center gap-2 rounded-full bg-surface py-1 pr-3.5 pl-1 text-sm font-bold ring-2 ring-line">${emojiDot(FACILITY_ICONS[option.id], tint)}${theme ? html`<a href="${themePath(theme)}" class="inline-flex min-h-6 items-center hover:text-accent hover:underline">${option.name}</a>` : option.name}</li>`;
   };
 
   const weekendRow = (weekend) => {
@@ -1963,9 +1965,9 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
       <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
         <a href="/" class="flex items-center gap-2 text-lg font-black"><span aria-hidden="true" class="grid size-9 -rotate-6 place-items-center rounded-full bg-sun text-lg shadow-sm">🏡</span>${SITE_NAME}</a>
         <nav aria-label="Hoofdmenu" class="flex gap-4 text-sm">
-          <a href="/weekenden" class="${link}">Weekenden</a>
-          <a href="/parken" class="${link}">Parken</a>
-          <a href="/last-minute" class="${link}">Last minute</a>
+          <a href="/weekenden" class="${navLink}">Weekenden</a>
+          <a href="/parken" class="${navLink}">Parken</a>
+          <a href="/last-minute" class="${navLink}">Last minute</a>
         </nav>
         <a href="/" class="ml-auto rounded-full bg-cta px-4 py-2 text-sm font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover">Zoek een weekend</a>
       </div>
@@ -1990,7 +1992,7 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
         boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra, en het bepaalt
         niet welke parken je hier ziet.
       </p>
-      <nav aria-label="Over de site" class="mx-auto flex max-w-5xl flex-wrap gap-x-4 gap-y-2 px-4 pb-8 text-sm sm:px-6"><a href="/weekenden" class="${link}">Alle weekenden</a><a href="/parken" class="${link}">Alle parken</a><a href="/last-minute" class="${link}">Last minute</a><a href="${HOW_PATH}" class="${link}">Zo werkt het</a><a href="/privacy" class="${link}">Privacy</a></nav>
+      <nav aria-label="Over de site" class="mx-auto flex max-w-5xl flex-wrap gap-x-4 gap-y-2 px-4 pb-8 text-sm sm:px-6"><a href="/weekenden" class="${navLink}">Alle weekenden</a><a href="/parken" class="${navLink}">Alle parken</a><a href="/last-minute" class="${navLink}">Last minute</a><a href="${HOW_PATH}" class="${navLink}">Zo werkt het</a><a href="/privacy" class="${navLink}">Privacy</a></nav>
     </footer>
     <script>${new Html(pageScript)}</script>
   </body>

@@ -231,7 +231,7 @@ async function switchTopic() {
             </li>
           </ol>
           <details class="mt-4 text-sm">
-            <summary class="font-medium text-accent">Luistert je telefoon al naar een ander onderwerp?</summary>
+            <summary class="py-0.5 font-medium text-accent">Luistert je telefoon al naar een ander onderwerp?</summary>
             <form class="mt-2 flex gap-2" @submit.prevent="switchTopic">
               <label class="min-w-0 flex-1">
                 <span class="sr-only">Onderwerp van je telefoon</span>

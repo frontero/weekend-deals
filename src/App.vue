@@ -577,10 +577,10 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
       en het bepaalt niet welke parken je hier ziet.
     </p>
     <nav aria-label="Meer op de site" class="mx-auto flex max-w-7xl flex-wrap gap-x-4 gap-y-2 px-4 pb-6 text-sm sm:px-6">
-      <a href="/weekenden" class="font-medium text-accent hover:underline">Alle weekenden</a>
-      <a href="/parken" class="font-medium text-accent hover:underline">Alle parken</a>
-      <a href="/zo-werkt-het" class="font-medium text-accent hover:underline">Zo werkt het</a>
-      <a href="/privacy" class="font-medium text-accent hover:underline">Privacy</a>
+      <a href="/weekenden" class="inline-flex min-h-6 items-center font-medium text-accent hover:underline">Alle weekenden</a>
+      <a href="/parken" class="inline-flex min-h-6 items-center font-medium text-accent hover:underline">Alle parken</a>
+      <a href="/zo-werkt-het" class="inline-flex min-h-6 items-center font-medium text-accent hover:underline">Zo werkt het</a>
+      <a href="/privacy" class="inline-flex min-h-6 items-center font-medium text-accent hover:underline">Privacy</a>
     </nav>
   </footer>
 
