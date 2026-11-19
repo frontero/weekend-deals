@@ -61,6 +61,29 @@ export async function trafficReport(query, { days, now = Date.now() }) {
   };
 }
 
+const MAX_STEPS = 3000;
+
+/**
+ * One day as its visitors lived it: per visitor (the code of that day) what they did, in order. The busiest first.
+ * @param day an ISO date (UTC)
+ * @returns [{ visitor, device, country, source, steps: [{ at, name, key, value, path, number }] }]
+ */
+export async function dayReport(query, day) {
+  const next = new Date(Date.parse(`${day}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
+  const rows = await query(`SELECT timestamp, index1 AS visitor, blob1 AS name, blob2 AS key, blob3 AS value, blob4 AS path, blob5 AS source, blob6 AS device, blob7 AS country, double1 AS number
+    FROM ${EVENTS_DATASET} WHERE timestamp >= toDateTime('${day} 00:00:00') AND timestamp < toDateTime('${next} 00:00:00')
+    ORDER BY timestamp LIMIT ${MAX_STEPS}`);
+  const visitors = [...Map.groupBy(rows, (row) => row.visitor)].map(([visitor, list]) => ({
+    visitor,
+    device: list[0].device,
+    country: list[0].country,
+    // Where the first page they opened was reached from.
+    source: list.find((row) => row.name === 'view' && row.source)?.source ?? '',
+    steps: list.map(({ timestamp, name, key, value, path, number }) => ({ at: `${String(timestamp).replace(' ', 'T')}Z`, name, key, value, path, number: Number(number) || 0 })),
+  }));
+  return visitors.sort((a, b) => b.steps.length - a.steps.length);
+}
+
 /** Runs SQL on the account's Analytics Engine, with a token that may only read analytics. */
 export function analyticsQuery({ accountId, token, fetcher = fetch }) {
   return async (sql) => {

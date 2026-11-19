@@ -169,6 +169,34 @@ test('a remark with the answer to "did you find it" is kept for the admin, and n
   db.close();
 });
 
+test('a day shows what each visitor did, in order, the busiest visitor first', async () => {
+  const { client } = connectFile(join(directory, 'day.db'));
+  const db = await openDatabase(client);
+  await client.execute(`INSERT INTO parks (code, name) VALUES ('HOT', 'Hof van Saksen')`);
+  const statements = [];
+  const row = (timestamp, visitor, name, key, value, path, source = '') => ({ timestamp, visitor, name, key, value, path, source, device: 'mobiel', country: 'NL', number: '0' });
+  const queryEvents = async (sql) => {
+    statements.push(sql);
+    return [
+      row('2026-11-19 08:00:01', 'aaaa1111', 'view', 'home', '', '/', 'google'),
+      row('2026-11-19 08:00:09', 'bbbb2222', 'view', 'park', '', '/park/hof-van-saksen', 'direct'),
+      row('2026-11-19 08:00:20', 'aaaa1111', 'park', 'cards', 'HOT', '/'),
+      row('2026-11-19 08:01:02', 'aaaa1111', 'click', 'landal', 'HOT', 'kaartje'),
+    ];
+  };
+  const handle = createApiHandler(db, { isAdmin: () => true, queryEvents });
+  const body = await (await handle(request('/api/admin/traffic/day?day=2026-11-19'))).json();
+  assert.deepEqual(body.visitors.map((visitor) => [visitor.visitor, visitor.source, visitor.steps.map((step) => step.name)]), [
+    ['aaaa1111', 'google', ['view', 'park', 'click']],
+    ['bbbb2222', 'direct', ['view']],
+  ]);
+  assert.equal(body.visitors[0].steps[0].at, '2026-11-19T08:00:01Z');
+  assert.deepEqual(body.parkNames, { HOT: 'Hof van Saksen' });
+  assert.match(statements[0], /timestamp >= toDateTime\('2026-11-19 00:00:00'\) AND timestamp < toDateTime\('2026-11-20 00:00:00'\)/);
+  assert.equal((await handle(request("/api/admin/traffic/day?day=2026-11-19'%20OR%201=1"))).status, 400, 'only a date gets into the query');
+  db.close();
+});
+
 test('the report starts at the first day of the period', async () => {
   const report = await trafficReport(async () => [], { days: 7, now: Date.parse('2026-11-18T12:00:00Z') });
   assert.equal(report.since, '2026-11-12');

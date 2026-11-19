@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { brandName } from '../../lib/brands.js';
-import { countryName, formatEuros, formatShortDate, formatTimestamp } from '../../lib/format.js';
+import { countryName, formatEuros, formatShortDate, formatTime, formatTimestamp } from '../../lib/format.js';
 import { providerName } from '../../lib/providers.js';
 import ChartCard from '../components/ChartCard.vue';
 import EChart from '../components/EChart.vue';
@@ -180,7 +180,53 @@ const parks = computed(() => {
     .map((park) => ({ ...park, name: names[park.code] ?? park.code, to: `/beheer/parken/${encodeURIComponent(park.code)}` }));
 });
 
+// One day opened from the list of days: what each visitor did, in order (GET /api/admin/traffic/day).
+const opened = ref(null);
+// closed, loading, failed or ready
+const dayState = ref('closed');
+const dayFailure = ref('');
+const daySection = ref(null);
+async function openDay(day) {
+  opened.value = { day, visitors: [], parkNames: {} };
+  dayState.value = 'loading';
+  try {
+    const response = await fetch(`/api/admin/traffic/day?day=${day}`);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error ?? `Day failed with ${response.status}`);
+    opened.value = body;
+    dayState.value = 'ready';
+  } catch (error) {
+    dayFailure.value = error.message;
+    dayState.value = 'failed';
+  }
+  daySection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+/** One step in a visitor's day, in words. */
+function stepText(step, parkNames) {
+  const park = parkNames[step.value] ?? step.value;
+  if (step.name === 'view') return `Opende ${step.path}`;
+  if (step.name === 'click') return `Klikte door naar ${providerName(step.key)}${park ? ` voor ${park}` : ''}${step.number ? ` (${formatEuros(step.number * 100)})` : ''}`;
+  if (step.name === 'park') return `${actionLabel(step)}: ${park}`;
+  if (step.name === 'speed') return `${SPEEDS[step.key] ?? step.key} na ${seconds(step.number)}`;
+  if (step.name === 'empty') return `Zocht zonder resultaat met: ${filterNames(step.value)}`;
+  const choice = CHOICES[`${step.name}:${step.key}`];
+  return `${actionLabel(step)}${step.value ? `: ${choice ? choice(step.value) : step.value}` : ''}`;
+}
+const visitorLine = (visitor) =>
+  [DEVICES[visitor.device] ?? visitor.device, visitor.country && countryName(visitor.country), visitor.source && (visitor.source === 'direct' ? 'kwam rechtstreeks' : `via ${SOURCES[visitor.source] ?? visitor.source}`)]
+    .filter(Boolean)
+    .join(' · ');
+
 const tables = computed(() => [
+  {
+    id: 'days',
+    title: 'Per dag: klik op een dag voor wat bezoekers deden',
+    columns: ['Dag', 'Bezoekers', "Pagina's", 'Doorgeklikt'],
+    rows: [...perDay.value]
+      .reverse()
+      .filter((row) => row.visitors)
+      .map((row) => ({ cells: [formatShortDate(row.day), count(row.visitors), count(row.views), count(row.clicks)], day: row.day })),
+  },
   {
     id: 'actions',
     title: 'Wat bezoekers gebruiken',
@@ -325,6 +371,9 @@ const tables = computed(() => [
             <tr v-for="(row, rowIndex) in table.rows" :key="rowIndex" class="border-b border-line last:border-0 hover:bg-hover">
               <th scope="row" class="px-4 py-2 font-normal sm:px-5">
                 <RouterLink v-if="row.to" :to="row.to" class="font-medium text-accent hover:underline">{{ row.cells[0] }}</RouterLink>
+                <button v-else-if="row.day" type="button" class="min-h-6 font-medium text-accent hover:underline" @click="openDay(row.day)">
+                  {{ row.cells[0] }}
+                </button>
                 <template v-else>{{ row.cells[0] }}</template>
               </th>
               <td
@@ -340,5 +389,36 @@ const tables = computed(() => [
         </table>
       </section>
     </div>
+
+    <section v-if="opened" ref="daySection" class="scroll-mt-4 rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="day-title">
+      <header class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3 sm:px-5">
+        <h2 id="day-title" class="flex-1 font-semibold">Wat bezoekers deden op {{ formatShortDate(opened.day) }}</h2>
+        <button type="button" class="rounded-full px-3 py-1 text-sm font-medium ring-1 ring-line hover:ring-field" @click="opened = null">Sluiten</button>
+      </header>
+      <p v-if="dayState === 'loading'" class="px-4 py-3 text-sm text-ink-secondary sm:px-5" role="status">Laden…</p>
+      <p v-else-if="dayState === 'failed'" class="px-4 py-3 text-sm text-warning-ink sm:px-5" role="status">
+        Deze dag kon niet worden geladen. <code class="break-words">{{ dayFailure }}</code>
+      </p>
+      <p v-else-if="!opened.visitors.length" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Niets geteld op deze dag.</p>
+      <template v-else>
+        <p class="px-4 pt-3 text-sm text-ink-secondary sm:px-5">
+          {{ count(opened.visitors.length) }} bezoekers, de drukste eerst. Een bezoeker is een code die alleen deze dag geldt; tijden zijn die van jouw computer.
+        </p>
+        <ol class="grid gap-3 p-4 sm:p-5 xl:grid-cols-2">
+          <li v-for="(visitor, index) in opened.visitors" :key="visitor.visitor" class="rounded-xl bg-plane p-3 ring-1 ring-line">
+            <p class="text-sm font-semibold">
+              Bezoeker {{ index + 1 }}
+              <span class="font-normal text-ink-secondary">· {{ visitorLine(visitor) }} · {{ count(visitor.steps.length) }} {{ visitor.steps.length === 1 ? 'stap' : 'stappen' }}</span>
+            </p>
+            <ol class="mt-2 space-y-1 text-sm">
+              <li v-for="(step, stepIndex) in visitor.steps" :key="stepIndex" class="flex gap-3">
+                <time class="w-12 shrink-0 text-ink-secondary tabular-nums" :datetime="step.at">{{ formatTime(step.at) }}</time>
+                <span class="min-w-0 break-words" :class="step.name === 'click' ? 'font-semibold text-good-ink' : ''">{{ stepText(step, opened.parkNames) }}</span>
+              </li>
+            </ol>
+          </li>
+        </ol>
+      </template>
+    </section>
   </div>
 </template>

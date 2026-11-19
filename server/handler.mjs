@@ -11,7 +11,7 @@ import { PROVIDERS } from './providers.mjs';
 import { scanStatus, statusBody } from './status.mjs';
 import { clientEventPoints, countsAsVisit, eventPoint } from './events.mjs';
 import { ISSUE_KINDS } from './seo.mjs';
-import { trafficReport } from './traffic.mjs';
+import { trafficReport, dayReport } from './traffic.mjs';
 
 const JSON_TYPE = 'application/json; charset=utf-8';
 // Group keys are short; anything longer is not one.
@@ -274,6 +274,19 @@ export function createApiHandler(
       }
       const codes = report.choices.filter((row) => row.name === 'park' || row.name === 'click').map((row) => row.value);
       return json({ configured: true, ...report, parkNames: await db.parkNames(codes), feedback: await db.recentFeedback() });
+    }),
+
+    // One day of visits, visitor by visitor, for the day an admin clicks on the Bezoekers page.
+    'GET /admin/traffic/day': forAdmins(async (request) => {
+      const day = new URL(request.url).searchParams.get('day') ?? '';
+      if (!queryEvents || !ISO_DATE.test(day)) return json({ error: 'No such day' }, 400);
+      try {
+        const visitors = await dayReport(queryEvents, day);
+        const codes = visitors.flatMap((visitor) => visitor.steps.filter((step) => step.name === 'park' || step.name === 'click').map((step) => step.value));
+        return json({ day, visitors, parkNames: await db.parkNames(codes) });
+      } catch (error) {
+        return json({ error: error.message }, 502);
+      }
     }),
 
     // What the last check of the public pages found (server/seo.mjs).
