@@ -208,6 +208,14 @@ const opened = ref(null);
 const dayState = ref('closed');
 const dayFailure = ref('');
 const daySection = ref(null);
+// time: who came first; steps: who did most.
+const dayOrder = ref('time');
+const dayVisitors = computed(() => {
+  const visitors = [...(opened.value?.visitors ?? [])];
+  return dayOrder.value === 'time'
+    ? visitors.sort((a, b) => a.steps[0].at.localeCompare(b.steps[0].at))
+    : visitors.sort((a, b) => b.steps.length - a.steps.length);
+});
 async function openDay(day) {
   opened.value = { day, visitors: [], parkNames: {} };
   dayState.value = 'loading';
@@ -468,14 +476,23 @@ const tables = computed(() => [
       </p>
       <p v-else-if="!opened.visitors.length" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Niets geteld op deze dag.</p>
       <template v-else>
-        <p class="px-4 pt-3 text-sm text-ink-secondary sm:px-5">
-          {{ count(opened.visitors.length) }} bezoekers, de drukste eerst. Een bezoeker is een code die alleen deze dag geldt; tijden zijn die van jouw computer.
-        </p>
+        <div class="flex flex-wrap items-center gap-3 px-4 pt-3 text-sm sm:px-5">
+          <p class="flex-1 text-ink-secondary">
+            {{ count(opened.visitors.length) }} bezoekers. Een bezoeker is een code die alleen deze dag geldt; tijden zijn die van jouw computer.
+          </p>
+          <label class="flex items-center gap-2">
+            <span class="text-ink-secondary">Sorteer op</span>
+            <select v-model="dayOrder" class="h-9 rounded-xl bg-surface px-3 font-medium ring-1 ring-field">
+              <option value="time">Tijd van bezoek</option>
+              <option value="steps">Meeste stappen</option>
+            </select>
+          </label>
+        </div>
         <ol class="grid gap-3 p-4 sm:p-5 xl:grid-cols-2">
-          <li v-for="(visitor, index) in opened.visitors" :key="visitor.visitor" class="rounded-xl bg-plane p-3 ring-1 ring-line">
+          <li v-for="(visitor, index) in dayVisitors" :key="visitor.visitor" class="rounded-xl bg-plane p-3 ring-1 ring-line">
             <p class="text-sm font-semibold">
               Bezoeker {{ index + 1 }}
-              <span class="font-normal text-ink-secondary">· {{ visitorLine(visitor) }} · {{ count(visitor.steps.length) }} {{ visitor.steps.length === 1 ? 'stap' : 'stappen' }}</span>
+              <span class="font-normal text-ink-secondary">· {{ formatTime(visitor.steps[0].at) }} · {{ visitorLine(visitor) }} · {{ count(visitor.steps.length) }} {{ visitor.steps.length === 1 ? 'stap' : 'stappen' }}</span>
             </p>
             <ol class="mt-2 space-y-1 text-sm">
               <li v-for="(step, stepIndex) in visitor.steps" :key="stepIndex" class="flex gap-3">
