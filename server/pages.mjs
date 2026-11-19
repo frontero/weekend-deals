@@ -352,6 +352,29 @@ const SEASONS = [
     until: '11-05',
     intro: 'Uitwaaien in de herfstvakantie. Die valt niet overal in dezelfde week: hieronder per weekend welke regio vrij is en welke parken nog plek hebben.',
   },
+  {
+    slug: 'zomervakantie',
+    path: '/vakantie/zomervakantie',
+    emoji: '🏖️',
+    name: 'Zomervakantie',
+    heading: 'Vakantiepark in de zomervakantie',
+    title: (year) => `Vakantiepark zomervakantie ${year}`,
+    matches: (label) => label.startsWith('Zomervakantie'),
+    until: '09-05',
+    intro: 'Een lang weekend weg in de zomervakantie. Die begint niet overal tegelijk: hieronder per weekend welke regio vrij is en welke parken nog plek hebben.',
+  },
+  {
+    slug: 'kerstvakantie',
+    path: '/vakantie/kerstvakantie',
+    emoji: '⛄',
+    name: 'Kerstvakantie',
+    heading: 'Vakantiepark in de kerstvakantie',
+    title: (year) => `Vakantiepark kerstvakantie ${year}`,
+    matches: (label) => label.startsWith('Kerstvakantie'),
+    // The year the holiday begins in: its January weekends are left to the Christmas and New Year pages.
+    until: '12-31',
+    intro: 'Er even uit in de kerstvakantie. Met kerst en oud en nieuw zelf verhuren de parken andere verblijven: die staan op hun eigen pagina.',
+  },
 ];
 const seasonYear = (season, today) => Number(today.slice(0, 4)) + (today.slice(5) > season.until ? 1 : 0);
 
@@ -1766,6 +1789,7 @@ const howPage = () => ({
   body: html`<h1 class="text-3xl font-bold tracking-tight">Zo werkt het</h1>
     <div class="mt-3 max-w-2xl text-ink-secondary">
       <p>${SITE_NAME} vergelijkt wat een weekendje weg kost bij de vakantieparken van Landal, Topparken en Molecaten. Je boekt altijd bij de aanbieder zelf.</p>
+      <p class="mt-3 font-semibold text-ink">Je ziet hier de echte prijs van elk weekend, zoals wij die bij de aanbieder zagen. Geen "tot 40% korting" zonder dat erbij staat waarop.</p>
       <h2 class="${heading} text-ink">Waar de prijzen vandaan komen</h2>
       <ul class="${listing}">
         <li>Elke dag vragen we bij de aanbieders op wat elk komend weekend kost, van vrijdag tot maandag. Bij een prijs staat wanneer we die voor het laatst zagen.</li>

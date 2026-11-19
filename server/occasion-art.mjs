@@ -196,4 +196,39 @@ export const OCCASION_ART = {
       ...[[300, 108, 1], [540, 106, 0.8], [930, 106, 1.1]].map(([x, y, scale]) => mushroom(x, y, scale)),
     ].join(''),
   },
+  zomervakantie: {
+    background: 'linear-gradient(160deg, #0b63a0 0%, #0c7f86 100%)',
+    ink: '#ffffff',
+    sticker: { background: '#ffd23f', ink: '#4a3600' },
+    patternOpacity: 0.18,
+    pattern: '<path d="M8 30q13-10 26 0t26 0M60 90q13-10 26 0t26 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>',
+    band: [
+      sun(170, 44, 26, '#ffd23f'),
+      cloud(520, 30, 0.9),
+      cloud(900, 44, 1.1),
+      '<path d="M0 120V84Q150 74 300 84T600 84T900 84T1200 84V120Z" fill="#0a5a8a"/>',
+      '<path d="M0 120V94Q150 84 300 94T600 94T900 94T1200 94V120Z" fill="#1487b8"/>',
+      // A sailing boat on the water.
+      '<g transform="translate(700 84)"><path d="M-22 0h44l-8 10h-28z" fill="#ffffff"/><path d="M0-34V0M2-32l20 28H2z" fill="#ff7657" stroke="#ffffff" stroke-width="2"/></g>',
+      '<path d="M0 120V106Q300 96 600 104T1200 102V120Z" fill="#f4d9a0"/>',
+      ...[[330, 106, '#ff7657'], [520, 108, '#ffd23f'], [980, 106, '#ff7657'], [1110, 107, '#ffffff']].map(
+        ([x, y, colour]) => `<g transform="translate(${x} ${y})"><path d="M0 0V-26" stroke="#7a4b00" stroke-width="2.5"/><path d="M-22-24A22 16 0 0 1 22-24Z" fill="${colour}"/></g>`,
+      ),
+    ].join(''),
+  },
+  kerstvakantie: {
+    background: 'linear-gradient(160deg, #123a5c 0%, #1b5a7a 100%)',
+    ink: '#ffffff',
+    sticker: { background: '#ffffff', ink: '#123a5c' },
+    patternOpacity: 0.2,
+    pattern: `${snowflake(24, 28, 1)}${snowflake(84, 78, 0.7)}<circle cx="70" cy="20" r="2" fill="#fff"/><circle cx="20" cy="95" r="1.6" fill="#fff"/><circle cx="105" cy="45" r="1.4" fill="#fff"/>`,
+    band: [
+      '<path d="M0 120V94Q150 72 300 90T600 88T900 86T1200 92V120Z" fill="#eef6fb"/>',
+      ...[[90, 98, 1], [150, 102, 0.7], [420, 96, 0.8], [820, 94, 0.9], [880, 98, 0.6], [1120, 98, 1]].map(([x, y, scale], index) => tree(x, y, scale, index % 2 ? '#0f2f49' : '#1e6f6a')),
+      cabin(250, 96, '#7a3b2e'),
+      cabin(980, 94, '#7a3b2e'),
+      // A snowman between the trees.
+      '<g transform="translate(610 96)"><circle cy="-8" r="14" fill="#ffffff"/><circle cy="-30" r="10" fill="#ffffff"/><circle cx="-3" cy="-32" r="1.4" fill="#123a5c"/><circle cx="3" cy="-32" r="1.4" fill="#123a5c"/><path d="M0-29l9 2-9 2z" fill="#ff7657"/><path d="M-9-39h18v-3h-4v-9h-10v9h-4z" fill="#123a5c"/><path d="M-10-22q10 5 20 0" fill="none" stroke="#d62839" stroke-width="3" stroke-linecap="round"/></g>',
+    ].join(''),
+  },
 };

@@ -289,7 +289,9 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
         </h1>
         <p class="mt-2 max-w-2xl text-sm font-semibold text-ink-secondary sm:text-base">
           Weekenden (vrijdag tot maandag) bij Landal, Topparken en Molecaten die duidelijk onder de normale prijs van
-          het park zitten.
+          het park zitten. Je ziet de echte prijs per weekend, zoals wij die bij de aanbieder zagen: geen "tot 40%
+          korting".
+          <a href="/zo-werkt-het" class="font-bold text-accent hover:underline">Zo werkt het</a>
         </p>
       </div>
       <WeekendStrip
