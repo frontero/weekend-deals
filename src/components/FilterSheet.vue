@@ -22,7 +22,7 @@ watch(open, (isOpen) => {
   <dialog
     ref="dialog"
     @click="closeOnBackdrop"
-    class="m-0 mt-auto max-h-[92dvh] w-full max-w-none rounded-t-2xl bg-plane p-0 text-ink shadow-2xl"
+    class="m-0 mt-auto max-h-[92dvh] w-full max-w-none rounded-t-2xl bg-plane p-0 text-ink shadow-2xl [--dialog-from:0_100%]"
     aria-labelledby="filters-title"
     @close="open = false"
   >

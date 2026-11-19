@@ -77,6 +77,43 @@ html:has(dialog[open]) {
   overflow: hidden;
 }
 
+/*
+ * Panels slide in and out, without fading: from where a panel says it comes (--dialog-from, e.g. the side for the
+ * park panel), else from under the screen. `allow-discrete` keeps a closing panel on screen until it has slid away.
+ * Only the dark layer behind a panel fades.
+ */
+dialog {
+  translate: var(--dialog-from, 0 100dvh);
+  transition:
+    translate 0.25s ease-out,
+    overlay 0.25s allow-discrete,
+    display 0.25s allow-discrete;
+}
+dialog[open] {
+  translate: 0 0;
+}
 dialog::backdrop {
+  background: rgb(0 0 0 / 0);
+  transition:
+    background-color 0.25s ease-out,
+    overlay 0.25s allow-discrete,
+    display 0.25s allow-discrete;
+}
+dialog[open]::backdrop {
   background: rgb(0 0 0 / 0.45);
+}
+@starting-style {
+  dialog[open] {
+    translate: var(--dialog-from, 0 100dvh);
+  }
+  dialog[open]::backdrop {
+    background: rgb(0 0 0 / 0);
+  }
+}
+/* Whoever asked their device for less motion gets the panels at once. */
+@media (prefers-reduced-motion: reduce) {
+  dialog,
+  dialog::backdrop {
+    transition: none;
+  }
 }

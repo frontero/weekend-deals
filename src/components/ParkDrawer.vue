@@ -129,7 +129,7 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
   <dialog
     ref="dialog"
     @click="closeOnBackdrop"
-    class="m-0 ml-auto h-dvh max-h-dvh w-full max-w-xl overflow-y-auto bg-surface p-0 text-ink shadow-2xl"
+    class="m-0 ml-auto h-dvh max-h-dvh w-full max-w-xl overflow-y-auto bg-surface p-0 text-ink shadow-2xl [--dialog-from:100%_0]"
     aria-labelledby="park-title"
     @close="emit('close')"
   >
