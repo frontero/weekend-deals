@@ -281,13 +281,16 @@ const holidayYear = (holiday, today) => {
   return [year - 1, year, year + 1].find((candidate) => holidayStay(holiday, candidate).arrival >= today);
 };
 /** The stays of the coming holidays, which the rounds collect for the holiday pages. */
-export const upcomingHolidayStays = (today) =>
-  HOLIDAYS.map((holiday) => ({ slug: holiday.slug, ...holidayStay(holiday, holidayYear(holiday, today)) }));
+export const upcomingHolidayStays = (today) => [
+  ...HOLIDAYS.map((holiday) => ({ slug: holiday.slug, ...holidayStay(holiday, holidayYear(holiday, today)) })),
+  ...SEASONS.filter((season) => season.stay).map((season) => ({ slug: season.slug, ...season.stay(seasonYear(season, today)) })),
+];
 /**
  * Times people look for a park for that the ordinary weekends cover: a page each, at an address that stays from year
  * to year, with the weekends a weekend occasion (shared/occasions.mjs) marks as theirs.
  * @property matches whether an occasion's label is this one's, e.g. "Voorjaarsvakantie Zuid"
  * @property until the last day (month-day) of the season's time of year; after it the page is about next year
+ * @property stay a longer stay parks rent out for it besides the weekends, which the rounds collect like a holiday's
  */
 const SEASONS = [
   {
@@ -333,7 +336,10 @@ const SEASONS = [
     title: (year) => `Vakantiepark met Hemelvaart ${year}`,
     matches: (label) => label === 'Na Hemelvaart',
     until: '06-10',
-    intro: 'Hemelvaartsdag valt altijd op donderdag. Met één vrije vrijdag erbij heb je een lang weekend: hieronder het weekend dat erop volgt, van vrijdag tot maandag.',
+    // Asked 19-11-2026: Topparken and Molecaten rent this out rather than the weekend, Landal both.
+    stay: (year) => ({ arrival: shiftDays(easter(year), 38), departure: shiftDays(easter(year), 43) }),
+    stayName: 'van de woensdag voor Hemelvaart tot de maandag erna',
+    intro: 'Hemelvaartsdag valt altijd op donderdag. Hieronder het lange weekend eromheen, en het gewone weekend dat erop volgt, van vrijdag tot maandag.',
   },
   {
     slug: 'herfstvakantie',
@@ -683,6 +689,9 @@ const bestBar = (parks, options) => {
   return park ? bookingBar(park, featuredWeekend(park), { ...options, named: true }) : '';
 };
 
+// JSON inside a script tag: no HTML escaping, but no "<" that could close the tag either.
+const jsonLd = (data) => html`<script type="application/ld+json">${new Html(JSON.stringify(data).replaceAll('<', '\\u003c'))}</script>`;
+
 /**
  * The trail above a page, also as structured data so search results can show it.
  * @param current the page's own name, last in the trail
@@ -695,9 +704,33 @@ function breadcrumb(current, ...trail) {
     '@type': 'BreadcrumbList',
     itemListElement: items.map((item, index) => ({ '@type': 'ListItem', position: index + 1, ...item })),
   };
-  // JSON inside a script tag: no HTML escaping, but no "<" that could close the tag either.
-  const json = JSON.stringify(data).replaceAll('<', '\\u003c');
-  return html`<nav aria-label="Kruimelpad" class="text-sm font-semibold text-ink-secondary">${trail.map(([href, label]) => html`<a href="${href}" class="${link}">${label}</a> › `)}</nav><script type="application/ld+json">${new Html(json)}</script>`;
+  return html`<nav aria-label="Kruimelpad" class="text-sm font-semibold text-ink-secondary">${trail.map(([href, label]) => html`<a href="${href}" class="${link}">${label}</a> › `)}</nav>${jsonLd(data)}`;
+}
+
+/**
+ * A park's weekends as schema.org sees something with a price, so a search result can show "vanaf". No rating: the
+ * stars are Google's own, which its rules keep out of a site's markup.
+ */
+function parkOfferData(park, path) {
+  const prices = park.weekends.map((weekend) => weekend.priceCents);
+  const amount = (cents) => (cents / 100).toFixed(2);
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: `Weekendje weg bij ${fullName(park)}`,
+    description: `Een weekend van vrijdag tot maandag bij ${fullName(park)}${placeOf(park) ? ` in ${placeOf(park)}` : ''}, voor ${partyLabel(PAGE_PARTY)}, inclusief toeslagen.`,
+    image: park.imageUrl ?? undefined,
+    brand: { '@type': 'Brand', name: providerName(park.provider) },
+    offers: {
+      '@type': 'AggregateOffer',
+      priceCurrency: 'EUR',
+      lowPrice: amount(Math.min(...prices)),
+      highPrice: amount(Math.max(...prices)),
+      offerCount: prices.length,
+      availability: 'https://schema.org/InStock',
+      url: `${SITE_URL}${path}`,
+    },
+  };
 }
 
 function rating(park) {
@@ -999,6 +1032,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
 
   const body = html`
     ${breadcrumb(name, ['/parken', 'Alle parken'], ...regionPages.slice(0, 1).map((region) => [regionPath(region), region]))}
+    ${cheapest && jsonLd(parkOfferData(park, pathOf(park)))}
     ${park.imageUrl && html`<div class="relative mt-3"><img src="${largePhoto(park.imageUrl)}" alt="${name}" class="aspect-[16/9] w-full rounded-[2rem] bg-line object-cover sm:aspect-[5/2]" />${photoSticker(cheapest)}</div>`}
     <h1 class="mt-5 text-4xl font-black tracking-tight sm:text-5xl">${name}</h1>
     <p class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-semibold text-ink-secondary">${place && html`<span><span aria-hidden="true">📍</span> ${place}</span>`}<span>bij ${providerName(park.provider)}</span>${rating(park)}${park.popular > 0 && html`<span class="rounded-full bg-cta-wash px-3 py-1 text-sm font-extrabold text-ink" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair deze week</span>`}</p>
@@ -1059,7 +1093,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
         <p class="mt-1 text-sm text-ink-secondary">Het verblijf dat de meeste parken met de feestdagen verhuren, voor ${partyLabel(PAGE_PARTY)}: het goedkoopste huisje, inclusief toeslagen.</p>
         <ul class="mt-4 space-y-2">${holidayOffers.map(
           ({ holiday, year, weekend }) => html`<li class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-surface p-3 pl-4 ring-1 ring-line">
-            <div class="min-w-0 basis-full sm:basis-0 sm:flex-1"><a href="${holiday.path}" class="${link}"><span aria-hidden="true">${holiday.emoji}</span> ${holiday.name} ${year}</a><p class="text-sm text-ink-secondary">${formatWeekend(weekend)} · ${nights(weekend)} nachten</p></div>
+            <div class="min-w-0 basis-full sm:basis-0 sm:flex-1"><a href="${holiday.path}" class="${link}"><span aria-hidden="true">${holiday.emoji}</span> ${holiday.name} ${year}</a><p class="text-sm text-ink-secondary">${formatWeekend(weekend)} · ${nights(weekend)} nachten</p>${checkedLine(weekend)}</div>
             <p class="flex-1 text-xl font-black tabular-nums sm:flex-none">${formatEuros(weekend.priceCents)}</p>
             ${bookButton(park, weekend, 'parkpagina')}
           </li>`,
@@ -1375,6 +1409,7 @@ function holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes,
       html`<section aria-labelledby="all" class="mt-10">
         ${sectionTitle('all', '💶', sorted.length > LISTED_OFFERS ? `De ${LISTED_OFFERS} goedkoopste parken` : 'Alle parken met plek, goedkoopste eerst')}
         <p class="mt-1 text-sm text-ink-secondary">${formatWeekend(period)} · ${stay(period)}. Het goedkoopste huisje per park.</p>
+        ${checkedLine(sorted[0].weekend)}
         <ul class="mt-4 space-y-2">${sorted.slice(0, LISTED_OFFERS).map((offer) => offerRow(offer, { pathOf, source: 'feestdagpagina' }))}</ul>
       </section>`
     }
@@ -1399,20 +1434,32 @@ function holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes,
  * @param matching the season's weekends with room, as on the weekend pages
  * @param others the other holiday and season pages, to point to
  */
-function seasonPage(season, { year, matching, lastKnown, pathOf, occasionsOf, others }) {
+function seasonPage(season, { year, matching, long, lastKnown, pathOf, occasionsOf, others }) {
+  const longOffers = [...(long?.offers ?? [])].sort((a, b) => a.weekend.priceCents - b.weekend.priceCents);
   const offers = matching.flatMap((entry) => entry.offers);
   const parkCount = new Set(offers.map(({ park }) => park.code)).size;
   const from = offers.length > 0 && formatEuros(cheapestOf(offers.map((offer) => offer.weekend)).priceCents);
   const name = `${season.name} ${year}`;
   const when = matching.length === 1 ? `nog plek van ${formatWeekend(matching[0].weekend)}` : `plek in ${matching.length} weekenden van vrijdag tot maandag`;
-  const status = matching.length
-    ? `${count(parkCount, 'vakantiepark heeft', 'vakantieparken hebben')} ${when} voor ${partyLabel(PAGE_PARTY)}, vanaf ${from}.`
-    : `De prijzen voor ${season.name.endsWith('vakantie') ? 'de ' : ''}${inText(season)} ${year} komen hier zodra we ze ophalen${lastKnown ? `; nu lopen ze tot en met ${formatWeekend(lastKnown)}` : ''}.`;
+  let status;
+  if (matching.length) status = `${count(parkCount, 'vakantiepark heeft', 'vakantieparken hebben')} ${when} voor ${partyLabel(PAGE_PARTY)}, vanaf ${from}.`;
+  else if (longOffers.length) status = `${count(longOffers.length, 'vakantiepark heeft', 'vakantieparken hebben')} nog plek ${season.stayName} (${formatWeekend(long.period)}) voor ${partyLabel(PAGE_PARTY)}, vanaf ${formatEuros(longOffers[0].weekend.priceCents)}.`;
+  else status = `De prijzen voor ${season.name.endsWith('vakantie') ? 'de ' : ''}${inText(season)} ${year} komen hier zodra we ze ophalen${lastKnown ? `; nu lopen ze tot en met ${formatWeekend(lastKnown)}` : ''}.`;
   const more = [...others.filter((other) => other !== season).map((other) => [other.path, other.emoji, other.heading]), ['/weekenden', '📅', 'Alle weekenden']];
 
   const body = html`
     ${breadcrumb(name, ['/weekenden', 'Alle weekenden'])}
     <div class="mt-3">${occasionBanner(season, { year, status })}</div>
+    ${
+      longOffers.length > 0 &&
+      html`<section aria-labelledby="long" class="mt-10">
+        ${sectionTitle('long', season.emoji, `Het lange weekend: ${formatWeekend(long.period)}`)}
+        <p class="mt-1 text-sm text-ink-secondary">${capitalised(season.stayName)}: ${stay(long.period)}. Het goedkoopste huisje per park, zonder vergelijking met een normale prijs.</p>
+        ${checkedLine(longOffers[0].weekend)}
+        <ul class="mt-4 grid gap-5 sm:grid-cols-3">${longOffers.slice(0, TOP_DEALS).map((offer) => offerCard(offer, { pathOf, source: 'vakantiepagina' }))}</ul>
+        <ul class="mt-4 space-y-2">${longOffers.slice(TOP_DEALS, LISTED_OFFERS).map((offer) => offerRow(offer, { pathOf, source: 'vakantiepagina' }))}</ul>
+      </section>`
+    }
     ${matching.map((entry, index) => weekendSection(entry, { id: `weekend-${index}`, emoji: season.emoji, title: formatWeekend(entry.weekend), source: 'vakantiepagina', pathOf, occasions: occasionsOf(entry.weekend) }))}
     <nav aria-labelledby="more" class="mt-10">${sectionTitle('more', '✨', 'Verder kijken')}<ul class="mt-4 flex flex-wrap gap-2">${more.map(
       ([href, emoji, label]) => html`<li><a href="${href}" class="${chip}"><span aria-hidden="true">${emoji}</span> ${label}</a></li>`,
@@ -1423,7 +1470,9 @@ function seasonPage(season, { year, matching, lastKnown, pathOf, occasionsOf, ot
     title: `${season.title(year)}: parken met plek en prijzen`,
     description: matching.length
       ? `${name} op een vakantiepark: ${count(matching.length, 'weekend', 'weekenden')} met plek bij ${count(parkCount, 'park', 'parken')} van Landal, Topparken en Molecaten, voor ${partyLabel(PAGE_PARTY)} vanaf ${from}.`
-      : `${name} op een vakantiepark: welke parken van Landal, Topparken en Molecaten nog plek hebben, en wat een weekend kost.`,
+      : longOffers.length
+        ? `${name} op een vakantiepark: bij ${count(longOffers.length, 'park', 'parken')} van Landal, Topparken en Molecaten is nog plek ${season.stayName} (${formatWeekend(long.period)}), voor ${partyLabel(PAGE_PARTY)} vanaf ${formatEuros(longOffers[0].weekend.priceCents)}.`
+        : `${name} op een vakantiepark: welke parken van Landal, Topparken en Molecaten nog plek hebben, en wat een weekend kost.`,
     image: bestOf(offers.map(({ park, weekend }) => ({ ...park, weekends: [weekend] })))?.imageUrl ?? null,
     body: body.text,
   };
@@ -1596,23 +1645,30 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
 
   const today = computedAt.slice(0, 10);
   const parkByCode = new Map(everyPark.map((park) => [park.code, park]));
+  // A collected stay's offers, like a weekend's but without a normal price to compare with: no other stay is that
+  // long or that dear. Null when the rounds have not looked yet.
+  const stayOffers = (period) => {
+    const collected = details.holidayStays.find((entry) => entry.arrival === period.arrival && entry.departure === period.departure);
+    if (!collected) return null;
+    return collected.offers
+      .map(({ code, priceCents, accommodationCode, bookingUrl }) => ({
+        park: parkByCode.get(code),
+        weekend: { ...period, priceCents, accommodationCode, bookingUrl, discount: null, observedAt: collected.fetchedAt },
+      }))
+      .filter((offer) => offer.park);
+  };
   const holidays = HOLIDAYS.map((holiday) => {
     const year = holidayYear(holiday, today);
     const period = holidayStay(holiday, year);
-    const collected = details.holidayStays.find((entry) => entry.arrival === period.arrival && entry.departure === period.departure);
-    // Like a weekend's offers, but without a normal price to compare with: no other stay is that long or that dear.
-    const offers =
-      collected?.offers
-        .map(({ code, priceCents, accommodationCode, bookingUrl }) => ({ park: parkByCode.get(code), weekend: { ...period, priceCents, accommodationCode, bookingUrl, discount: null } }))
-        .filter((offer) => offer.park) ?? null;
-    return { holiday, year, period, offers };
+    return { holiday, year, period, offers: stayOffers(period) };
   });
   const seasons = SEASONS.map((season) => {
     const year = seasonYear(season, today);
     const matching = weekends.filter(
       ({ weekend }) => weekend.arrival.startsWith(String(year)) && details.occasionsOf(weekend).some((occasion) => season.matches(occasion.label)),
     );
-    return { season, year, matching };
+    const period = season.stay?.(year);
+    return { season, year, matching, long: period ? { period, offers: stayOffers(period) ?? [] } : null };
   });
   const occasionPages = [...HOLIDAYS, ...SEASONS];
   const holidaysOn = (weekend) => [
@@ -1624,7 +1680,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
   // The lists point to a holiday or season once it has prices.
   const upcoming = [
     ...holidays.filter(({ offers }) => offers?.length).map(({ holiday }) => holiday),
-    ...seasons.filter(({ matching }) => matching.length).map(({ season }) => season),
+    ...seasons.filter(({ matching, long }) => matching.length || long?.offers.length).map(({ season }) => season),
   ];
   const lastKnown = weekends.at(-1)?.weekend;
 
@@ -1634,7 +1690,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
     ...holidays.map(({ holiday, year, period, offers }) =>
       holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes: themePages, holidays: occasionPages }),
     ),
-    ...seasons.map(({ season, year, matching }) => seasonPage(season, { year, matching, lastKnown, pathOf, occasionsOf: details.occasionsOf, others: occasionPages })),
+    ...seasons.map(({ season, year, matching, long }) => seasonPage(season, { year, matching, long, lastKnown, pathOf, occasionsOf: details.occasionsOf, others: occasionPages })),
     lastMinutePage(weekends, { pathOf, occasionsOf: details.occasionsOf, parks: everyPark }),
     ...everyPark.map((park) =>
       parkPage(park, {

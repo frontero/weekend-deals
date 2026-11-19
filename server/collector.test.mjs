@@ -105,6 +105,9 @@ test('a holiday stay keeps the prices found before when a provider fails on it, 
   };
   const before = { ...stays[1], offers: [{ code: 'OLD', priceCents: 50000, accommodationCode: null, bookingUrl: null }] };
   const found = await fetchHolidayStays([steady, flaky], party, stays, [before]);
-  assert.deepEqual(found, [{ ...stays[0], offers: [{ code: 'GPN', priceCents: 72000, accommodationCode: 'A4', bookingUrl: null }] }, before]);
+  const [{ fetchedAt, ...christmas }, newYear] = found;
+  assert.deepEqual(christmas, { ...stays[0], offers: [{ code: 'GPN', priceCents: 72000, accommodationCode: 'A4', bookingUrl: null }] });
+  assert.match(fetchedAt, /^\d{4}-\d{2}-\d{2}T/, 'when it was asked, for the page');
+  assert.deepEqual(newYear, before);
   assert.deepEqual(asked[0], { ...party, ...stays[0] });
 });

@@ -68,7 +68,7 @@ export async function fetchHolidayStays(providers, party, stays, previous = [], 
       continue;
     }
     const rows = offers.map(({ park, priceCents, accommodationCode, bookingUrl }) => ({ code: park.code, priceCents, accommodationCode, bookingUrl: bookingUrl ?? null }));
-    found.push({ ...stay, offers: rows });
+    found.push({ ...stay, fetchedAt: new Date().toISOString(), offers: rows });
   }
   return found;
 }

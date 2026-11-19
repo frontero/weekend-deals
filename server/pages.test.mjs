@@ -191,6 +191,22 @@ test('a card says when its price was last seen at the provider, in Dutch time', 
   assert.doesNotMatch(pageAt('/weekend/2026-11-06').body, /Prijs gecontroleerd/, 'nothing without a time');
 });
 
+test('a park page tells search engines its lowest and highest weekend price', () => {
+  const [, json] = pageAt('/park/vakantiepark-gulpen').body.match(/<script type="application\/ld\+json">(\{"@context":"https:\/\/schema.org","@type":"Product".*?)<\/script>/);
+  const data = JSON.parse(json);
+  assert.equal(data.name, 'Weekendje weg bij Landal Vakantiepark Gulpen');
+  assert.deepEqual(data.offers, {
+    '@type': 'AggregateOffer',
+    priceCurrency: 'EUR',
+    lowPrice: '300.00',
+    highPrice: '520.00',
+    offerCount: 3,
+    availability: 'https://schema.org/InStock',
+    url: 'https://parkjeweg.nl/park/vakantiepark-gulpen',
+  });
+  assert.doesNotMatch(pageAt('/park/vakantiepark-sohojlandet').body, /"@type":"Product"/, 'nothing without a free weekend');
+});
+
 test("providers' names are escaped", () => {
   const body = pageAt('/weekend/2026-11-06').body;
   assert.match(body, /Hoogduin &#60;b&#62;/);
@@ -262,7 +278,8 @@ test('a holiday page lists the stay the parks rent out for it, cheapest first, a
       // A park without a page of its own is left out.
       offers: [offer('GPN', 72000, 'https://www.landal.nl/boeken?kerst'), offer('molecaten:6006', 51000, 'https://www.molecaten.nl/boek?x=1'), offer('GONE', 10000)],
     },
-    { slug: 'oud-en-nieuw', arrival: '2026-12-31', departure: '2027-01-04', offers: [offer('GPN', 64000, 'https://www.landal.nl/boeken?oud')] },
+    { slug: 'oud-en-nieuw', arrival: '2026-12-31', departure: '2027-01-04', fetchedAt: '2026-11-18T05:57:00.000Z', offers: [offer('GPN', 64000, 'https://www.landal.nl/boeken?oud')] },
+    { slug: 'hemelvaart', arrival: '2027-05-05', departure: '2027-05-10', offers: [offer('GPN', 88000, 'https://www.landal.nl/boeken?hemelvaart')] },
   ];
   const built = buildPages({ parks: [festive, hoogduin], allParks, computedAt: '2026-11-18T06:00:00.000Z', details: { ...details, holidayStays } });
   const at = (path) => built.find((page) => page.path === path);
@@ -286,6 +303,12 @@ test('a holiday page lists the stay the parks rent out for it, cheapest first, a
   assert.equal(newYear.title, 'Oud en nieuw 2026 op een vakantiepark: parken met plek en prijzen');
   assert.match(newYear.body, /1 vakantiepark heeft nog plek van oudejaarsdag tot de maandag erna \(do 31 dec – ma 4 jan, 4 nachten\)/);
   assert.match(newYear.body, /<\/span>Vuurwerkvrij vakantiepark<\/h2>/, 'the parks without fireworks');
+  assert.match(newYear.body, /Prijs gecontroleerd op 18 november[^<]*06:57/, 'when the stay was asked');
+
+  const ascension = at('/feestdag/hemelvaart');
+  assert.match(ascension.body, /1 vakantiepark heeft nog plek van de woensdag voor Hemelvaart tot de maandag erna \(wo 5 mei – ma 10 mei\) voor 2 personen, vanaf €\s880\./);
+  assert.match(ascension.body, /Het lange weekend: wo 5 mei – ma 10 mei/);
+  assert.match(at('/weekenden').body, /href="\/feestdag\/hemelvaart"/);
 
   const park = at('/park/vakantiepark-gulpen').body;
   assert.match(park, /href="\/feestdag\/kerst" [^>]*><span aria-hidden="true">🎄<\/span> Kerst 2026<\/a><p[^>]*>do 24 dec – ma 28 dec · 4 nachten<\/p>/);
@@ -361,6 +384,8 @@ test('the rounds collect the stay of each coming holiday: from its eve to the Mo
     // Easter and Whitsun: from the Friday before to the Tuesday after.
     { slug: 'pasen', arrival: '2027-03-26', departure: '2027-03-30' },
     { slug: 'pinksteren', arrival: '2027-05-14', departure: '2027-05-18' },
+    // Ascension: its long weekend besides the ordinary one, from the Wednesday before to the Monday after.
+    { slug: 'hemelvaart', arrival: '2027-05-05', departure: '2027-05-10' },
   ]);
   assert.deepEqual(upcomingHolidayStays('2027-01-02').slice(0, 2), [
     { slug: 'kerst', arrival: '2027-12-24', departure: '2027-12-27' },
