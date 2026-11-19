@@ -171,6 +171,22 @@ const SCHEMA = `
     party_key TEXT,
     visitor TEXT
   );
+  CREATE TABLE IF NOT EXISTS search_stats (
+    day TEXT NOT NULL,
+    path TEXT NOT NULL,
+    query TEXT NOT NULL,
+    clicks INTEGER NOT NULL,
+    impressions INTEGER NOT NULL,
+    position REAL NOT NULL,
+    PRIMARY KEY (day, path, query)
+  );
+  CREATE TABLE IF NOT EXISTS page_index (
+    path TEXT PRIMARY KEY,
+    verdict TEXT NOT NULL,
+    coverage TEXT NOT NULL,
+    last_crawl TEXT,
+    checked_at TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     at TEXT NOT NULL,
@@ -684,6 +700,62 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
 
     async saveSchoolHolidays(holidays, fetchedAt = new Date().toISOString()) {
       await writeSetting('schoolHolidays', JSON.stringify({ holidays, fetchedAt }));
+    },
+
+    /** Google Search Console's figures per day, page and search (server/search-console.mjs); a day read again replaces itself. */
+    async saveSearchStats(rows) {
+      if (!rows.length) return;
+      await client.batch(
+        rows.map(({ day, path, query, clicks, impressions, position }) => ({
+          sql: `INSERT OR REPLACE INTO search_stats (day, path, query, clicks, impressions, position) VALUES (?, ?, ?, ?, ?, ?)`,
+          args: [day, path, query, clicks, impressions, position],
+        })),
+        'write',
+      );
+    },
+
+    /** The search figures since a day: per day, and the searches and pages shown most. Position is weighed by how often shown. */
+    async searchSummary(since) {
+      const sums = `SUM(clicks) AS clicks, SUM(impressions) AS impressions, SUM(position * impressions) / MAX(SUM(impressions), 1) AS position`;
+      const [days, queries, pages] = await Promise.all([
+        all(`SELECT day, ${sums} FROM search_stats WHERE day >= ? GROUP BY day ORDER BY day`, since),
+        all(`SELECT query, ${sums} FROM search_stats WHERE day >= ? GROUP BY query ORDER BY impressions DESC LIMIT 40`, since),
+        all(`SELECT path, ${sums} FROM search_stats WHERE day >= ? GROUP BY path ORDER BY impressions DESC LIMIT 40`, since),
+      ]);
+      return { days, queries, pages };
+    },
+
+    /** The stored pages Google was asked about longest ago, never-asked ones first. */
+    async pagesToInspect(limit) {
+      const rows = await all(
+        `SELECT pages.path FROM pages LEFT JOIN page_index ON page_index.path = pages.path
+         ORDER BY page_index.checked_at IS NOT NULL, page_index.checked_at, pages.path LIMIT ?`,
+        limit,
+      );
+      return rows.map((row) => row.path);
+    },
+
+    async savePageIndex({ path, verdict, coverage, lastCrawl, checkedAt }) {
+      await client.execute({
+        sql: `INSERT OR REPLACE INTO page_index (path, verdict, coverage, last_crawl, checked_at) VALUES (?, ?, ?, ?, ?)`,
+        args: [path, verdict, coverage, lastCrawl, checkedAt],
+      });
+    },
+
+    /** Whether Google has each page that exists now, as last asked. */
+    pageIndex() {
+      return all(
+        `SELECT page_index.path, verdict, coverage, last_crawl AS lastCrawl, checked_at AS checkedAt
+         FROM page_index JOIN pages ON pages.path = page_index.path ORDER BY page_index.path`,
+      );
+    },
+
+    async searchSitemaps() {
+      return parseJson(await readSetting('searchSitemaps'), null);
+    },
+
+    async saveSearchSitemaps(state) {
+      await writeSetting('searchSitemaps', JSON.stringify(state));
     },
 
     /** The last check of the public pages (server/seo.mjs), or null before the first. */

@@ -16,6 +16,7 @@ import { activeProviders, PROVIDERS, providerBrand } from './providers.mjs';
 import { roundInProgress } from './status.mjs';
 import { fetchSurroundings } from './surroundings.mjs';
 import { fetchSchoolHolidays } from './holidays.mjs';
+import { serviceAccount, updateSearchConsole } from './search-console.mjs';
 import { fetchForecast } from './weather.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -397,6 +398,14 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
     if (holidays.length) await db.saveSchoolHolidays(holidays);
   }
 
+  /** Google's search figures and index state for the admin's SEO page; skipped without a key (GSC_SERVICE_ACCOUNT). */
+  async function refreshSearchConsole() {
+    const account = serviceAccount();
+    if (!account || cancelled) return;
+    const read = await updateSearchConsole(db, account, { log });
+    log(`search console: ${read.rows} rows, ${read.inspected} pages inspected`);
+  }
+
   /** Rebuilds the screen's data of each collected party whose data is missing or outdated. */
   async function updateOverviews() {
     if (cancelled) return;
@@ -514,6 +523,7 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
       throwIfCancelled();
       await refreshWeather().catch((error) => log(`weather failed: ${error.message}`));
       await refreshSchoolHolidays().catch((error) => log(`school holidays failed: ${error.message}`));
+      await refreshSearchConsole().catch((error) => log(`search console failed: ${error.message}`));
     });
 
     if (rerunRequested && !cancelled) {

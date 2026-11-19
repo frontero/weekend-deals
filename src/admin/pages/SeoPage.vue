@@ -7,6 +7,11 @@ import { count } from '../useRounds.js';
 // What the check after each price round found on the public pages (server/seo.mjs).
 const audit = ref(null);
 const kinds = ref({});
+// From Google Search Console, read in each price round (server/search-console.mjs).
+const search = ref({ days: [], queries: [], pages: [] });
+const index = ref([]);
+const sitemaps = ref(null);
+const pageCount = ref(0);
 // loading, failed or ready
 const state = ref('loading');
 
@@ -14,7 +19,7 @@ onMounted(async () => {
   try {
     const response = await fetch('/api/admin/seo');
     if (!response.ok) throw new Error(`SEO failed with ${response.status}`);
-    ({ audit: audit.value, kinds: kinds.value } = await response.json());
+    ({ audit: audit.value, kinds: kinds.value, search: search.value, index: index.value, sitemaps: sitemaps.value, pageCount: pageCount.value } = await response.json());
     state.value = 'ready';
   } catch {
     state.value = 'failed';
@@ -28,6 +33,20 @@ const tiles = computed(() => [
   { label: 'Bevindingen', value: count(total.value), hint: total.value ? '' : 'Niets gevonden' },
   { label: "Pagina's met een bevinding", value: count(affected.value), hint: total.value > (audit.value?.issues.length ?? 0) ? 'Van de eerste 300 bevindingen' : '' },
 ]);
+const sum = (field) => search.value.days.reduce((total, row) => total + row[field], 0);
+const place = (position) => position.toLocaleString('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const indexed = computed(() => index.value.filter((row) => row.verdict === 'PASS').length);
+const searchTiles = computed(() => [
+  { label: 'Getoond in Google, laatste 28 dagen', value: count(sum('impressions')), trend: search.value.days.map((row) => row.impressions) },
+  { label: 'Klikken vanuit Google', value: count(sum('clicks')), trend: search.value.days.map((row) => row.clicks) },
+  { label: 'Opgenomen door Google', value: `${count(indexed.value)} van ${count(index.value.length)}`, hint: `${count(pageCount.value - index.value.length)} pagina's nog niet nagevraagd` },
+]);
+const notIndexed = computed(() => index.value.filter((row) => row.verdict !== 'PASS'));
+const coverage = computed(() => [...Map.groupBy(notIndexed.value, (row) => row.coverage || 'Onbekend')].sort((a, b) => b[1].length - a[1].length));
+const searchTables = computed(() => [
+  { id: 'queries', title: 'Zoekwoorden', first: 'Zoekwoord', rows: search.value.queries.map((row) => [row.query, row]) },
+  { id: 'search-pages', title: "Pagina's in Google", first: 'Pagina', rows: search.value.pages.map((row) => [row.path, row]) },
+]);
 const byKind = computed(() =>
   Object.entries(audit.value?.counts ?? {})
     .sort((a, b) => b[1] - a[1])
@@ -40,18 +59,63 @@ const byKind = computed(() =>
   <p v-else-if="state === 'failed'" class="rounded-2xl bg-warning-wash px-4 py-3 text-sm text-warning-ink" role="status">
     De controle kon niet worden geladen.
   </p>
-  <p v-else-if="!audit" class="rounded-2xl bg-surface px-4 py-3 text-sm text-ink-secondary ring-1 ring-line" role="status">
-    Nog geen controle gedaan. Die loopt mee met de eerstvolgende prijsronde.
-  </p>
   <div v-else class="flex flex-col gap-6">
+    <h2 class="text-lg font-semibold">Google Search Console</h2>
+    <section aria-label="Kerncijfers van Google" class="grid gap-3 sm:grid-cols-3">
+      <StatTile v-for="tile in searchTiles" :key="tile.label" v-bind="tile" />
+    </section>
+    <p v-if="sitemaps" class="text-sm text-ink-secondary">
+      <template v-for="map in sitemaps.sitemaps" :key="map.path">
+        Sitemap {{ map.path }}: {{ map.pending ? 'wacht op Google' : map.lastDownloaded ? `gelezen op ${formatTimestamp(map.lastDownloaded)}` : 'nog niet gelezen' }},
+        {{ count(map.errors) }} fouten, {{ count(map.warnings) }} waarschuwingen.
+      </template>
+      <template v-if="!sitemaps.sitemaps.length">Google kent nog geen sitemap van de site.</template>
+    </p>
+    <p v-else class="text-sm text-ink-secondary">Nog geen gegevens van Google: die komen met de eerstvolgende prijsronde.</p>
+    <section v-if="notIndexed.length" class="rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="seo-not-indexed">
+      <h2 id="seo-not-indexed" class="border-b border-line px-4 py-3 font-semibold sm:px-5">Nog niet opgenomen door Google</h2>
+      <div v-for="[reason, rows] in coverage" :key="reason" class="border-b border-line px-4 py-3 text-sm last:border-0 sm:px-5">
+        <p class="font-medium">{{ reason }} <span class="font-normal text-ink-secondary">{{ count(rows.length) }} pagina's</span></p>
+        <p class="mt-1 break-words text-ink-secondary">{{ rows.slice(0, 12).map((row) => row.path).join(' · ') }}<template v-if="rows.length > 12"> en nog {{ count(rows.length - 12) }}</template></p>
+      </div>
+    </section>
+    <div class="grid gap-4 xl:grid-cols-2">
+      <section v-for="table in searchTables" :key="table.id" class="rounded-2xl bg-surface ring-1 ring-line" :aria-labelledby="`seo-${table.id}`">
+        <h2 :id="`seo-${table.id}`" class="border-b border-line px-4 py-3 font-semibold sm:px-5">{{ table.title }}</h2>
+        <p v-if="!table.rows.length" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Google heeft de site nog niet in zoekresultaten getoond.</p>
+        <table v-else class="w-full text-left text-sm">
+          <thead class="text-ink-secondary">
+            <tr class="border-b border-line">
+              <th scope="col" class="px-4 py-2.5 font-medium sm:px-5">{{ table.first }}</th>
+              <th scope="col" class="px-4 py-2.5 text-right font-medium sm:px-5">Getoond</th>
+              <th scope="col" class="px-4 py-2.5 text-right font-medium sm:px-5">Klikken</th>
+              <th scope="col" class="px-4 py-2.5 text-right font-medium sm:px-5">Plek</th>
+            </tr>
+          </thead>
+          <tbody class="tabular-nums">
+            <tr v-for="[label, row] in table.rows" :key="label" class="border-b border-line last:border-0 hover:bg-hover">
+              <th scope="row" class="px-4 py-2 font-normal break-words sm:px-5">{{ label }}</th>
+              <td class="px-4 py-2 text-right font-semibold sm:px-5">{{ count(row.impressions) }}</td>
+              <td class="px-4 py-2 text-right font-semibold sm:px-5">{{ count(row.clicks) }}</td>
+              <td class="px-4 py-2 text-right font-semibold sm:px-5">{{ place(row.position) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <h2 class="text-lg font-semibold">Eigen controle van de pagina's</h2>
     <p class="max-w-3xl text-ink-secondary">
       Na elke prijsronde lopen we alle pagina's na die Google kan vinden: titels, omschrijvingen, koppen, links en de
       gegevens voor zoekmachines.
     </p>
-    <section aria-label="Kerncijfers" class="grid gap-3 sm:grid-cols-3">
+    <p v-if="!audit" class="rounded-2xl bg-surface px-4 py-3 text-sm text-ink-secondary ring-1 ring-line" role="status">
+      Nog geen controle gedaan. Die loopt mee met de eerstvolgende prijsronde.
+    </p>
+    <section v-if="audit" aria-label="Kerncijfers" class="grid gap-3 sm:grid-cols-3">
       <StatTile v-for="tile in tiles" :key="tile.label" v-bind="tile" />
     </section>
-    <p v-if="!byKind.length" class="rounded-2xl bg-good-wash px-4 py-3 text-sm text-good-ink" role="status">Alle pagina's zijn in orde.</p>
+    <p v-if="audit && !byKind.length" class="rounded-2xl bg-good-wash px-4 py-3 text-sm text-good-ink" role="status">Alle pagina's zijn in orde.</p>
     <section v-for="group in byKind" :key="group.kind" class="rounded-2xl bg-surface ring-1 ring-line" :aria-labelledby="`seo-${group.kind}`">
       <h2 :id="`seo-${group.kind}`" class="flex items-baseline gap-2 border-b border-line px-4 py-3 font-semibold sm:px-5">
         {{ group.label }}

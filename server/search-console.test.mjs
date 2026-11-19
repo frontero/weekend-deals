@@ -34,3 +34,41 @@ test('asks Google for a read-only token with a signed request, and Search Consol
   assert.equal(calls[1].init.headers.Authorization, 'Bearer token-1');
   await assert.rejects(searchAnalytics(token, { dimensions: [] }, { fetcher: async () => new Response('no access', { status: 403 }) }), /403: no access/);
 });
+
+test("a round's reading stores the search figures, the sitemap state and what Google has of the pages longest unchecked", async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { connectFile } = await import('./connect.mjs');
+  const { openDatabase } = await import('./db.mjs');
+  const { updateSearchConsole } = await import('./search-console.mjs');
+  const directory = mkdtempSync(join(tmpdir(), 'weekend-deals-gsc-'));
+  const db = await openDatabase(connectFile(join(directory, 'gsc.db')).client);
+  const page = (path) => ({ path, title: path, description: '', image: null, body: '' });
+  await db.replacePages([page('/parken'), page('/weekenden'), page('/feestdag/kerst')], '2026-11-19T06:00:00.000Z');
+  await db.savePageIndex({ path: '/parken', verdict: 'PASS', coverage: 'Ingediend en geïndexeerd', lastCrawl: null, checkedAt: '2026-11-18T06:00:00.000Z' });
+
+  const inspected = [];
+  const fetcher = async (url, init) => {
+    if (url.includes('oauth2')) return Response.json({ access_token: 't' });
+    if (url.endsWith('/searchAnalytics/query')) {
+      return Response.json({ rows: [{ keys: ['2026-11-17', 'https://parkjeweg.nl/feestdag/kerst', 'vakantiepark kerst'], clicks: 2, impressions: 30, ctr: 0.07, position: 9 }, { keys: ['2026-11-17', 'https://parkjeweg.nl/', 'parkje weg'], clicks: 1, impressions: 10, ctr: 0.1, position: 1 }] });
+    }
+    if (url.endsWith('/sitemaps')) return Response.json({ sitemap: [{ path: 'https://parkjeweg.nl/sitemap.xml', lastDownloaded: '2026-11-18T08:58:06Z', errors: '0', warnings: '1', isPending: false }] });
+    const { inspectionUrl } = JSON.parse(init.body);
+    inspected.push(inspectionUrl);
+    return Response.json({ inspectionResult: { indexStatusResult: { verdict: 'NEUTRAL', coverageState: 'Gevonden, momenteel niet geïndexeerd' } } });
+  };
+  const read = await updateSearchConsole(db, account, { fetcher, now: Date.parse('2026-11-19T12:00:00Z'), inspections: 2 });
+  assert.deepEqual(read, { rows: 2, inspected: 2 });
+  assert.deepEqual(inspected, ['https://parkjeweg.nl/feestdag/kerst', 'https://parkjeweg.nl/weekenden'], 'never-asked pages first');
+
+  const summary = await db.searchSummary('2026-11-01');
+  assert.deepEqual(summary.days, [{ day: '2026-11-17', clicks: 3, impressions: 40, position: 7 }]);
+  assert.deepEqual(summary.pages.map((row) => [row.path, row.impressions]), [['/feestdag/kerst', 30], ['/', 10]]);
+  assert.equal(summary.queries[0].query, 'vakantiepark kerst');
+  assert.equal((await db.searchSitemaps()).sitemaps[0].warnings, 1);
+  assert.deepEqual((await db.pageIndex()).map((row) => [row.path, row.verdict]), [['/feestdag/kerst', 'NEUTRAL'], ['/parken', 'PASS'], ['/weekenden', 'NEUTRAL']]);
+  db.close();
+  rmSync(directory, { recursive: true, force: true });
+});

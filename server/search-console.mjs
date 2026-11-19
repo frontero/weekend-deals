@@ -47,3 +47,82 @@ export async function searchAnalytics(token, { startDate, endDate, dimensions, r
   if (!response.ok) throw new Error(`Search Console answered ${response.status}: ${(await response.text()).slice(0, 200)}`);
   return (await response.json()).rows ?? [];
 }
+
+const authorised = (token) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' });
+
+/** The sitemaps Google knows of the property, with when it last read each and what it found wrong. */
+export async function sitemaps(token, { fetcher = fetch, site = SITE_PROPERTY } = {}) {
+  const response = await fetcher(`${API}/sites/${encodeURIComponent(site)}/sitemaps`, { headers: authorised(token) });
+  if (!response.ok) throw new Error(`Search Console answered ${response.status}: ${(await response.text()).slice(0, 200)}`);
+  return ((await response.json()).sitemap ?? []).map(({ path, lastDownloaded, errors, warnings, isPending }) => ({
+    path,
+    lastDownloaded: lastDownloaded ?? null,
+    errors: Number(errors) || 0,
+    warnings: Number(warnings) || 0,
+    pending: Boolean(isPending),
+  }));
+}
+
+/** Whether Google has one page in its index, and when it last came by. */
+export async function inspectUrl(token, url, { fetcher = fetch, site = SITE_PROPERTY } = {}) {
+  const response = await fetcher('https://searchconsole.googleapis.com/v1/urlInspection/index:inspect', {
+    method: 'POST',
+    headers: authorised(token),
+    body: JSON.stringify({ inspectionUrl: url, siteUrl: site, languageCode: 'nl' }),
+  });
+  if (!response.ok) throw new Error(`Search Console answered ${response.status}: ${(await response.text()).slice(0, 200)}`);
+  const status = (await response.json()).inspectionResult?.indexStatusResult ?? {};
+  return { verdict: status.verdict ?? 'UNKNOWN', coverage: status.coverageState ?? '', lastCrawl: status.lastCrawlTime ?? null };
+}
+
+const SITE_URL = 'https://parkjeweg.nl';
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Google's figures of the last days still change, so those days are read again each time.
+const DAYS_BACK = 7;
+// Pages asked about per round: Google allows 2,000 a day, and a round should not take minutes longer for it.
+const INSPECTIONS = 60;
+const TOGETHER = 6;
+
+/**
+ * One round's reading of Search Console into the database: the search figures of the last days, the sitemap's state
+ * and, for the pages longest unchecked, whether Google has them. A failing part leaves the others standing.
+ * @returns what it read, for the round's log
+ */
+export async function updateSearchConsole(db, account, { fetcher = fetch, now = Date.now(), inspections = INSPECTIONS, log = () => {} } = {}) {
+  const token = await accessToken(account, { fetcher, now });
+  const day = (back) => new Date(now - back * DAY_MS).toISOString().slice(0, 10);
+  const read = { rows: 0, inspected: 0 };
+  try {
+    const rows = await searchAnalytics(token, { startDate: day(DAYS_BACK), endDate: day(0), dimensions: ['date', 'page', 'query'], rowLimit: 5000 }, { fetcher });
+    await db.saveSearchStats(
+      rows.map(({ keys: [date, page, query], clicks, impressions, position }) => ({ day: date, path: page.replace(SITE_URL, '') || '/', query, clicks, impressions, position })),
+    );
+    read.rows = rows.length;
+  } catch (error) {
+    log(`search figures failed: ${error.message}`);
+  }
+  try {
+    await db.saveSearchSitemaps({ checkedAt: new Date(now).toISOString(), sitemaps: await sitemaps(token, { fetcher }) });
+  } catch (error) {
+    log(`sitemap state failed: ${error.message}`);
+  }
+  // A few at a time: one answer takes Google seconds, and one by one a round would take minutes longer.
+  const paths = await db.pagesToInspect(inspections);
+  for (let start = 0; start < paths.length; start += TOGETHER) {
+    const answers = await Promise.allSettled(
+      paths.slice(start, start + TOGETHER).map(async (path) => ({ path, ...(await inspectUrl(token, `${SITE_URL}${path}`, { fetcher })) })),
+    );
+    const failed = answers.find((answer) => answer.status === 'rejected');
+    for (const answer of answers) {
+      if (answer.status !== 'fulfilled') continue;
+      await db.savePageIndex({ ...answer.value, checkedAt: new Date(now).toISOString() });
+      read.inspected += 1;
+    }
+    if (failed) {
+      log(`inspection failed: ${failed.reason.message}`);
+      // Out of quota or out of reach: the rest waits for the next round.
+      break;
+    }
+  }
+  return read;
+}
