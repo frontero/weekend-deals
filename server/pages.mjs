@@ -1858,7 +1858,7 @@ const privacyPage = (hostname) => ({
       <h2 class="${heading} text-ink">Wat we bewaren</h2>
       <ul class="${listing}">
         <li>Klik je door naar een aanbieder, dan bewaren we welk park, welk weekend, vanaf welke pagina, voor hoeveel personen en wanneer. Niet wie je bent en niet je IP-adres. Zodat dezelfde bezoeker een park maar één keer per dag populairder maakt, bewaren we een korte code die we maken uit je IP-adres en een sleutel van die dag. Die sleutel vervangen we elke dag; daarna valt de code niet meer terug te leiden.</li>
-        <li>We tellen bezoeken: welke pagina, van welke site je kwam, of je op een telefoon, tablet of computer zit en uit welk land. En wat je gebruikt: welke filters, weekenden en parken je kiest, of een zoekopdracht geen park opleverde, hoe ver je een pagina doorleest, hoe snel die laadde en of er iets misging. Klik je door naar een aanbieder, dan tellen we de prijs en de korting die je zag. Nooit wat je in het zoekveld typt en nooit je adres. Een bezoeker is daarbij dezelfde code van één dag als bij klikken. Deze tellingen staan bij Cloudflare, dat ze na drie maanden weggooit.</li>
+        <li>We tellen bezoeken: welke pagina, van welke site je kwam, of je op een telefoon, tablet of computer zit, met welke browser en welk formaat scherm, en uit welk land en welke provincie of regio. Die regio schat Cloudflare uit je netwerk; je plaats of adres bewaren we niet. En wat je gebruikt: welke filters, weekenden en parken je kiest, of een zoekopdracht geen park opleverde, hoe ver je een pagina doorleest, hoe snel die laadde en of er iets misging. Klik je door naar een aanbieder, dan tellen we de prijs en de korting die je zag. Nooit wat je in het zoekveld typt en nooit je adres. Een bezoeker is daarbij dezelfde code van één dag als bij klikken. Deze tellingen staan bij Cloudflare, dat ze na drie maanden weggooit.</li>
         <li>Beantwoord je de vraag of je vond wat je zocht, dan tellen we je antwoord. Schrijf je er een opmerking bij, dan bewaren we die tekst met de pagina waar je was en het tijdstip, zonder je bezoekerscode. Zet er dus geen naam of adres in.</li>
         <li>Zet je een prijsalarm aan, dan bewaren we je zoekopdracht, je gezelschap en de willekeurige code van je meldingen. Zoek je op afstand, dan ook je plek, afgerond op ongeveer een kilometer. Verwijder je het alarm, dan is het weg.</li>
       </ul>
@@ -1890,7 +1890,8 @@ const pageScript = `(() => {
   };
   const send = () => {
     if (!events.length) return;
-    const body = JSON.stringify({ path: location.pathname, events: events.splice(0) });
+    const screen = innerWidth < 640 ? 'klein' : innerWidth < 1024 ? 'middel' : 'groot';
+    const body = JSON.stringify({ path: location.pathname, screen, events: events.splice(0) });
     navigator.sendBeacon?.('/api/events', new Blob([body], { type: 'application/json' }));
   };
   addEventListener('scroll', () => {

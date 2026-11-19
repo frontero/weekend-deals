@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { connectFile } from './connect.mjs';
 import { openDatabase } from './db.mjs';
-import { clientEventPoints, countsAsVisit, deviceOf, isPageView, pageKind, pageViewPoint, trafficSource } from './events.mjs';
+import { browserOf, clientEventPoints, countsAsVisit, deviceOf, isPageView, pageKind, pageViewPoint, trafficSource } from './events.mjs';
 import { createApiHandler } from './handler.mjs';
 import { analyticsQuery, trafficReport } from './traffic.mjs';
 
@@ -36,6 +36,16 @@ test('counts people in browsers, not crawlers, empty user agents or the admin', 
   assert.equal(isPageView(request('/park/x', { headers: { 'Sec-Fetch-Mode': 'navigate' } })), true);
 });
 
+test('names a browser and system, and takes a screen width and a campaign label only as the site sends them', () => {
+  assert.equal(browserOf('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36 Edg/130.0'), 'Edge · Windows');
+  assert.equal(browserOf('Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36'), 'Chrome · Android');
+  assert.equal(browserOf('Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:132.0) Gecko/20100101 Firefox/132.0'), 'Firefox · macOS');
+  const batch = (extra) => clientEventPoints(request('/api/events', { method: 'POST' }), 'abcd1234', JSON.stringify({ path: '/', events: [{ name: 'view' }, { name: 'more', key: 'cards' }], ...extra }));
+  const [view, more] = batch({ screen: 'klein', label: 'Nieuwsbrief-Kerst' });
+  assert.deepEqual([view.blobs[2], view.blobs[9], more.blobs[2], more.blobs[9]], ['nieuwsbrief-kerst', 'klein', '', 'klein']);
+  assert.deepEqual(batch({ screen: '1920x1080', label: '<script>' }).map((point) => [point.blobs[2], point.blobs[9]]), [['', ''], ['', '']]);
+});
+
 test('tells page kinds and devices apart', () => {
   assert.deepEqual(['/', '/park/hunzedal', '/weekend/2026-12-04', '/regio/veluwe', '/feestdag/kerst', '/iets'].map(pageKind), ['home', 'park', 'weekend', 'regio', 'feestdag', 'other']);
   assert.equal(deviceOf(BROWSER), 'mobiel');
@@ -44,10 +54,13 @@ test('tells page kinds and devices apart', () => {
 });
 
 test('a server page view carries its kind, path and source', () => {
-  const point = pageViewPoint(request('/park/hunzedal?utm_source=pinterest', { headers: { Referer: 'https://www.pinterest.com/' } }), 'abcd1234');
+  const visit = request('/park/hunzedal?utm_source=pinterest&utm_campaign=Kerst-2026', { headers: { Referer: 'https://www.pinterest.com/' } });
+  // What Cloudflare adds to a request: the country and the province it places the network in.
+  Object.defineProperty(visit, 'cf', { value: { country: 'NL', region: 'North Brabant' } });
+  const point = pageViewPoint(visit, 'abcd1234');
   assert.deepEqual(point, {
     indexes: ['abcd1234'],
-    blobs: ['view', 'park', '', '/park/hunzedal', 'pinterest', 'mobiel', ''],
+    blobs: ['view', 'park', 'kerst-2026', '/park/hunzedal', 'pinterest', 'mobiel', 'NL', 'North Brabant', 'Safari · iOS', ''],
     doubles: [0, 0, 0],
   });
 });
@@ -136,7 +149,7 @@ test('the admin traffic report says when it cannot read, and names the parks it 
   assert.equal(report.configured, true);
   assert.deepEqual(report.days, [{ day: '2026-11-18', visitors: 10, views: 25, clicks: 3, parkVisitors: 6, clickers: 2 }]);
   assert.deepEqual(report.parkNames, { HOT: 'Hof van Saksen' });
-  assert.equal(statements.length, 12);
+  assert.equal(statements.length, 15);
   assert.ok(statements.every((sql) => sql.includes(`FROM parkjeweg_events WHERE timestamp >= toDateTime('${report.since} 00:00:00')`)));
 
   const failing = createApiHandler(db, { ...admin, queryEvents: async () => Promise.reject(new Error('Analytics Engine answered 422: unknown table')) });

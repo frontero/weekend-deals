@@ -85,6 +85,15 @@ const conversionRows = (rows, label) => rows.map((row) => ({ cells: [label(row),
 // What the clicks could bring in: both shares are guesses the admin can change, never figures of the site's own.
 const bookingPercent = ref(5);
 const feePercent = ref(5);
+// Cloudflare names regions in English; the Dutch provinces that differ get their own name.
+const regionName = (region = '') => region.replace(/^North /, 'Noord-').replace(/^South /, 'Zuid-').replace(/^Friesland$/, 'Fryslân');
+const SCREENS = { klein: 'Klein (telefoon)', middel: 'Middel (tablet)', groot: 'Groot (computer)' };
+// How long between a visitor's first and last step of the day.
+function stayed(visitor) {
+  if (visitor.steps.length < 2) return 'één stap';
+  const minutes = (Date.parse(visitor.steps.at(-1).at) - Date.parse(visitor.steps[0].at)) / 60000;
+  return minutes < 1 ? 'korter dan een minuut' : `${Math.round(minutes)} min`;
+}
 const SPEEDS = { load: 'Pagina geladen', paint: 'Grootste beeld in beeld' };
 const seconds = (milliseconds) => `${(milliseconds / 1000).toLocaleString('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
 const filterNames = (value) => value.split(',').map((key) => (ACTIONS[`filter:${key}`] ?? key).replace(/^Filter /, '')).join(', ');
@@ -243,7 +252,7 @@ function stepText(step, parkNames) {
   return `${actionLabel(step)}${step.value ? `: ${choice ? choice(step.value) : step.value}` : ''}`;
 }
 const visitorLine = (visitor) =>
-  [DEVICES[visitor.device] ?? visitor.device, visitor.country && countryName(visitor.country), visitor.source && (visitor.source === 'direct' ? 'kwam rechtstreeks' : `via ${SOURCES[visitor.source] ?? visitor.source}`)]
+  [DEVICES[visitor.device] ?? visitor.device, visitor.browser, [regionName(visitor.region), visitor.country && countryName(visitor.country)].filter(Boolean).join(', '), `bleef ${stayed(visitor)}`, visitor.source && (visitor.source === 'direct' ? 'kwam rechtstreeks' : `via ${SOURCES[visitor.source] ?? visitor.source}`)]
     .filter(Boolean)
     .join(' · ');
 
@@ -296,6 +305,30 @@ const tables = computed(() => [
     title: 'Welke pagina werkt als binnenkomer',
     columns: ['Eerste pagina van het bezoek', 'Bezoekers', 'Bekeek een park', 'Klikte door', 'Aandeel'],
     rows: conversionRows(report.value?.byLanding ?? [], (row) => LANDINGS[row.kind] ?? row.kind),
+  },
+  {
+    id: 'regions',
+    title: 'Provincie of regio',
+    columns: ['Regio, geschat uit het netwerk', 'Bezoekers'],
+    rows: (report.value?.regions ?? []).map((row) => ({ cells: [[regionName(row.region), row.country && countryName(row.country)].filter(Boolean).join(', '), count(row.visitors)] })),
+  },
+  {
+    id: 'browsers',
+    title: 'Browser en systeem',
+    columns: ['Browser', 'Bezoekers'],
+    rows: (report.value?.browsers ?? []).map((row) => ({ cells: [row.browser, count(row.visitors)] })),
+  },
+  {
+    id: 'screens',
+    title: 'Schermgrootte',
+    columns: ['Scherm', 'Bezoekers'],
+    rows: (report.value?.screens ?? []).map((row) => ({ cells: [SCREENS[row.screen] ?? row.screen, count(row.visitors)] })),
+  },
+  {
+    id: 'campaigns',
+    title: 'Campagnes',
+    columns: ['Label van de link (utm_campaign)', 'Bezoekers'],
+    rows: (report.value?.choices ?? []).filter((row) => row.name === 'view').map((row) => ({ cells: [row.value, count(row.visitors)] })),
   },
   {
     id: 'empty',

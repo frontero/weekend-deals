@@ -70,16 +70,28 @@ export function deviceOf(agent = '') {
   return 'desktop';
 }
 
+/** The browser and system a visitor uses, by name only: "Safari · iOS". Thousands share each. */
+export function browserOf(agent = '') {
+  const system = /iPhone|iPad|iPod/.test(agent) ? 'iOS' : /Android/.test(agent) ? 'Android' : /Windows/.test(agent) ? 'Windows' : /Mac OS X/.test(agent) ? 'macOS' : /Linux/.test(agent) ? 'Linux' : 'Anders';
+  const browser = /Edg(e|A|iOS)?\//.test(agent) ? 'Edge' : /Firefox\/|FxiOS/.test(agent) ? 'Firefox' : /SamsungBrowser/.test(agent) ? 'Samsung' : /OPR\//.test(agent) ? 'Opera' : /Chrome\/|CriOS/.test(agent) ? 'Chrome' : /Safari\//.test(agent) ? 'Safari' : 'Anders';
+  return `${browser} · ${system}`;
+}
+
+// The screen as the page reports it: one of three widths, never its size in pixels.
+const SCREENS = new Set(['klein', 'middel', 'groot']);
+
 /**
  * One count as Analytics Engine stores it. The visitor is the index, so sampling on busy days keeps or drops a
  * visitor's counts together. blob1 event, blob2 key, blob3 value, blob4 path or place, blob5 source, blob6 device,
- * blob7 country; double1 a number (a position in the list, milliseconds, or a click's price in euros). A click also
+ * blob7 country, blob8 the province or region Cloudflare places the network in (never a town), blob9 browser and
+ * system, blob10 the screen's width as one of three; double1 a number (a position in the list, milliseconds, or a click's price in euros). A click also
  * has double2, its discount in percent, and double3, how many weeks ahead its weekend is.
  */
-export function eventPoint(request, visitor, { name, key = '', value = '', path = '', source = '', number = 0, more = [0, 0] }) {
+export function eventPoint(request, visitor, { name, key = '', value = '', path = '', source = '', number = 0, more = [0, 0], screen = '' }) {
+  const agent = request.headers.get('User-Agent') ?? '';
   return {
     indexes: [visitor ?? ''],
-    blobs: [name, key, value, path, source, deviceOf(request.headers.get('User-Agent') ?? ''), request.cf?.country ?? ''],
+    blobs: [name, key, value, path, source, deviceOf(agent), request.cf?.country ?? '', String(request.cf?.region ?? '').slice(0, 64), browserOf(agent), SCREENS.has(screen) ? screen : ''],
     doubles: [number, ...more],
   };
 }
@@ -88,7 +100,9 @@ export function eventPoint(request, visitor, { name, key = '', value = '', path 
 export function pageViewPoint(request, visitor) {
   const { hostname, pathname, searchParams } = new URL(request.url);
   const source = trafficSource(request.headers.get('Referer'), hostname, searchParams.get('utm_source') ?? '');
-  return eventPoint(request, visitor, { name: 'view', key: pageKind(pathname), path: pathname, source });
+  // A link's own label (utm_campaign) names the message or advertisement it came from.
+  const campaign = text((searchParams.get('utm_campaign') ?? '').toLowerCase().slice(0, 64)) ?? '';
+  return eventPoint(request, visitor, { name: 'view', key: pageKind(pathname), value: campaign, path: pathname, source });
 }
 
 export const isPageView = (request) => request.headers.get('Sec-Fetch-Mode') === 'navigate' && countsAsVisit(request);
@@ -105,14 +119,17 @@ export function clientEventPoints(request, visitor, bodyText) {
   const { hostname } = new URL(request.url);
   const path = typeof body?.path === 'string' && PATH.test(body.path) ? body.path : '/';
   const source = trafficSource(body?.referrer, hostname, body?.campaign ?? '');
+  const label = text(typeof body?.label === 'string' ? body.label.toLowerCase().slice(0, 64) : '') ?? '';
+  const screen = typeof body?.screen === 'string' ? body.screen : '';
   return (Array.isArray(body?.events) ? body.events.slice(0, MAX_EVENTS) : [])
     .filter((event) => CLIENT_EVENTS.has(event?.name) && text(event.key) !== null && text(event.value) !== null)
     .map(({ name, key, value, number }) =>
       eventPoint(request, visitor, {
         name,
         key: name === 'view' ? pageKind(path) : (key ?? ''),
-        value: value ?? '',
+        value: name === 'view' ? label : (value ?? ''),
         path,
+        screen,
         source: name === 'view' ? source : '',
         number: Number.isFinite(number) ? Math.max(-1e6, Math.min(1e6, number)) : 0,
       }),

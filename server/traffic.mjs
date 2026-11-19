@@ -58,7 +58,7 @@ export async function trafficReport(query, { days, now = Date.now() }) {
   ]);
   // Later additions, each on its own: one that Analytics Engine refuses leaves the rest of the page standing.
   const optional = (sql) => query(sql).catch(() => []);
-  const [speed, clickDiscounts, clickWeeks, views, visitorDays] = await Promise.all([
+  const [speed, clickDiscounts, clickWeeks, views, visitorDays, regions, browsers, screens] = await Promise.all([
     optional(`SELECT blob2 AS key, blob6 AS device, sum(_sample_interval) AS times, sum(double1 * _sample_interval) AS total ${from} AND blob1 = 'speed'
       GROUP BY key, device ORDER BY key, device`),
     optional(`SELECT floor(double2 / 10) * 10 AS discount, sum(_sample_interval) AS clicks, sum(double1 * _sample_interval) AS euros ${from} AND blob1 = 'click' AND double1 > 0
@@ -73,6 +73,9 @@ export async function trafficReport(query, { days, now = Date.now() }) {
         countIf(blob1 = 'click' AND double1 > 0) AS priced,
         sumIf(double1, blob1 = 'click') AS euros
       ${from} GROUP BY day, visitor LIMIT ${MAX_ROWS}`),
+    optional(`SELECT blob7 AS country, blob8 AS region, count(DISTINCT index1) AS visitors ${from} AND blob8 != '' GROUP BY country, region ORDER BY visitors DESC LIMIT 25`),
+    optional(`SELECT blob9 AS browser, count(DISTINCT index1) AS visitors ${from} AND blob9 != '' GROUP BY browser ORDER BY visitors DESC LIMIT 15`),
+    optional(`SELECT blob10 AS screen, count(DISTINCT index1) AS visitors ${from} AND blob10 != '' GROUP BY screen ORDER BY visitors DESC`),
   ]);
   const arrivals = arrivalsOf(views);
   const visits = numbers(visitorDays, ['parks', 'clicks', 'priced', 'euros']).map((row) => ({ ...row, ...(arrivals.get(`${row.day}|${row.visitor}`) ?? { source: 'onbekend', kind: 'onbekend' }) }));
@@ -81,6 +84,9 @@ export async function trafficReport(query, { days, now = Date.now() }) {
     speed: numbers(speed, ['times', 'total']),
     clickDiscounts: numbers(clickDiscounts, ['discount', 'clicks', 'euros']),
     clickWeeks: numbers(clickWeeks, ['weeks', 'clicks']),
+    regions: numbers(regions, ['visitors']),
+    browsers: numbers(browsers, ['visitors']),
+    screens: numbers(screens, ['visitors']),
     bySource: conversion(visits, 'source'),
     byLanding: conversion(visits, 'kind'),
     // Per day the clicks that carried a price, and those prices added up: what visitors were about to spend.
@@ -106,13 +112,15 @@ const MAX_STEPS = 3000;
  */
 export async function dayReport(query, day) {
   const next = new Date(Date.parse(`${day}T00:00:00Z`) + DAY_MS).toISOString().slice(0, 10);
-  const rows = await query(`SELECT timestamp, index1 AS visitor, blob1 AS name, blob2 AS key, blob3 AS value, blob4 AS path, blob5 AS source, blob6 AS device, blob7 AS country, double1 AS number
+  const rows = await query(`SELECT timestamp, index1 AS visitor, blob1 AS name, blob2 AS key, blob3 AS value, blob4 AS path, blob5 AS source, blob6 AS device, blob7 AS country, blob8 AS region, blob9 AS browser, double1 AS number
     FROM ${EVENTS_DATASET} WHERE timestamp >= toDateTime('${day} 00:00:00') AND timestamp < toDateTime('${next} 00:00:00')
     ORDER BY timestamp LIMIT ${MAX_STEPS}`);
   const visitors = [...Map.groupBy(rows, (row) => row.visitor)].map(([visitor, list]) => ({
     visitor,
     device: list[0].device,
     country: list[0].country,
+    region: list[0].region ?? '',
+    browser: list[0].browser ?? '',
     // Where the first page they opened was reached from.
     source: list.find((row) => row.name === 'view' && row.source)?.source ?? '',
     steps: list.map(({ timestamp, name, key, value, path, number }) => ({ at: `${String(timestamp).replace(' ', 'T')}Z`, name, key, value, path, number: Number(number) || 0 })),

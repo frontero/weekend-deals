@@ -6,12 +6,16 @@ const queue = [];
 let timer = null;
 const referrer = document.referrer;
 const campaign = new URLSearchParams(window.location.search).get('utm_source') ?? '';
+// The label of the message or advertisement a link came from, if it carries one.
+const label = new URLSearchParams(window.location.search).get('utm_campaign') ?? '';
+// The screen as one of three widths, never its size.
+const screen = () => (window.innerWidth < 640 ? 'klein' : window.innerWidth < 1024 ? 'middel' : 'groot');
 
 function send() {
   clearTimeout(timer);
   timer = null;
   if (!queue.length) return;
-  const body = JSON.stringify({ path: window.location.pathname, referrer, campaign, events: queue.splice(0) });
+  const body = JSON.stringify({ path: window.location.pathname, referrer, campaign, label, screen: screen(), events: queue.splice(0) });
   if (!navigator.sendBeacon?.('/api/events', new Blob([body], { type: 'application/json' }))) {
     fetch('/api/events', { method: 'POST', body, keepalive: true, headers: { 'Content-Type': 'application/json' } }).catch(() => {});
   }
