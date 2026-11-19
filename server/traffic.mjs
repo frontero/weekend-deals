@@ -37,8 +37,20 @@ export async function trafficReport(query, { days, now = Date.now() }) {
     query(`SELECT blob1 AS name, blob2 AS key, blob3 AS value, count(DISTINCT index1) AS visitors ${from} AND blob3 != ''
       GROUP BY name, key, value ORDER BY visitors DESC LIMIT 150`),
   ]);
+  // Later additions, each on its own: one that Analytics Engine refuses leaves the rest of the page standing.
+  const optional = (sql) => query(sql).catch(() => []);
+  const [speed, clickDiscounts, clickWeeks] = await Promise.all([
+    optional(`SELECT blob2 AS key, blob6 AS device, sum(_sample_interval) AS times, sum(double1 * _sample_interval) AS total ${from} AND blob1 = 'speed'
+      GROUP BY key, device ORDER BY key, device`),
+    optional(`SELECT floor(double2 / 10) * 10 AS discount, sum(_sample_interval) AS clicks, sum(double1 * _sample_interval) AS euros ${from} AND blob1 = 'click' AND double1 > 0
+      GROUP BY discount ORDER BY discount`),
+    optional(`SELECT double3 AS weeks, sum(_sample_interval) AS clicks ${from} AND blob1 = 'click' AND double1 > 0 GROUP BY weeks ORDER BY weeks`),
+  ]);
   return {
     since,
+    speed: numbers(speed, ['times', 'total']),
+    clickDiscounts: numbers(clickDiscounts, ['discount', 'clicks', 'euros']),
+    clickWeeks: numbers(clickWeeks, ['weeks', 'clicks']),
     days: numbers(daily, ['visitors', 'views', 'clicks', 'parkVisitors', 'clickers']),
     sources: numbers(sources, ['visitors']),
     pages: numbers(pages, ['views', 'visitors']),

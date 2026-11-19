@@ -19,6 +19,7 @@ const LIMITED = new Set([
   'POST /api/alerts',
   'DELETE /api/alerts',
   'POST /api/alerts/test',
+  'POST /api/feedback',
 ]);
 // The counts of what visitors use come in batches, apart from the routes above so they never use up their limit.
 const EVENTS_ROUTE = 'POST /api/events';

@@ -76,5 +76,8 @@ export function bookingUrl(park, weekend, settings) {
 export function trackedBookingUrl(park, weekend, settings, source) {
   const params = new URLSearchParams({ url: bookingUrl(park, weekend, settings), park: park.code, arrival: weekend.arrival, from: source });
   if (settings) params.set('party', groupKey(settings));
+  // For the counts only (server/events.mjs): what the visitor saw when they clicked.
+  if (weekend.priceCents) params.set('price', String(Math.round(weekend.priceCents / 100)));
+  if (weekend.discount != null) params.set('off', String(Math.round(weekend.discount * 100)));
   return `/api/go?${params}`;
 }

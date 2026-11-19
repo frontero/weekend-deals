@@ -7,7 +7,9 @@ export const EVENTS_DATASET = 'parkjeweg_events';
 
 // What the site itself reports (src/lib/track.js). Views of the server's own pages and clicks to providers are
 // counted on the server.
-const CLIENT_EVENTS = new Set(['view', 'filter', 'weekend', 'mode', 'sort', 'park', 'alert', 'party', 'more']);
+// `empty`: a search without a park. `read`: how far down a page. `speed`: how fast it came. `error`: what broke.
+// `found`: the answer to "did you find what you were looking for".
+const CLIENT_EVENTS = new Set(['view', 'filter', 'weekend', 'mode', 'sort', 'park', 'alert', 'party', 'more', 'empty', 'read', 'speed', 'error', 'found']);
 const MAX_EVENTS = 30;
 const MAX_BODY = 8192;
 // Control names, park codes, dates and numbers; never free text such as a search or an address.
@@ -71,13 +73,14 @@ export function deviceOf(agent = '') {
 /**
  * One count as Analytics Engine stores it. The visitor is the index, so sampling on busy days keeps or drops a
  * visitor's counts together. blob1 event, blob2 key, blob3 value, blob4 path or place, blob5 source, blob6 device,
- * blob7 country; double1 a number (a position in the list, say).
+ * blob7 country; double1 a number (a position in the list, milliseconds, or a click's price in euros). A click also
+ * has double2, its discount in percent, and double3, how many weeks ahead its weekend is.
  */
-export function eventPoint(request, visitor, { name, key = '', value = '', path = '', source = '', number = 0 }) {
+export function eventPoint(request, visitor, { name, key = '', value = '', path = '', source = '', number = 0, more = [0, 0] }) {
   return {
     indexes: [visitor ?? ''],
     blobs: [name, key, value, path, source, deviceOf(request.headers.get('User-Agent') ?? ''), request.cf?.country ?? ''],
-    doubles: [number],
+    doubles: [number, ...more],
   };
 }
 

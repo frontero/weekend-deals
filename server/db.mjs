@@ -171,6 +171,13 @@ const SCHEMA = `
     party_key TEXT,
     visitor TEXT
   );
+  CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    found TEXT NOT NULL,
+    path TEXT NOT NULL,
+    comment TEXT NOT NULL
+  );
   CREATE TABLE IF NOT EXISTS admin_stats (
     group_key TEXT PRIMARY KEY,
     computed_at TEXT NOT NULL,
@@ -1000,6 +1007,16 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
         'read',
       );
       return { days: plain(days), providers: plain(providers), sources: plain(sources), parks: plain(parks), total: plain(total)[0] };
+    },
+
+    /** A visitor's remark with their answer to "did you find what you were looking for". */
+    async saveFeedback({ found, comment, path }, at = new Date().toISOString()) {
+      await client.execute({ sql: `INSERT INTO feedback (at, found, path, comment) VALUES (?, ?, ?, ?)`, args: [at, found, path, comment] });
+    },
+
+    /** The latest remarks, newest first, for the admin's Bezoekers page. */
+    recentFeedback(limit = 50) {
+      return all(`SELECT at, found, path, comment FROM feedback ORDER BY id DESC LIMIT ?`, limit);
     },
 
     /** Park code → name, for the codes given. */

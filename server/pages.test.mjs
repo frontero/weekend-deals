@@ -241,6 +241,8 @@ test('serves a stored page in the site frame, a 404 page, the sitemap and robots
   assert.match(text, /<link rel="canonical" href="https:\/\/weekendjeweg.test\/parken" \/>/);
   assert.match(text, /affiliate-links/);
   assert.doesNotMatch(text, /<script type="module"/);
+  assert.match(text, /<form data-feedback hidden[^]*Heb je gevonden wat je zocht\?/);
+  assert.match(text, /add\('read', 'half'\)[^]*replace\(\/\[\^\\p\{L\}/, 'the counting script, with its regular expression intact');
 
   assert.equal((await serve('/park/weg')).status, 404);
   const privacy = await (await serve('/privacy')).text();

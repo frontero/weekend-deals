@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { brandName } from '../../lib/brands.js';
-import { countryName, formatShortDate } from '../../lib/format.js';
+import { countryName, formatEuros, formatShortDate, formatTimestamp } from '../../lib/format.js';
 import { providerName } from '../../lib/providers.js';
 import ChartCard from '../components/ChartCard.vue';
 import EChart from '../components/EChart.vue';
@@ -52,7 +52,20 @@ const ACTIONS = {
   'alert:create': 'Prijsalarm aangezet',
   'party:save': 'Gezelschap gewijzigd',
   'more:cards': 'Meer parken geladen',
+  'empty:filters': 'Zoeken zonder resultaat',
+  'read:half': 'Pagina tot de helft gelezen',
+  'read:end': 'Pagina tot het eind gelezen',
+  'found:ja': 'Gevonden wat ze zochten: ja',
+  'found:nee': 'Gevonden wat ze zochten: nee',
+  'speed:load': 'Laadtijd gemeten',
+  'speed:paint': 'Grootste beeld gemeten',
+  'error:js1': 'Fout in de browser',
+  'error:js2': 'Tweede fout in de browser',
+  'error:js3': 'Derde fout in de browser',
 };
+const SPEEDS = { load: 'Pagina geladen', paint: 'Grootste beeld in beeld' };
+const seconds = (milliseconds) => `${(milliseconds / 1000).toLocaleString('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
+const filterNames = (value) => value.split(',').map((key) => (ACTIONS[`filter:${key}`] ?? key).replace(/^Filter /, '')).join(', ');
 const actionLabel = ({ name, key }) =>
   ACTIONS[`${name}:${key}`] ??
   (name === 'sort' ? `Sorteren op ${SORTS[key] ?? key}` : name === 'click' ? `Doorgeklikt naar ${providerName(key)}` : `${name} ${key}`);
@@ -192,6 +205,46 @@ const tables = computed(() => [
     rows: parks.value.map((park) => ({ cells: [park.name, count(park.opened), count(park.clicked)], to: park.to })),
   },
   {
+    id: 'empty',
+    title: 'Zoeken zonder resultaat',
+    columns: ['Ingestelde filters', 'Bezoekers'],
+    rows: (report.value?.choices ?? []).filter((row) => row.name === 'empty').map((row) => ({ cells: [filterNames(row.value), count(row.visitors)] })),
+  },
+  {
+    id: 'click-discounts',
+    title: 'Kliks naar korting',
+    columns: ['Korting op de normale prijs', 'Kliks', 'Gemiddelde prijs'],
+    rows: (report.value?.clickDiscounts ?? []).map((row) => ({
+      cells: [row.discount < 0 ? 'Boven normaal' : `${row.discount} tot ${row.discount + 10}%`, count(row.clicks), formatEuros((row.euros / row.clicks) * 100)],
+    })),
+  },
+  {
+    id: 'click-weeks',
+    title: 'Kliks: hoeveel weken vooruit',
+    columns: ['Weken tot het weekend', 'Kliks'],
+    rows: (report.value?.clickWeeks ?? []).map((row) => ({ cells: [count(row.weeks), count(row.clicks)] })),
+  },
+  {
+    id: 'speed',
+    title: 'Snelheid',
+    columns: ['Meting', 'Apparaat', 'Gemiddeld', 'Metingen'],
+    left: 2,
+    rows: (report.value?.speed ?? []).map((row) => ({ cells: [SPEEDS[row.key] ?? row.key, DEVICES[row.device] ?? row.device, seconds(row.total / row.times), count(row.times)] })),
+  },
+  {
+    id: 'errors',
+    title: 'Fouten in de browser',
+    columns: ['Melding', 'Bezoekers'],
+    rows: (report.value?.choices ?? []).filter((row) => row.name === 'error').map((row) => ({ cells: [row.value, count(row.visitors)] })),
+  },
+  {
+    id: 'feedback',
+    title: 'Opmerkingen van bezoekers',
+    columns: ['Opmerking', 'Gevonden', 'Pagina', 'Wanneer'],
+    left: 4,
+    rows: (report.value?.feedback ?? []).map((row) => ({ cells: [row.comment, row.found, row.path, formatTimestamp(row.at)] })),
+  },
+  {
     id: 'pages',
     title: "Meest bekeken pagina's",
     columns: ['Pagina', 'Weergaven', 'Bezoekers'],
@@ -262,7 +315,7 @@ const tables = computed(() => [
                 :key="column"
                 scope="col"
                 class="px-4 py-2.5 font-medium sm:px-5"
-                :class="index && column !== 'Keuze' ? 'text-right' : ''"
+                :class="index >= (table.left ?? (column === 'Keuze' ? 2 : 1)) ? 'text-right' : ''"
               >
                 {{ column }}
               </th>
@@ -278,7 +331,7 @@ const tables = computed(() => [
                 v-for="(cell, index) in row.cells.slice(1)"
                 :key="index"
                 class="px-4 py-2 sm:px-5"
-                :class="table.columns[index + 1] === 'Keuze' ? '' : 'text-right font-semibold'"
+                :class="index + 1 < (table.left ?? (table.columns[index + 1] === 'Keuze' ? 2 : 1)) ? '' : 'text-right font-semibold'"
               >
                 {{ cell }}
               </td>

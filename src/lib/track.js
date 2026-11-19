@@ -25,7 +25,34 @@ export function track(name, key = '', value = '', number = 0) {
   timer ??= setTimeout(send, SEND_AFTER_MS);
 }
 
+// How fast the page came: when it had loaded, and when its largest piece was on screen.
+let largestPaint = 0;
+try {
+  new PerformanceObserver((list) => {
+    largestPaint = list.getEntries().at(-1)?.startTime ?? largestPaint;
+  }).observe({ type: 'largest-contentful-paint', buffered: true });
+} catch {
+  // A browser without this measure sends none.
+}
+window.addEventListener('load', () =>
+  setTimeout(() => {
+    const [navigation] = performance.getEntriesByType('navigation');
+    if (navigation?.loadEventEnd) track('speed', 'load', '', Math.round(navigation.loadEventEnd));
+  }),
+);
+
+// What broke in the browser, by its message without anything that is not a letter or number; a few per page at most.
+let errors = 0;
+function trackError(message) {
+  errors += 1;
+  if (errors <= 3) track('error', `js${errors}`, String(message ?? '').replace(/[^\p{L}\p{N} _.,:-]/gu, ' ').slice(0, 64));
+}
+window.addEventListener('error', (event) => trackError(event.message));
+window.addEventListener('unhandledrejection', (event) => trackError(event.reason?.message ?? event.reason));
+
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') send();
+  if (document.visibilityState !== 'hidden') return;
+  if (largestPaint) track('speed', 'paint', '', Math.round(largestPaint));
+  send();
 });
 window.addEventListener('pagehide', send);

@@ -48,7 +48,7 @@ test('a server page view carries its kind, path and source', () => {
   assert.deepEqual(point, {
     indexes: ['abcd1234'],
     blobs: ['view', 'park', '', '/park/hunzedal', 'pinterest', 'mobiel', ''],
-    doubles: [0],
+    doubles: [0, 0, 0],
   });
 });
 
@@ -63,6 +63,8 @@ test('keeps only known events with short plain values from a batch', () => {
       { name: 'click', key: 'landal', value: 'HOT' },
       { name: 'filter', key: 'search', value: 'Kerkstraat 1 <b>' },
       { name: 'sort', key: { nested: true } },
+      { name: 'empty', key: 'filters', value: 'brands,facilities,weekend' },
+      { name: 'speed', key: 'load', number: 1840 },
       { name: 'park', key: 'cards', value: 'x'.repeat(65) },
     ],
   });
@@ -73,9 +75,12 @@ test('keeps only known events with short plain values from a batch', () => {
       ['view', 'home', '', '/', 'bing'],
       ['filter', 'brands', 'landal,roompot', '/', ''],
       ['park', 'cards', 'HOT', '/', ''],
+      ['empty', 'filters', 'brands,facilities,weekend', '/', ''],
+      ['speed', 'load', '', '/', ''],
     ],
   );
   assert.equal(points[2].doubles[0], 3);
+  assert.equal(points[4].doubles[0], 1840);
   assert.deepEqual(clientEventPoints(request('/api/events'), null, 'not json'), []);
   assert.deepEqual(clientEventPoints(request('/api/events'), null, JSON.stringify({ events: Array(40).fill({ name: 'more' }) })).length, 30);
 });
@@ -103,9 +108,11 @@ test('a click through to a provider is counted with its park and place on the si
   const db = await openDatabase(connectFile(join(directory, 'click-event.db')).client);
   const points = [];
   const handle = createApiHandler(db, { recordEvent: (point) => points.push(point) });
-  const query = new URLSearchParams({ url: 'https://www.landal.nl/', park: 'HOT', from: 'kaartje' });
+  const arrival = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const query = new URLSearchParams({ url: 'https://www.landal.nl/', park: 'HOT', from: 'kaartje', arrival, price: '284', off: '53' });
   assert.equal((await handle(request(`/api/go?${query}`))).status, 302);
   assert.deepEqual(points.map((point) => point.blobs.slice(0, 4)), [['click', 'landal', 'HOT', 'kaartje']]);
+  assert.deepEqual(points[0].doubles, [284, 53, 3], 'the price and discount seen, and how many weeks ahead');
   db.close();
 });
 
@@ -129,13 +136,36 @@ test('the admin traffic report says when it cannot read, and names the parks it 
   assert.equal(report.configured, true);
   assert.deepEqual(report.days, [{ day: '2026-11-18', visitors: 10, views: 25, clicks: 3, parkVisitors: 6, clickers: 2 }]);
   assert.deepEqual(report.parkNames, { HOT: 'Hof van Saksen' });
-  assert.equal(statements.length, 7);
+  assert.equal(statements.length, 10);
   assert.ok(statements.every((sql) => sql.includes(`FROM parkjeweg_events WHERE timestamp >= toDateTime('${report.since} 00:00:00')`)));
 
   const failing = createApiHandler(db, { ...admin, queryEvents: async () => Promise.reject(new Error('Analytics Engine answered 422: unknown table')) });
   const response = await get(failing);
   assert.equal(response.status, 502);
   assert.deepEqual(await response.json(), { configured: true, error: 'Analytics Engine answered 422: unknown table' });
+  db.close();
+});
+
+test('a query added later that fails leaves the rest of the report standing', async () => {
+  const query = async (sql) => (sql.includes("blob1 = 'speed'") ? Promise.reject(new Error('unknown function')) : sql.includes('double3 AS weeks') ? [{ weeks: '3', clicks: '2' }] : []);
+  const report = await trafficReport(query, { days: 7, now: Date.parse('2026-11-18T12:00:00Z') });
+  assert.deepEqual(report.speed, []);
+  assert.deepEqual(report.clickWeeks, [{ weeks: 3, clicks: 2 }]);
+});
+
+test('a remark with the answer to "did you find it" is kept for the admin, and nothing without one or from another site', async () => {
+  const db = await openDatabase(connectFile(join(directory, 'feedback.db')).client);
+  const handle = createApiHandler(db, { isAdmin: () => true, queryEvents: async () => [] });
+  const post = (body, headers = {}) => handle(request('/api/feedback', { method: 'POST', body: JSON.stringify(body), headers }));
+
+  assert.equal((await post({ found: 'nee', comment: '  Ik miste Center Parcs  ', path: '/feestdag/kerst' })).status, 204);
+  assert.equal((await post({ found: 'nee', comment: '   ' })).status, 400);
+  assert.equal((await post({ found: 'misschien', comment: 'x' })).status, 400);
+  await post({ found: 'ja', comment: 'spam' }, { 'Sec-Fetch-Site': 'cross-site' });
+  await post({ found: 'ja', comment: 'x'.repeat(900), path: 'javascript:alert(1)' });
+
+  const { feedback } = await (await handle(request('/api/admin/traffic'))).json();
+  assert.deepEqual(feedback.map(({ found, path, comment }) => [found, path, comment.length]), [['ja', '/', 500], ['nee', '/feestdag/kerst', 21]]);
   db.close();
 });
 

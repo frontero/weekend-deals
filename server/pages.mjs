@@ -1819,7 +1819,8 @@ const privacyPage = (hostname) => ({
       <h2 class="${heading} text-ink">Wat we bewaren</h2>
       <ul class="${listing}">
         <li>Klik je door naar een aanbieder, dan bewaren we welk park, welk weekend, vanaf welke pagina, voor hoeveel personen en wanneer. Niet wie je bent en niet je IP-adres. Zodat dezelfde bezoeker een park maar één keer per dag populairder maakt, bewaren we een korte code die we maken uit je IP-adres en een sleutel van die dag. Die sleutel vervangen we elke dag; daarna valt de code niet meer terug te leiden.</li>
-        <li>We tellen bezoeken: welke pagina, van welke site je kwam, of je op een telefoon, tablet of computer zit en uit welk land. En wat je gebruikt: welke filters, weekenden en parken je kiest. Nooit wat je in het zoekveld typt en nooit je adres. Een bezoeker is daarbij dezelfde code van één dag als bij klikken. Deze tellingen staan bij Cloudflare, dat ze na drie maanden weggooit.</li>
+        <li>We tellen bezoeken: welke pagina, van welke site je kwam, of je op een telefoon, tablet of computer zit en uit welk land. En wat je gebruikt: welke filters, weekenden en parken je kiest, of een zoekopdracht geen park opleverde, hoe ver je een pagina doorleest, hoe snel die laadde en of er iets misging. Klik je door naar een aanbieder, dan tellen we de prijs en de korting die je zag. Nooit wat je in het zoekveld typt en nooit je adres. Een bezoeker is daarbij dezelfde code van één dag als bij klikken. Deze tellingen staan bij Cloudflare, dat ze na drie maanden weggooit.</li>
+        <li>Beantwoord je de vraag of je vond wat je zocht, dan tellen we je antwoord. Schrijf je er een opmerking bij, dan bewaren we die tekst met de pagina waar je was en het tijdstip, zonder je bezoekerscode. Zet er dus geen naam of adres in.</li>
         <li>Zet je een prijsalarm aan, dan bewaren we je zoekopdracht, je gezelschap en de willekeurige code van je meldingen. Zoek je op afstand, dan ook je plek, afgerond op ongeveer een kilometer. Verwijder je het alarm, dan is het weg.</li>
       </ul>
       <h2 class="${heading} text-ink">Wat in je browser blijft</h2>
@@ -1836,6 +1837,59 @@ const privacyPage = (hostname) => ({
       <p class="mt-2">Mail naar <a href="mailto:contact@${hostname}" class="${link}">contact@${hostname}</a>.</p>
     </div>`.text,
 });
+
+// On every page of the server: anonymous counts like the app sends (src/lib/track.js, server/events.mjs), and the
+// question in the footer. How far down the visitor scrolled, how fast the page came and what broke go off when the
+// page is left; the answer is counted at once and a remark is kept for the admin (POST /api/feedback).
+const pageScript = `(() => {
+  const events = [];
+  const seen = new Set();
+  const add = (name, key, value = '', number = 0) => {
+    if (seen.has(name + key)) return;
+    seen.add(name + key);
+    events.push({ name, key, value, number });
+  };
+  const send = () => {
+    if (!events.length) return;
+    const body = JSON.stringify({ path: location.pathname, events: events.splice(0) });
+    navigator.sendBeacon?.('/api/events', new Blob([body], { type: 'application/json' }));
+  };
+  addEventListener('scroll', () => {
+    const depth = (scrollY + innerHeight) / document.documentElement.scrollHeight;
+    if (depth > 0.5) add('read', 'half');
+    if (depth > 0.9) add('read', 'end');
+  }, { passive: true });
+  addEventListener('load', () => setTimeout(() => {
+    const [navigation] = performance.getEntriesByType('navigation');
+    if (navigation && navigation.loadEventEnd) add('speed', 'load', '', Math.round(navigation.loadEventEnd));
+  }));
+  addEventListener('error', (event) => add('error', 'js1', String(event.message || '').replace(/[^\\p{L}\\p{N} _.,:-]/gu, ' ').slice(0, 64)));
+  addEventListener('pagehide', send);
+  document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && send());
+
+  const form = document.querySelector('[data-feedback]');
+  if (!form) return;
+  form.hidden = false;
+  const part = (name) => form.querySelector('[data-' + name + ']');
+  let found = '';
+  for (const button of form.querySelectorAll('[data-answer]')) {
+    button.addEventListener('click', () => {
+      found = button.dataset.answer;
+      add('found', found);
+      part('question').hidden = true;
+      part('more').hidden = false;
+    });
+  }
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const comment = form.querySelector('textarea').value.trim();
+    if (comment) {
+      fetch('/api/feedback', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ found, comment, path: location.pathname }) }).catch(() => {});
+    }
+    part('more').hidden = true;
+    part('thanks').hidden = false;
+  });
+})();`;
 
 /** A stored page as a whole document, with the site's header and footer around it. */
 export function pageDocument({ title, description, image, body }, { url, stylesheet }) {
@@ -1881,6 +1935,19 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
     </header>
     <main class="mx-auto max-w-5xl px-4 py-6 sm:px-6">${new Html(body)}</main>
     <footer class="mt-16 rounded-t-[2.5rem] bg-accent-wash">
+      <form data-feedback hidden class="mx-auto max-w-5xl px-4 pt-8 text-sm sm:px-6">
+        <div class="max-w-xl rounded-2xl bg-surface p-4 ring-1 ring-line">
+          <p class="font-semibold">Heb je gevonden wat je zocht?</p>
+          <p data-question class="mt-3 flex gap-2"><button type="button" data-answer="ja" class="${chip}">Ja</button><button type="button" data-answer="nee" class="${chip}">Nee</button></p>
+          <div data-more hidden class="mt-3">
+            <label for="feedback-comment" class="font-medium">Wat miste je, of wat kan er beter? <span class="font-normal text-ink-secondary">(niet verplicht)</span></label>
+            <textarea id="feedback-comment" maxlength="500" rows="3" class="mt-2 block w-full rounded-xl bg-plane p-2 ring-1 ring-field"></textarea>
+            <p class="mt-1 text-xs text-ink-secondary">Zet hier geen naam, adres of e-mailadres in.</p>
+            <button type="submit" class="mt-3 rounded-full bg-accent px-4 py-1.5 font-bold text-on-accent transition hover:bg-accent-hover">Verstuur</button>
+          </div>
+          <p data-thanks hidden role="status" class="mt-2 text-ink-secondary">Bedankt, daar hebben we wat aan.</p>
+        </div>
+      </form>
       <p class="mx-auto max-w-5xl px-4 pt-8 pb-4 text-sm font-semibold text-ink-secondary sm:px-6">
         ${SITE_NAME} vergelijkt prijzen van Landal, Topparken en Molecaten. Links naar een aanbieder zijn affiliate-links:
         boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra, en het bepaalt
@@ -1888,6 +1955,7 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
       </p>
       <nav aria-label="Over de site" class="mx-auto flex max-w-5xl flex-wrap gap-x-4 gap-y-2 px-4 pb-8 text-sm sm:px-6"><a href="/weekenden" class="${link}">Alle weekenden</a><a href="/parken" class="${link}">Alle parken</a><a href="/last-minute" class="${link}">Last minute</a><a href="${HOW_PATH}" class="${link}">Zo werkt het</a><a href="/privacy" class="${link}">Privacy</a></nav>
     </footer>
+    <script>${new Html(pageScript)}</script>
   </body>
 </html>
 `.text;

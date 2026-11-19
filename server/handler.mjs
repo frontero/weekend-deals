@@ -15,6 +15,7 @@ import { trafficReport } from './traffic.mjs';
 const JSON_TYPE = 'application/json; charset=utf-8';
 // Group keys are short; anything longer is not one.
 const MAX_KEY_LENGTH = 300;
+const FEEDBACK_LENGTH = 500;
 const MAX_ALERTS_PER_TOPIC = 20;
 const MAX_SEEN_DEALS = 1000;
 // Topics cost nothing, so everyone's alerts together have a ceiling too: on how many there are (each round checks
@@ -145,7 +146,11 @@ export function createApiHandler(
           .then((visitor) => {
             if (recordEvent && countsAsVisit(request)) {
               const place = { key: provider, value: text('park', 64) ?? '', path: text('from', 32) ?? '' };
-              recordEvent(eventPoint(request, visitor, { name: 'click', ...place }));
+              // What it cost, how far under normal and how many weeks ahead: what makes a visitor click.
+              const whole = (name, least, most) => Math.max(least, Math.min(most, Math.round(Number(params.get(name)) || 0)));
+              const arrival = ISO_DATE.test(params.get('arrival') ?? '') ? Date.parse(params.get('arrival')) : null;
+              const weeks = arrival ? Math.max(0, Math.round((arrival - Date.now()) / (7 * 24 * 60 * 60 * 1000))) : 0;
+              recordEvent(eventPoint(request, visitor, { name: 'click', ...place, number: whole('price', 0, 100000), more: [whole('off', -100, 100), weeks] }));
             }
             return db.saveClick({
               provider,
@@ -168,6 +173,17 @@ export function createApiHandler(
         const visitor = await visitorOf(db, request).catch(() => null);
         for (const point of clientEventPoints(request, visitor, await request.text())) recordEvent(point);
       }
+      return new Response(null, { status: 204 });
+    },
+
+    // A visitor's answer to "did you find what you were looking for", with a remark if they wrote one.
+    'POST /feedback': async (request) => {
+      if (request.headers.get('Sec-Fetch-Site') === 'cross-site' || !countsAsVisit(request)) return new Response(null, { status: 204 });
+      const body = await request.text().then((raw) => (raw.length <= 2000 ? JSON.parse(raw) : null)).catch(() => null);
+      const comment = typeof body?.comment === 'string' ? body.comment.trim().slice(0, FEEDBACK_LENGTH) : '';
+      if (!['ja', 'nee'].includes(body?.found) || !comment) return json({ error: 'Nothing to keep' }, 400);
+      const path = typeof body.path === 'string' && /^\/[a-z0-9/._-]{0,120}$/.test(body.path) ? body.path : '/';
+      await db.saveFeedback({ found: body.found, comment, path });
       return new Response(null, { status: 204 });
     },
 
@@ -256,7 +272,7 @@ export function createApiHandler(
         return json({ configured: true, error: error.message }, 502);
       }
       const codes = report.choices.filter((row) => row.name === 'park' || row.name === 'click').map((row) => row.value);
-      return json({ configured: true, ...report, parkNames: await db.parkNames(codes) });
+      return json({ configured: true, ...report, parkNames: await db.parkNames(codes), feedback: await db.recentFeedback() });
     }),
 
     // One park's prices per round and weekend for a party size.

@@ -5,6 +5,7 @@ import { toFacilityId } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
 import { partyOf } from '../shared/party.mjs';
 import ActiveFilters from './components/ActiveFilters.vue';
+import FeedbackPrompt from './components/FeedbackPrompt.vue';
 import AlertsDialog from './components/AlertsDialog.vue';
 import AppBar from './components/AppBar.vue';
 import DatePicker from './components/DatePicker.vue';
@@ -215,6 +216,15 @@ for (const key of FILTER_KEYS.filter((key) => key !== 'from' && key !== 'to')) {
 watch(
   () => home.maxDistanceKm,
   (km) => km && track('filter', 'distance', km),
+);
+// A search that leaves no park: which filters were set, so it shows what visitors look for and do not find.
+watch(
+  () => parks.value.length > 0 && visibleParks.value.length === 0,
+  (empty) => {
+    if (!empty) return;
+    const set = FILTER_KEYS.filter((key) => key !== 'from' && key !== 'to' && JSON.stringify(filters[key]) !== JSON.stringify(DEFAULTS[key]));
+    track('empty', 'filters', [...set, home.maxDistanceKm && 'distance', filters.from && 'weekend'].filter(Boolean).join(','));
+  },
 );
 watch(
   () => filters.from,
@@ -539,6 +549,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
   </main>
 
   <footer class="border-t border-line bg-surface">
+    <FeedbackPrompt />
     <p class="mx-auto max-w-7xl px-4 py-6 text-sm text-ink-secondary sm:px-6">
       Parkje weg vergelijkt prijzen van Landal, Topparken en Molecaten. Links naar een aanbieder zijn
       affiliate-links: boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra,
