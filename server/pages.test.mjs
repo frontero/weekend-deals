@@ -90,8 +90,11 @@ const pageAt = (path) => pages.find((page) => page.path === path);
 test('one page per park with something to tell, per weekend, per country, region and theme with three parks, and the lists', () => {
   assert.deepEqual(pages.map((page) => page.path).sort(), [
     '/feestdag/carnaval',
+    '/feestdag/hemelvaart',
     '/feestdag/kerst',
     '/feestdag/oud-en-nieuw',
+    '/feestdag/pasen',
+    '/feestdag/pinksteren',
     '/land/nederland',
     '/last-minute',
     '/park/hoogduin-b',
@@ -101,6 +104,8 @@ test('one page per park with something to tell, per weekend, per country, region
     '/park/valkenburg-heuvelland',
     '/parken',
     '/regio/limburg',
+    '/vakantie/herfstvakantie',
+    '/vakantie/meivakantie',
     '/vakantie/voorjaarsvakantie',
     '/weekend/2026-11-06',
     '/weekend/2026-11-13',
@@ -346,18 +351,26 @@ test('the spring holiday and carnival pages show their weekends, region by regio
   assert.match(at('/weekend/2027-02-05').body, /href="\/feestdag\/carnaval"/);
   assert.doesNotMatch(at('/weekend/2027-02-26').body, /vakantie\/|feestdag\//);
   assert.match(at('/weekenden').body, /href="\/feestdag\/carnaval"/);
-  assert.match(pageAt('/vakantie/voorjaarsvakantie').body, /De weekenden van de voorjaarsvakantie 2027 komen hier zodra we de prijzen ervan ophalen/);
+  assert.match(pageAt('/vakantie/voorjaarsvakantie').body, /De prijzen voor de voorjaarsvakantie 2027 komen hier zodra we ze ophalen/);
 });
 
 test('the rounds collect the stay of each coming holiday: from its eve to the Monday after, three nights at least', () => {
   assert.deepEqual(upcomingHolidayStays('2026-11-18'), [
     { slug: 'kerst', arrival: '2026-12-24', departure: '2026-12-28' },
     { slug: 'oud-en-nieuw', arrival: '2026-12-31', departure: '2027-01-04' },
+    // Easter and Whitsun: from the Friday before to the Tuesday after.
+    { slug: 'pasen', arrival: '2027-03-26', departure: '2027-03-30' },
+    { slug: 'pinksteren', arrival: '2027-05-14', departure: '2027-05-18' },
   ]);
-  assert.deepEqual(upcomingHolidayStays('2027-01-02'), [
+  assert.deepEqual(upcomingHolidayStays('2027-01-02').slice(0, 2), [
     { slug: 'kerst', arrival: '2027-12-24', departure: '2027-12-27' },
     { slug: 'oud-en-nieuw', arrival: '2027-12-31', departure: '2028-01-03' },
   ]);
+  const easterPage = pageAt('/feestdag/pasen');
+  assert.equal(easterPage.title, 'Vakantiepark met Pasen 2027: parken met plek en prijzen');
+  assert.match(easterPage.body, /De prijzen van Goede Vrijdag tot de dinsdag na Pasen \(vr 26 mrt – di 30 mrt, 4 nachten\) komen hier zodra we ze ophalen[^<]*Zo verhuren de meeste parken het met Pasen/);
+  assert.equal(pageAt('/feestdag/hemelvaart').title, 'Vakantiepark met Hemelvaart 2027: parken met plek en prijzen');
+  assert.equal(pageAt('/vakantie/herfstvakantie').title, 'Vakantiepark herfstvakantie 2026: parken met plek en prijzen');
 });
 
 test('areas people search for get a page: Texel by its villages, the Veluwe by where it lies', () => {

@@ -14,6 +14,7 @@ import { facilityGroups } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
 import { OCCASION_ART } from './occasion-art.mjs';
 import { groupKey, HOT_TUB_PARTY, parseGroupKey, partyLabel, PET_PARTY, STANDARD_PARTIES } from '../shared/party.mjs';
+import { easter } from '../shared/occasions.mjs';
 import { shiftDays } from '../shared/weekends.mjs';
 
 // Two adults, the app's own default: the most searched-for weekend away.
@@ -209,7 +210,8 @@ const themePath = (theme) => `/thema/${theme.slug}`;
 /**
  * Holidays people look for a park for ("vakantiepark kerst"): a page each, at an address that stays from year to
  * year, with the stay the parks rent out for the coming one. The rounds collect that stay apart (server/collector.mjs).
- * @property arrival the stay's first day
+ * @property stay the stay for a year: what most parks of all three providers had room for when asked, where the
+ *   ordinary Friday to Monday had far fewer (Christmas and New Year 18-11-2026, Easter and Whitsun 19-11-2026)
  * @property stayName that stay in words
  */
 const HOLIDAYS = [
@@ -220,7 +222,7 @@ const HOLIDAYS = [
     name: 'Kerst',
     heading: 'Vakantiepark met kerst',
     title: (year) => `Vakantiepark met kerst ${year}`,
-    arrival: (year) => `${year}-12-24`,
+    stay: (year) => untilMonday(`${year}-12-24`),
     stayName: 'van kerstavond tot de maandag erna',
     intro: 'Kerst vieren in een huisje op een vakantiepark: samen aan tafel, en overdag een winterwandeling.',
   },
@@ -231,24 +233,48 @@ const HOLIDAYS = [
     name: 'Oud en nieuw',
     heading: 'Oud en nieuw op een vakantiepark',
     title: (year) => `Oud en nieuw ${year} op een vakantiepark`,
-    arrival: (year) => `${year}-12-31`,
+    stay: (year) => untilMonday(`${year}-12-31`),
     stayName: 'van oudejaarsdag tot de maandag erna',
     intro: 'Het nieuwe jaar beginnen op een vakantiepark: met familie of vrienden in een huisje, of juist rustig op een park zonder vuurwerk.',
     theme: 'vuurwerkvrij',
+  },
+  {
+    slug: 'pasen',
+    path: '/feestdag/pasen',
+    emoji: '🐣',
+    name: 'Pasen',
+    word: 'Pasen',
+    heading: 'Vakantiepark met Pasen',
+    title: (year) => `Vakantiepark met Pasen ${year}`,
+    stay: (year) => ({ arrival: shiftDays(easter(year), -2), departure: shiftDays(easter(year), 2) }),
+    stayName: 'van Goede Vrijdag tot de dinsdag na Pasen',
+    intro: 'Een lang paasweekend op een vakantiepark: eieren zoeken met de kinderen, of er met z\'n tweeën even uit.',
+  },
+  {
+    slug: 'pinksteren',
+    path: '/feestdag/pinksteren',
+    emoji: '🌼',
+    name: 'Pinksteren',
+    word: 'Pinksteren',
+    heading: 'Vakantiepark met Pinksteren',
+    title: (year) => `Vakantiepark met Pinksteren ${year}`,
+    stay: (year) => ({ arrival: shiftDays(easter(year), 47), departure: shiftDays(easter(year), 51) }),
+    stayName: 'van de vrijdag voor Pinksteren tot de dinsdag erna',
+    intro: 'Een lang pinksterweekend op een vakantiepark, met tweede pinksterdag als extra vrije dag.',
   },
 ];
 const MONDAY = 1;
 const FRIDAY = 5;
 /**
- * The stay the parks rent out for a holiday: from its arrival day to the Monday after, three nights at least.
- * shortcut: seen for 2026 only (Thursday to Monday at most parks of all three providers, where Friday to Monday had
- * next to none; 18-11-2026), check again once another year's holidays come within the rounds' reach.
+ * From a day to the Monday after, three nights at least: the Christmas and New Year stay.
+ * shortcut: seen for 2026 only, when both begin on a Thursday; check again once another year's come within the
+ * rounds' reach.
  */
-function holidayStay(holiday, year) {
-  const arrival = holiday.arrival(year);
+function untilMonday(arrival) {
   const earliest = shiftDays(arrival, 3);
   return { arrival, departure: shiftDays(earliest, (MONDAY - day(earliest).getUTCDay() + 7) % 7) };
 }
+const holidayStay = (holiday, year) => holiday.stay(year);
 /** The coming holiday's year: this year's until its stay has begun, then next year's. */
 const holidayYear = (holiday, today) => {
   const year = Number(today.slice(0, 4));
@@ -286,9 +312,45 @@ const SEASONS = [
     until: '03-15',
     intro: 'Carnaval vieren in Limburg of Brabant, of er juist even tussenuit naar een rustig park.',
   },
+  {
+    slug: 'meivakantie',
+    path: '/vakantie/meivakantie',
+    emoji: '☀️',
+    name: 'Meivakantie',
+    heading: 'Vakantiepark in de meivakantie',
+    title: (year) => `Vakantiepark meivakantie ${year}`,
+    matches: (label) => label.startsWith('Meivakantie'),
+    until: '05-25',
+    intro: 'Er even tussenuit in de meivakantie: hieronder per weekend welke parken nog plek hebben en wat het kost.',
+  },
+  {
+    slug: 'hemelvaart',
+    path: '/feestdag/hemelvaart',
+    emoji: '🚲',
+    name: 'Hemelvaart',
+    word: 'Hemelvaart',
+    heading: 'Vakantiepark met Hemelvaart',
+    title: (year) => `Vakantiepark met Hemelvaart ${year}`,
+    matches: (label) => label === 'Na Hemelvaart',
+    until: '06-10',
+    intro: 'Hemelvaartsdag valt altijd op donderdag. Met één vrije vrijdag erbij heb je een lang weekend: hieronder het weekend dat erop volgt, van vrijdag tot maandag.',
+  },
+  {
+    slug: 'herfstvakantie',
+    path: '/vakantie/herfstvakantie',
+    emoji: '🍂',
+    name: 'Herfstvakantie',
+    heading: 'Vakantiepark in de herfstvakantie',
+    title: (year) => `Vakantiepark herfstvakantie ${year}`,
+    matches: (label) => label.startsWith('Herfstvakantie'),
+    until: '11-05',
+    intro: 'Uitwaaien in de herfstvakantie. Die valt niet overal in dezelfde week: hieronder per weekend welke regio vrij is en welke parken nog plek hebben.',
+  },
 ];
 const seasonYear = (season, today) => Number(today.slice(0, 4)) + (today.slice(5) > season.until ? 1 : 0);
 
+// A holiday's or season's name inside a sentence: lower case, but for the ones Dutch writes with a capital.
+const inText = (occasion) => occasion.word ?? occasion.name.toLowerCase();
 const holidayChip = (holiday) =>
   html`<a href="${holiday.path}" class="${chip}"><span aria-hidden="true">${holiday.emoji}</span> ${holiday.heading}</a>`;
 
@@ -1288,7 +1350,7 @@ function holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes,
   if (sorted.length) status = `${count(sorted.length, 'vakantiepark heeft', 'vakantieparken hebben')} nog plek ${holiday.stayName} (${when}) voor ${partyLabel(PAGE_PARTY)}, vanaf ${from}.`;
   else if (offers) status = `${capitalised(holiday.stayName)} (${when}) vonden we bij de parken die we volgen geen plek meer voor ${partyLabel(PAGE_PARTY)}.`;
   else status = `De prijzen ${holiday.stayName} (${when}) komen hier zodra we ze ophalen${lastKnown ? `; nu lopen ze tot en met ${formatWeekend(lastKnown)}` : ''}.`;
-  const sentences = [status, !usual && `Zo verhuren de meeste parken het met ${holiday.name.toLowerCase()}, in plaats van een weekend van vrijdag tot maandag.`].filter(Boolean);
+  const sentences = [status, !usual && `Zo verhuren de meeste parken het met ${inText(holiday)}, in plaats van een weekend van vrijdag tot maandag.`].filter(Boolean);
   const more = [
     ...holidays.filter((other) => other !== holiday).map((other) => [other.path, other.emoji, other.heading]),
     theme && themes.includes(theme) && [themePath(theme), themeIcon(theme), theme.name],
@@ -1345,7 +1407,7 @@ function seasonPage(season, { year, matching, lastKnown, pathOf, occasionsOf, ot
   const when = matching.length === 1 ? `nog plek van ${formatWeekend(matching[0].weekend)}` : `plek in ${matching.length} weekenden van vrijdag tot maandag`;
   const status = matching.length
     ? `${count(parkCount, 'vakantiepark heeft', 'vakantieparken hebben')} ${when} voor ${partyLabel(PAGE_PARTY)}, vanaf ${from}.`
-    : `De weekenden van de ${season.name.toLowerCase()} ${year} komen hier zodra we de prijzen ervan ophalen${lastKnown ? `; nu lopen ze tot en met ${formatWeekend(lastKnown)}` : ''}.`;
+    : `De prijzen voor ${season.name.endsWith('vakantie') ? 'de ' : ''}${inText(season)} ${year} komen hier zodra we ze ophalen${lastKnown ? `; nu lopen ze tot en met ${formatWeekend(lastKnown)}` : ''}.`;
   const more = [...others.filter((other) => other !== season).map((other) => [other.path, other.emoji, other.heading]), ['/weekenden', '📅', 'Alle weekenden']];
 
   const body = html`
