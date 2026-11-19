@@ -20,6 +20,7 @@ const routes = [
     meta: { title: 'Prijswijzigingen', filters: false },
   },
   { path: '/beheer/bezoekers', name: 'traffic', component: () => import('./pages/TrafficPage.vue'), meta: { title: 'Bezoekers', filters: false } },
+  { path: '/beheer/seo', name: 'seo', component: () => import('./pages/SeoPage.vue'), meta: { title: 'SEO', filters: false } },
   { path: '/beheer/klikken', name: 'clicks', component: () => import('./pages/ClicksPage.vue'), meta: { title: 'Klikken', filters: false } },
   { path: '/beheer/rondes', name: 'rounds', component: () => import('./pages/RoundsPage.vue'), meta: { title: 'Prijsrondes', filters: false } },
   { path: '/beheer/:rest(.*)*', redirect: '/beheer' },

@@ -10,6 +10,7 @@ import { clampSettings, groupKey } from './settings.mjs';
 import { PROVIDERS } from './providers.mjs';
 import { scanStatus, statusBody } from './status.mjs';
 import { clientEventPoints, countsAsVisit, eventPoint } from './events.mjs';
+import { ISSUE_KINDS } from './seo.mjs';
 import { trafficReport } from './traffic.mjs';
 
 const JSON_TYPE = 'application/json; charset=utf-8';
@@ -274,6 +275,9 @@ export function createApiHandler(
       const codes = report.choices.filter((row) => row.name === 'park' || row.name === 'click').map((row) => row.value);
       return json({ configured: true, ...report, parkNames: await db.parkNames(codes), feedback: await db.recentFeedback() });
     }),
+
+    // What the last check of the public pages found (server/seo.mjs).
+    'GET /admin/seo': forAdmins(async () => json({ audit: await db.seoAudit(), kinds: ISSUE_KINDS })),
 
     // One park's prices per round and weekend for a party size.
     'GET /admin/park': forAdmins(async (request) => {

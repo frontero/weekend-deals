@@ -258,7 +258,7 @@ test('serves a stored page in the site frame, a 404 page, the sitemap and robots
 
 test('the last-minute page shows the coming weekends, the biggest deals first', () => {
   const page = pageAt('/last-minute');
-  assert.equal(page.title, 'Last minute vakantiepark: weekendje weg dit of volgend weekend');
+  assert.equal(page.title, 'Last minute vakantiepark: dit of volgend weekend weg');
   assert.match(page.body, /Eerstvolgende weekend: vr 6 nov – ma 9 nov/);
   assert.match(page.body, /Het weekend daarna: vr 13 nov – ma 16 nov/);
   assert.doesNotMatch(page.body, /4 dec/);
@@ -304,7 +304,7 @@ test('a holiday page lists the stay the parks rent out for it, cheapest first, a
   assert.match(christmas.body, /href="\/feestdag\/oud-en-nieuw"/);
 
   const newYear = at('/feestdag/oud-en-nieuw');
-  assert.equal(newYear.title, 'Oud en nieuw 2026 op een vakantiepark: parken met plek en prijzen');
+  assert.equal(newYear.title, 'Oud en nieuw 2026 op een vakantiepark: parken en prijzen');
   assert.match(newYear.body, /1 vakantiepark heeft nog plek van oudejaarsdag tot de maandag erna \(do 31 dec – ma 4 jan, 4 nachten\)/);
   assert.match(newYear.body, /<\/span>Vuurwerkvrij vakantiepark<\/h2>/, 'the parks without fireworks');
   assert.match(newYear.body, /Prijs gecontroleerd op 18 november[^<]*06:57/, 'when the stay was asked');
@@ -335,7 +335,7 @@ test('a holiday page keeps its address: before its prices are in, when no park h
   assert.equal(pathAt(after, '/feestdag/kerst').title, 'Vakantiepark met kerst 2027: parken met plek en prijzen');
   assert.match(pathAt(after, '/feestdag/kerst').body, /vr 24 dec – ma 27 dec, 3 nachten/);
   assert.doesNotMatch(pathAt(after, '/feestdag/kerst').body, /Zo verhuren/, 'a stay from Friday to Monday is the usual weekend');
-  assert.equal(pathAt(after, '/feestdag/oud-en-nieuw').title, 'Oud en nieuw 2026 op een vakantiepark: parken met plek en prijzen');
+  assert.equal(pathAt(after, '/feestdag/oud-en-nieuw').title, 'Oud en nieuw 2026 op een vakantiepark: parken en prijzen');
 });
 
 test('the spring holiday and carnival pages show their weekends, region by region, and those weekends point to them', () => {
@@ -362,7 +362,7 @@ test('the spring holiday and carnival pages show their weekends, region by regio
   const at = (path) => built.find((page) => page.path === path);
 
   const spring = at('/vakantie/voorjaarsvakantie');
-  assert.equal(spring.title, 'Vakantiepark voorjaarsvakantie 2027: parken met plek en prijzen');
+  assert.equal(spring.title, 'Vakantiepark voorjaarsvakantie 2027: parken en prijzen');
   assert.match(spring.body, /2 vakantieparken hebben plek in 2 weekenden van vrijdag tot maandag voor 2 personen, vanaf €\s330\./);
   assert.match(spring.body, /vr 12 feb – ma 15 feb[^]*>Voorjaarsvakantie Zuid</, 'each weekend says which region is free');
   assert.match(spring.body, /vr 19 feb – ma 22 feb/);
@@ -453,7 +453,7 @@ test("the family theme shows four people's prices and books for four", () => {
     details: { facilitiesOf: (code) => kids.find((park) => park.code === code).facilities, parksOf: (key) => (key === 'a4-c0' ? forFour : null) },
   });
   const page = built.find((entry) => entry.path === '/thema/vakantiepark-met-kinderen');
-  assert.equal(page.title, 'Vakantiepark met kinderen: weekendje weg met de laagste prijzen');
+  assert.equal(page.title, 'Vakantiepark met kinderen: laagste weekendprijzen');
   assert.match(page.body, /€\s520/);
   assert.match(page.body, /vr 6 nov – ma 9 nov · 4 personen/);
   assert.match(page.body, /party=a4-c0/);
@@ -477,7 +477,7 @@ test('the hot tub page shows the hot tub series: its accommodation, price and bo
       details: { facilitiesOf: () => ['bos'], parksOf },
     });
   const page = build((key) => (key === 'a2-c0-f9266.16402' ? withTub : null)).find((entry) => entry.path === '/thema/huisje-met-hottub');
-  assert.equal(page.title, 'Huisje met hottub of jacuzzi: weekendje weg met de laagste prijzen');
+  assert.equal(page.title, 'Huisje met hottub of jacuzzi: laagste weekendprijzen');
   assert.match(page.body, /Wellness Lodge 4/);
   assert.match(page.body, /src="https:\/\/landal.test\/tub.jpg"/);
   assert.match(page.body, /party=a2-c0-f9266.16402/);
@@ -578,4 +578,23 @@ test('a page tells search engines its trail, ending at the page itself', () => {
   assert.deepEqual(items[0], { '@type': 'ListItem', position: 1, name: 'Alle parken', item: 'https://parkjeweg.nl/parken' });
   assert.equal(items.at(-1).item, undefined);
   assert.match(items.at(-1).name, /Gulpen/);
+});
+
+test('the check of the pages finds what search engines stumble over, and nothing on a sound page', async () => {
+  const { auditPages } = await import('./seo.mjs');
+  const text = Array(130).fill('woord').join(' ');
+  const sound = { path: '/parken', title: 'Alle parken', description: 'x'.repeat(100), body: `<h1>Parken</h1><p>${text}</p><a href="/park/a">a</a><img src="a.jpg" alt="Park A" />` };
+  const broken = {
+    path: '/park/a',
+    title: 'Een titel die veel te lang is om nog in een zoekresultaat van Google te passen',
+    description: 'Kort',
+    body: '<h1>A</h1><h1>B</h1><a href="/park/weg">weg</a><a href="/api/go?url=x">boek</a><a href="/zo-werkt-het">hoe</a><img src="b.jpg" /><script type="application/ld+json">{oeps</script>',
+  };
+  const twin = { ...sound, path: '/weekenden' };
+  const audit = auditPages([sound, broken, twin], '2026-11-19T06:00:00.000Z');
+  assert.equal(audit.pages, 3);
+  assert.deepEqual(audit.issues.filter((issue) => issue.path === '/park/a').map((issue) => issue.kind), ['title-long', 'description-short', 'heading-count', 'link-dead', 'data-invalid', 'image-alt', 'thin']);
+  assert.equal(audit.issues.find((issue) => issue.kind === 'link-dead').detail, '/park/weg');
+  assert.deepEqual(audit.counts['title-double'], 2);
+  assert.deepEqual(auditPages([sound, { ...broken, title: 'Park A', description: 'y'.repeat(100), body: `<h1>A</h1><p>${text}</p>` }]).issues, []);
 });

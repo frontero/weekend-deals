@@ -7,6 +7,7 @@ import { weekendOccasions } from '../shared/occasions.mjs';
 import { FEATURE_PARTIES, groupKey } from '../shared/party.mjs';
 import { localToday, shiftDays } from '../shared/weekends.mjs';
 import { buildPages, PAGE_PARTY } from './pages.mjs';
+import { auditPages } from './seo.mjs';
 import { PROVIDERS } from './providers.mjs';
 import { goodWeekendWeather } from './weather.mjs';
 
@@ -145,6 +146,7 @@ export async function refreshOverview(db, { googleEnabled, party }) {
   if (key === groupKey(PAGE_PARTY)) {
     const pages = buildPages({ parks, allParks: await db.parks(), computedAt, details: await pageDetails(db) });
     await db.replacePages(pages, computedAt);
+    await db.saveSeoAudit(auditPages(pages, computedAt));
   }
 }
 

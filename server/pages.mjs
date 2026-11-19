@@ -13,6 +13,7 @@ import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
 import { OCCASION_ART } from './occasion-art.mjs';
+import { DESCRIPTION_MAX, documentTitle, TITLE_MAX } from './seo.mjs';
 import { groupKey, HOT_TUB_PARTY, parseGroupKey, partyLabel, PET_PARTY, STANDARD_PARTIES } from '../shared/party.mjs';
 import { easter } from '../shared/occasions.mjs';
 import { shiftDays } from '../shared/weekends.mjs';
@@ -440,6 +441,19 @@ const checkedLine = (offer) =>
 export const weekendRange = ({ arrival, departure }) => longDate.formatRange(day(arrival), day(departure));
 
 /** "a, b en c" */
+// The longest of a title's wordings that a search result still shows in full; the last one if none does.
+const fitting = (...titles) => titles.find((title) => title.length <= TITLE_MAX) ?? titles.at(-1);
+/** A description cut back to whole sentences that a search result shows in full; as it is when its first is too long. */
+function fittingDescription(description) {
+  if (description.length <= DESCRIPTION_MAX) return description;
+  const sentences = description.match(/[^.?!]+[.?!]+(?=\s|$)\s*/g) ?? [description];
+  let kept = '';
+  for (const sentence of sentences) {
+    if ((kept + sentence).trimEnd().length > DESCRIPTION_MAX) break;
+    kept += sentence;
+  }
+  return kept.trimEnd() || description;
+}
 const joinAnd = (items) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} en ${items.at(-1)}`);
 const count = (number, one, many) => `${number} ${number === 1 ? one : many}`;
 
@@ -1143,7 +1157,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
 
   return {
     path: pathOf(park),
-    title: `${name}: weekendprijzen en aanbiedingen`,
+    title: fitting(`${name}: weekendprijzen en aanbiedingen`, `${name}: prijzen en aanbiedingen`, `${name}: weekendprijzen`, name),
     description: cheapest
       ? `Weekendje weg naar ${name}${place ? ` in ${place}` : ''}? Vanaf ${formatEuros(cheapest.priceCents)} voor ${partyLabel(PAGE_PARTY)} (${formatWeekend(cheapest)}). Zie de prijs van elk weekend, wat er te doen is en of je nu moet boeken.`
       : `${name}${place ? ` in ${place}` : ''}: wat er te doen is op het park en in de omgeving, de huisjes en de weekendprijzen voor ${partyLabel(PAGE_PARTY)}.`,
@@ -1216,7 +1230,7 @@ function weekendPage(weekend, offers, { pathOf, previous, next, updated, themes,
 
   return {
     path: weekendPath(weekend.arrival),
-    title: `Weekendje weg ${range}: vakantieparken met plek`,
+    title: fitting(`Weekendje weg ${range}: vakantieparken met plek`, `Weekendje weg ${range}: parken met plek`),
     description: `${count(offers.length, 'vakantiepark', 'vakantieparken')} van Landal, Topparken en Molecaten met plek van ${formatWeekend(weekend)}, voor ${partyLabel(PAGE_PARTY)} vanaf ${from}.${deals.length > 0 ? ` ${dealCount} minstens ${Math.round(DEAL_SHARE * 100)}% goedkoper dan normaal.` : ''}`,
     image: deals[0]?.park.imageUrl ?? null,
     body: body.text,
@@ -1309,7 +1323,7 @@ function placePage(name, parks, { path, place, emoji, pathOf, surroundings, link
   return {
     path,
     // People search "vakantiepark Zeeland", not "weekendje weg Zeeland" (Google Trends): the title starts with it.
-    title: `Vakantiepark ${name}: alle parken met weekendprijzen`,
+    title: fitting(`Vakantiepark ${name}: alle parken met weekendprijzen`, `Vakantiepark ${name}: parken en weekendprijzen`),
     description: `${parks.length} vakantieparken ${place} met de prijs van elk komend weekend. ${listIntro(parks)[0] ?? ''}`.trim(),
     image: parks.find((park) => park.imageUrl)?.imageUrl ?? null,
     body: body.text,
@@ -1334,7 +1348,7 @@ function themePage(theme, parks, { pathOf, themes, party }) {
     ${bestBar(parks, { source: 'themabalk', party })}`;
   return {
     path: themePath(theme),
-    title: `${theme.name}: weekendje weg met de laagste prijzen`,
+    title: fitting(`${theme.name}: weekendje weg met de laagste prijzen`, `${theme.name}: laagste weekendprijzen`, `${theme.name}: weekendje weg`, theme.name),
     description: `${theme.name}: ${count(parks.length, 'park', 'parken')} met de prijs van elk komend weekend. ${listIntro(parks, party)[0] ?? ''}`.trim(),
     image: parks.find((park) => park.imageUrl)?.imageUrl ?? null,
     body: body.text,
@@ -1377,7 +1391,7 @@ function lastMinutePage(weekends, { pathOf, occasionsOf, parks }) {
   const [first] = soon;
   return {
     path: '/last-minute',
-    title: 'Last minute vakantiepark: weekendje weg dit of volgend weekend',
+    title: 'Last minute vakantiepark: dit of volgend weekend weg',
     description: first
       ? `Last minute een weekendje weg: ${first.offers.length} vakantieparken met plek van ${formatWeekend(first.weekend)}, vanaf ${formatEuros(cheapestOf(first.offers.map((offer) => offer.weekend)).priceCents)} voor ${partyLabel(PAGE_PARTY)}.`
       : 'Last minute een weekendje weg: de vakantieparken die de komende weekenden nog plek hebben.',
@@ -1442,10 +1456,10 @@ function holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes,
     ${bestBar(asParks, { source: 'feestdagbalk' })}`;
   return {
     path: holiday.path,
-    title: `${holiday.title(year)}: parken met plek en prijzen`,
+    title: fitting(`${holiday.title(year)}: parken met plek en prijzen`, `${holiday.title(year)}: parken en prijzen`),
     description: sorted.length
-      ? `${name} op een vakantiepark: bij ${count(sorted.length, 'park', 'parken')} van Landal, Topparken en Molecaten is nog plek ${holiday.stayName} (${formatWeekend(period)}), voor ${partyLabel(PAGE_PARTY)} vanaf ${from}.`
-      : `${name} op een vakantiepark: welke parken van Landal, Topparken en Molecaten nog plek hebben ${holiday.stayName} (${formatWeekend(period)}), en wat het kost.`,
+      ? `${name} op een vakantiepark: ${count(sorted.length, 'park', 'parken')} met plek ${holiday.stayName}, voor ${partyLabel(PAGE_PARTY)} vanaf ${from}.`
+      : `${name} op een vakantiepark: welke parken nog plek hebben ${holiday.stayName}, en wat het kost.`,
     image: bestOf(asParks)?.imageUrl ?? null,
     body: body.text,
   };
@@ -1490,11 +1504,11 @@ function seasonPage(season, { year, matching, long, lastKnown, pathOf, occasions
     ${bestBar(offers.map(({ park, weekend }) => ({ ...park, weekends: [weekend] })), { source: 'vakantiebalk' })}`;
   return {
     path: season.path,
-    title: `${season.title(year)}: parken met plek en prijzen`,
+    title: fitting(`${season.title(year)}: parken met plek en prijzen`, `${season.title(year)}: parken en prijzen`),
     description: matching.length
       ? `${name} op een vakantiepark: ${count(matching.length, 'weekend', 'weekenden')} met plek bij ${count(parkCount, 'park', 'parken')} van Landal, Topparken en Molecaten, voor ${partyLabel(PAGE_PARTY)} vanaf ${from}.`
       : longOffers.length
-        ? `${name} op een vakantiepark: bij ${count(longOffers.length, 'park', 'parken')} van Landal, Topparken en Molecaten is nog plek ${season.stayName} (${formatWeekend(long.period)}), voor ${partyLabel(PAGE_PARTY)} vanaf ${formatEuros(longOffers[0].weekend.priceCents)}.`
+        ? `${name} op een vakantiepark: ${count(longOffers.length, 'park', 'parken')} met plek ${season.stayName}, voor ${partyLabel(PAGE_PARTY)} vanaf ${formatEuros(longOffers[0].weekend.priceCents)}.`
         : `${name} op een vakantiepark: welke parken van Landal, Topparken en Molecaten nog plek hebben, en wat een weekend kost.`,
     image: bestOf(offers.map(({ park, weekend }) => ({ ...park, weekends: [weekend] })))?.imageUrl ?? null,
     body: body.text,
@@ -1525,7 +1539,7 @@ function parksIndex(parks, { pathOf, regions, themes, countries: countryPages, h
     ${bestBar(parks, { source: 'overzichtbalk' })}`;
   return {
     path: '/parken',
-    title: 'Alle vakantieparken: weekendprijzen bij Landal, Topparken en Molecaten',
+    title: 'Alle vakantieparken van Landal, Topparken en Molecaten',
     description: `${parks.length} vakantieparken in Nederland en daarbuiten, per land, regio en thema, elk met de laagste prijs voor een weekendje weg en de prijs van elk komend weekend.`,
     image: null,
     body: body.text,
@@ -1757,7 +1771,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
       }),
     ),
     ...themes.map(([theme, list]) => themePage(theme, list, { pathOf, themes: themePages, party: partyOf(theme.party) })),
-  ];
+  ].map((page) => ({ ...page, description: fittingDescription(page.description) }));
 }
 
 const UNAVAILABLE = {
@@ -1898,7 +1912,7 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>${title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`}</title>
+    <title>${documentTitle(title)}</title>
     <meta name="description" content="${description}" />
     <link rel="canonical" href="${url}" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />

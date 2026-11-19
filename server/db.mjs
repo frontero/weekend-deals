@@ -686,6 +686,15 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       await writeSetting('schoolHolidays', JSON.stringify({ holidays, fetchedAt }));
     },
 
+    /** The last check of the public pages (server/seo.mjs), or null before the first. */
+    async seoAudit() {
+      return parseJson(await readSetting('seoAudit'), null);
+    },
+
+    async saveSeoAudit(audit) {
+      await writeSetting('seoAudit', JSON.stringify(audit));
+    },
+
     /** The holiday stays' prices of the last round (see fetchHolidayStays): [{ slug, arrival, departure, offers }]. */
     async holidayStays() {
       return parseJson(await readSetting('holidayStays'), []);

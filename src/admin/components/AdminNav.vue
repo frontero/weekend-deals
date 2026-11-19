@@ -13,6 +13,7 @@ const { admin } = useAdmin();
 const ITEMS = [
   { name: 'dashboard', to: '/beheer', label: 'Dashboard', icon: 'dashboard' },
   { name: 'traffic', to: '/beheer/bezoekers', label: 'Bezoekers', icon: 'users' },
+  { name: 'seo', to: '/beheer/seo', label: 'SEO', icon: 'search' },
   { name: 'clicks', to: '/beheer/klikken', label: 'Klikken', icon: 'external' },
   { name: 'parks', to: '/beheer/parken', label: 'Parken', icon: 'pin' },
   { name: 'weekends', to: '/beheer/weekenden', label: 'Weekenden', icon: 'calendar' },
