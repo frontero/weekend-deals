@@ -6,7 +6,7 @@ import { analyticsQuery } from '../server/traffic.mjs';
 import { parseAffiliateLinks } from '../server/affiliate.mjs';
 import { isAdminEmail, verifyAccess } from './access.mjs';
 import { startWorkflows } from './clock.mjs';
-import { isPagePath, servePage, serveUnavailable } from '../server/pages.mjs';
+import { addressKind, isPagePath, servePage, serveNotFound, serveUnavailable } from '../server/pages.mjs';
 
 // Routes where each call costs something: a provider's or Google's quota, a message sent, or database rows. RATE_LIMITER
 // in wrangler.jsonc caps them per visitor.
@@ -40,7 +40,13 @@ export default {
   async fetch(request, env, context) {
     const { pathname } = new URL(request.url);
     const page = isPagePath(pathname);
-    if (!page && !pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
+    if (!page && !pathname.startsWith('/api/')) {
+      // No file of the built app has this address (those are served before this Worker runs).
+      const kind = addressKind(pathname);
+      if (kind === 'app') return env.ASSETS.fetch(new URL('/', request.url));
+      if (kind.redirect) return Response.redirect(new URL(`${kind.redirect}${new URL(request.url).search}`, request.url), 301);
+      return serveNotFound(request, { stylesheet: await appStylesheet(env, request) });
+    }
     const route = `${request.method} ${pathname}`;
     const limiter = route === EVENTS_ROUTE ? env.EVENT_LIMITER : LIMITED.has(route) ? env.RATE_LIMITER : null;
     if (limiter) {

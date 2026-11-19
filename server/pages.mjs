@@ -2036,6 +2036,24 @@ export async function servePage(db, request, { stylesheet }) {
   });
 }
 
+/**
+ * What an address is that no file of the built app answers: the app itself (its admin pages live under /beheer), a
+ * page's address with a slash too many, which goes to the page, or nothing at all.
+ * @returns 'app', { redirect: path } or 'missing'
+ */
+export function addressKind(pathname) {
+  if (pathname === '/' || pathname === '/beheer' || pathname.startsWith('/beheer/')) return 'app';
+  const bare = pathname.replace(/\/+$/, '');
+  if (bare !== pathname && (bare === '' || isPagePath(bare))) return { redirect: bare || '/' };
+  return 'missing';
+}
+
+/** The not-found page with its own status, so an address that never existed is not taken for a copy of the search page. */
+export function serveNotFound(request, { stylesheet }) {
+  const { origin, pathname } = new URL(request.url);
+  return new Response(pageDocument(NOT_FOUND, { url: `${origin}${pathname}`, stylesheet }), { status: 404, headers: headers('text/html') });
+}
+
 /** A short page instead of an error when the database is out of reach; 503 tells search engines to come back later. */
 export function serveUnavailable(request, { stylesheet }) {
   const { origin, pathname } = new URL(request.url);

@@ -8,7 +8,9 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
+    // An address without a file comes to the Worker, which serves the app under /beheer and a real 404 elsewhere:
+    // with "single-page-application" every mistyped address showed the search page as if it existed.
+    "not_found_handling": "none",
     // The API, and the park, weekend, region and theme pages with their sitemap (server/pages.mjs).
     "run_worker_first": ["/api/*", "/park/*", "/parken", "/weekend/*", "/weekenden", "/regio/*", "/thema/*", "/land/*", "/feestdag/*", "/vakantie/*", "/last-minute", "/privacy", "/zo-werkt-het", "/sitemap.xml", "/robots.txt"]
   },

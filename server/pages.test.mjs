@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildPages, isPagePath, servePage, serveUnavailable, upcomingHolidayStays, upcomingOccasionLinks } from './pages.mjs';
+import { addressKind, buildPages, isPagePath, serveNotFound, servePage, serveUnavailable, upcomingHolidayStays, upcomingOccasionLinks } from './pages.mjs';
 
 const weekend = (arrival, departure, priceCents, discount, extra = {}) => ({
   arrival,
@@ -612,4 +612,17 @@ test('the app points to the holidays and seasons that come first', () => {
     { path: '/feestdag/pinksteren', emoji: '🌼', label: 'Pinksteren' },
     { path: '/vakantie/meivakantie', emoji: '☀️', label: 'Meivakantie' },
   ]);
+});
+
+test('an address without a file is the app, a page with a slash too many, or not found with a status of its own', async () => {
+  assert.equal(addressKind('/'), 'app');
+  assert.equal(addressKind('/beheer/seo'), 'app');
+  assert.deepEqual(addressKind('/weekenden/'), { redirect: '/weekenden' });
+  assert.deepEqual(addressKind('/park/vakantiepark-gulpen//'), { redirect: '/park/vakantiepark-gulpen' });
+  assert.equal(addressKind('/bestaat-niet'), 'missing');
+  assert.equal(addressKind('/bestaat-niet/'), 'missing');
+  assert.equal(addressKind('/beheerder'), 'missing');
+  const response = serveNotFound(new Request('https://parkjeweg.nl/bestaat-niet'), { stylesheet: '/assets/index.css' });
+  assert.equal(response.status, 404);
+  assert.match(await response.text(), /Deze pagina bestaat niet/);
 });

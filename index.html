@@ -8,6 +8,8 @@
       name="description"
       content="Weekenden weg (vrijdag tot maandag) die duidelijk onder de normale prijs van het park zitten, met prijsgeschiedenis en boekadvies: nu boeken of wachten?"
     />
+    <!-- The search page has one address: a link with a weekend or a search in it shows the same page. -->
+    <link rel="canonical" href="https://parkjeweg.nl/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#fffaf0" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0e1b29" media="(prefers-color-scheme: dark)" />
@@ -38,7 +40,24 @@
     </script>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <!-- What a crawler or a browser without JavaScript reads; the app takes its place as soon as it starts. -->
+      <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        <h1 class="text-2xl font-black tracking-tight sm:text-4xl">Buitenkansjes voor een weekendje weg</h1>
+        <p class="mt-2 max-w-2xl text-sm font-semibold text-ink-secondary sm:text-base">
+          Parkje weg vergelijkt wat een weekend (vrijdag tot maandag) kost bij de vakantieparken van Landal, Topparken
+          en Molecaten, en laat zien welke weekenden duidelijk onder de normale prijs van het park zitten. Je ziet de
+          echte prijs per weekend, zoals wij die bij de aanbieder zagen.
+        </p>
+        <ul class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm font-bold text-accent">
+          <li><a href="/last-minute">Last minute: de komende weekenden</a></li>
+          <li><a href="/weekenden">Alle weekenden met prijzen</a></li>
+          <li><a href="/parken">Alle vakantieparken, per land, regio en thema</a></li>
+          <li><a href="/zo-werkt-het">Zo werkt het</a></li>
+          <li><a href="/privacy">Privacy</a></li>
+        </ul>
+      </main>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
