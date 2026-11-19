@@ -96,6 +96,13 @@ const minDiscount = computed(() => Math.max(filters.minDiscountPercent, 1) / 100
 const discountLabel = computed(() =>
   filters.minDiscountPercent ? `${filters.minDiscountPercent}%+ onder normaal` : 'Alle prijzen',
 );
+// The pages next to this one (server/pages.mjs): the coming holidays first, as the last overview named them.
+const pageLinks = computed(() => [
+  { path: '/last-minute', emoji: '⏰', label: 'Last minute' },
+  ...(overview.value?.occasionLinks ?? []),
+  { path: '/weekenden', emoji: '📅', label: 'Alle weekenden' },
+  { path: '/parken', emoji: '🏕️', label: 'Alle parken' },
+]);
 const weekendParks = computed(() => withinDates(parks.value, filters.from, filters.to));
 const visibleParks = computed(() => filterParks(weekendParks.value, parkFilters.value));
 // Also what a price alert on this search watches for.
@@ -298,11 +305,25 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
           <span class="inline-block -rotate-1 rounded-3xl bg-sun px-2 text-on-sun">weekendje weg</span>
         </h1>
         <p class="mt-2 max-w-2xl text-sm font-semibold text-ink-secondary sm:text-base">
-          Weekenden (vrijdag tot maandag) bij Landal, Topparken en Molecaten die duidelijk onder de normale prijs van
-          het park zitten. Je ziet de echte prijs per weekend, zoals wij die bij de aanbieder zagen: geen "tot 40%
-          korting".
+          <span class="sm:hidden">Echte weekendprijzen bij Landal, Topparken en Molecaten.{{ ' ' }}</span>
+          <span class="hidden sm:inline">
+            Weekenden (vrijdag tot maandag) bij Landal, Topparken en Molecaten die duidelijk onder de normale prijs van
+            het park zitten. Je ziet de echte prijs per weekend, zoals wij die bij de aanbieder zagen: geen "tot 40%
+            korting".
+            {{ ' ' }}
+          </span>
           <a href="/zo-werkt-het" class="font-bold text-accent hover:underline">Zo werkt het</a>
         </p>
+        <nav aria-label="Meer manieren om te zoeken" class="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 text-sm sm:mx-0 sm:flex-wrap sm:px-0">
+          <a
+            v-for="item in pageLinks"
+            :key="item.path"
+            :href="item.path"
+            class="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-surface px-3 py-1.5 font-bold ring-1 ring-line transition hover:ring-accent"
+          >
+            <span aria-hidden="true">{{ item.emoji }}</span>{{ item.label }}
+          </a>
+        </nav>
       </div>
       <WeekendStrip
         v-if="strip.length"
@@ -365,7 +386,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
 
       <div class="flex min-w-0 flex-col gap-4">
         <div class="flex flex-wrap items-center gap-3">
-          <h2 class="text-2xl font-black" aria-live="polite">
+          <h2 class="text-xl font-black sm:text-2xl" aria-live="polite">
             <template v-if="overview">
               {{ cards.length }} {{ cards.length === 1 ? 'park' : 'parken' }}
               <template v-if="filters.minDiscountPercent">met een buitenkansje</template>
@@ -373,7 +394,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
             <template v-else>Vakantieparken</template>
             <span v-if="periodLabel" class="font-normal text-ink-secondary">· {{ periodLabel }}</span>
           </h2>
-          <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+          <div class="ml-auto flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
             <div class="flex rounded-lg bg-surface p-0.5 text-sm font-medium ring-1 ring-line" role="group" aria-label="Weergave">
               <button
                 v-for="option in [{ value: 'cards', label: 'Lijst', icon: 'dashboard' }, { value: 'map', label: 'Kaart', icon: 'pin' }]"
@@ -409,7 +430,7 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
             </button>
             <label class="flex items-center gap-2 text-sm">
               <span class="sr-only text-ink-secondary sm:not-sr-only">Sorteer op</span>
-              <select v-model="filters.sort" class="rounded-lg bg-surface px-3 py-2 font-medium ring-1 ring-field hover:ring-ink-secondary">
+              <select v-model="filters.sort" class="w-[7.5rem] rounded-lg bg-surface px-3 py-2 font-medium ring-1 ring-field hover:ring-ink-secondary sm:w-auto">
                 <option v-for="option in sortOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
               </select>
             </label>

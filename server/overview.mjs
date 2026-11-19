@@ -6,7 +6,7 @@ import { accommodationGroups, facilityGroups, parkFacilities } from '../shared/f
 import { weekendOccasions } from '../shared/occasions.mjs';
 import { FEATURE_PARTIES, groupKey } from '../shared/party.mjs';
 import { localToday, shiftDays } from '../shared/weekends.mjs';
-import { buildPages, PAGE_PARTY } from './pages.mjs';
+import { buildPages, PAGE_PARTY, upcomingOccasionLinks } from './pages.mjs';
 import { auditPages } from './seo.mjs';
 import { PROVIDERS } from './providers.mjs';
 import { goodWeekendWeather } from './weather.mjs';
@@ -90,6 +90,8 @@ export async function buildOverview(db, { googleEnabled, party }) {
       lastScan: await db.lastScan(key),
       // Parks visitors clicked through to most this week, most first.
       popular: [...popular.keys()],
+      // The holiday and season pages that come first, for the links under the app's title.
+      occasionLinks: upcomingOccasionLinks(today),
       // Per weekend what makes it special: a long weekend, Valentine's Day, the school holidays.
       occasions: Object.fromEntries(
         arrivals.map((weekend) => [weekend.arrival, weekendOccasions(weekend, holidays)]).filter(([, list]) => list.length),

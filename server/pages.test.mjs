@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildPages, isPagePath, servePage, serveUnavailable, upcomingHolidayStays } from './pages.mjs';
+import { buildPages, isPagePath, servePage, serveUnavailable, upcomingHolidayStays, upcomingOccasionLinks } from './pages.mjs';
 
 const weekend = (arrival, departure, priceCents, discount, extra = {}) => ({
   arrival,
@@ -604,4 +604,12 @@ test('the check of the pages finds what search engines stumble over, and nothing
   assert.equal(audit.issues.find((issue) => issue.kind === 'link-dead').detail, '/park/weg');
   assert.deepEqual(audit.counts['title-double'], 2);
   assert.deepEqual(auditPages([sound, { ...broken, title: 'Park A', description: 'y'.repeat(100), body: `<h1>A</h1><p>${text}</p>` }]).issues, []);
+});
+
+test('the app points to the holidays and seasons that come first', () => {
+  assert.deepEqual(upcomingOccasionLinks('2026-11-19').map((link) => link.path), ['/feestdag/kerst', '/feestdag/oud-en-nieuw', '/vakantie/kerstvakantie', '/vakantie/voorjaarsvakantie']);
+  assert.deepEqual(upcomingOccasionLinks('2027-04-01', 2), [
+    { path: '/feestdag/pinksteren', emoji: '🌼', label: 'Pinksteren' },
+    { path: '/vakantie/meivakantie', emoji: '☀️', label: 'Meivakantie' },
+  ]);
 });

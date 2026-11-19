@@ -381,6 +381,18 @@ const seasonYear = (season, today) => Number(today.slice(0, 4)) + (today.slice(5
 
 // A holiday's or season's name inside a sentence: lower case, but for the ones Dutch writes with a capital.
 const inText = (occasion) => occasion.word ?? occasion.name.toLowerCase();
+/** The holidays and seasons that come first, for the app to point to under its title: [{ path, emoji, label }]. */
+export function upcomingOccasionLinks(today, limit = 4) {
+  const dated = [
+    ...HOLIDAYS.map((holiday) => [holidayStay(holiday, holidayYear(holiday, today)).arrival, holiday]),
+    ...SEASONS.map((season) => [`${seasonYear(season, today)}-${season.until}`, season]),
+  ];
+  return dated
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, limit)
+    .map(([, occasion]) => ({ path: occasion.path, emoji: occasion.emoji, label: occasion.name }));
+}
+
 const holidayChip = (holiday) =>
   html`<a href="${holiday.path}" class="${chip}"><span aria-hidden="true">${holiday.emoji}</span> ${holiday.heading}</a>`;
 
