@@ -63,6 +63,28 @@ const ACTIONS = {
   'error:js2': 'Tweede fout in de browser',
   'error:js3': 'Derde fout in de browser',
 };
+const LANDINGS = {
+  home: 'Zoekpagina',
+  park: 'Parkpagina',
+  parken: 'Alle parken',
+  weekend: 'Weekendpagina',
+  weekenden: 'Alle weekenden',
+  regio: 'Regiopagina',
+  thema: 'Themapagina',
+  land: 'Landpagina',
+  feestdag: 'Feestdagpagina',
+  vakantie: 'Vakantiepagina',
+  'last-minute': 'Last minute',
+  'zo-werkt-het': 'Zo werkt het',
+  privacy: 'Privacy',
+  other: 'Andere pagina',
+  onbekend: 'Onbekend',
+};
+const percent = (part, whole) => (whole ? `${Math.round((part / whole) * 100)}%` : '–');
+const conversionRows = (rows, label) => rows.map((row) => ({ cells: [label(row), count(row.visitors), count(row.parkVisitors), count(row.clickers), percent(row.clickers, row.visitors)] }));
+// What the clicks could bring in: both shares are guesses the admin can change, never figures of the site's own.
+const bookingPercent = ref(5);
+const feePercent = ref(5);
 const SPEEDS = { load: 'Pagina geladen', paint: 'Grootste beeld in beeld' };
 const seconds = (milliseconds) => `${(milliseconds / 1000).toLocaleString('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
 const filterNames = (value) => value.split(',').map((key) => (ACTIONS[`filter:${key}`] ?? key).replace(/^Filter /, '')).join(', ');
@@ -217,6 +239,11 @@ const visitorLine = (visitor) =>
     .filter(Boolean)
     .join(' · ');
 
+const clickValue = computed(() => {
+  const rows = report.value?.clickValue ?? [];
+  const euros = rows.reduce((sum, row) => sum + row.euros, 0);
+  return { rows, euros, clicks: rows.reduce((sum, row) => sum + row.clicks, 0), estimate: euros * (bookingPercent.value / 100) * (feePercent.value / 100) };
+});
 const tables = computed(() => [
   {
     id: 'days',
@@ -249,6 +276,18 @@ const tables = computed(() => [
     title: 'Parken: bekeken en doorgeklikt',
     columns: ['Park', 'Bekeken', 'Doorgeklikt'],
     rows: parks.value.map((park) => ({ cells: [park.name, count(park.opened), count(park.clicked)], to: park.to })),
+  },
+  {
+    id: 'by-source',
+    title: 'Welke bron klikt door',
+    columns: ['Bron van het eerste bezoek', 'Bezoekers', 'Bekeek een park', 'Klikte door', 'Aandeel'],
+    rows: conversionRows(report.value?.bySource ?? [], (row) => SOURCES[row.source] ?? row.source),
+  },
+  {
+    id: 'by-landing',
+    title: 'Welke pagina werkt als binnenkomer',
+    columns: ['Eerste pagina van het bezoek', 'Bezoekers', 'Bekeek een park', 'Klikte door', 'Aandeel'],
+    rows: conversionRows(report.value?.byLanding ?? [], (row) => LANDINGS[row.kind] ?? row.kind),
   },
   {
     id: 'empty',
@@ -389,6 +428,34 @@ const tables = computed(() => [
         </table>
       </section>
     </div>
+
+    <section class="rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="click-value-title">
+      <h2 id="click-value-title" class="border-b border-line px-4 py-3 font-semibold sm:px-5">Waarop geklikt is, in euro's</h2>
+      <p v-if="!clickValue.clicks" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">
+        Nog geen doorklik met een prijs geteld. De prijs wordt sinds 19 november bij elke doorklik bewaard.
+      </p>
+      <div v-else class="flex flex-col gap-3 px-4 py-3 text-sm sm:px-5">
+        <p>
+          <span class="text-2xl font-black tabular-nums">{{ formatEuros(clickValue.euros * 100) }}</span>
+          <span class="text-ink-secondary"> aan weekenden waar bezoekers voor doorklikten, in {{ count(clickValue.clicks) }} {{ clickValue.clicks === 1 ? 'klik' : 'klikken' }}.</span>
+        </p>
+        <p class="flex flex-wrap items-center gap-2">
+          Als
+          <input v-model.number="bookingPercent" type="number" min="0" max="100" step="1" aria-label="Aandeel klikken dat boekt, in procenten" class="h-8 w-16 rounded-lg bg-plane px-2 ring-1 ring-field" />
+          % van de klikken een boeking wordt en de aanbieder
+          <input v-model.number="feePercent" type="number" min="0" max="100" step="0.5" aria-label="Vergoeding van de aanbieder, in procenten" class="h-8 w-16 rounded-lg bg-plane px-2 ring-1 ring-field" />
+          % betaalt, is dat ongeveer <strong class="tabular-nums">{{ formatEuros(clickValue.estimate * 100) }}</strong>.
+        </p>
+        <p class="text-xs text-ink-secondary">Een schatting: beide percentages zijn aannames die je zelf invult. Wat een klik echt opleverde, staat straks bij het affiliate-netwerk.</p>
+        <ul class="divide-y divide-line tabular-nums">
+          <li v-for="row in [...clickValue.rows].reverse()" :key="row.day" class="flex justify-between gap-4 py-1.5">
+            <span>{{ formatShortDate(row.day) }}</span>
+            <span class="text-ink-secondary">{{ count(row.clicks) }} {{ row.clicks === 1 ? 'klik' : 'klikken' }}</span>
+            <span class="font-semibold">{{ formatEuros(row.euros * 100) }}</span>
+          </li>
+        </ul>
+      </div>
+    </section>
 
     <section v-if="opened" ref="daySection" class="scroll-mt-4 rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="day-title">
       <header class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3 sm:px-5">

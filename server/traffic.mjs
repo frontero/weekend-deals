@@ -6,6 +6,25 @@ import { EVENTS_DATASET } from './events.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+const MAX_ROWS = 10000;
+
+/** Per visitor and day (`day|visitor`) the first page they opened: its kind, and the source it was reached from. */
+function arrivalsOf(views) {
+  const arrivals = new Map();
+  for (const { timestamp, visitor, kind, source } of views) {
+    const key = `${String(timestamp).slice(0, 10)}|${visitor}`;
+    if (!arrivals.has(key)) arrivals.set(key, { kind: kind || 'other', source: source && source !== 'intern' ? source : 'direct' });
+  }
+  return arrivals;
+}
+
+/** Per value of a field (a source, a kind of landing page): how many visitors, how many opened a park, how many clicked through. */
+function conversion(days, field) {
+  return [...Map.groupBy(days, (row) => row[field])]
+    .map(([value, rows]) => ({ [field]: value, visitors: rows.length, parkVisitors: rows.filter((row) => row.parks > 0).length, clickers: rows.filter((row) => row.clicks > 0).length }))
+    .sort((a, b) => b.visitors - a.visitors);
+}
+
 const numbers = (rows, fields) => rows.map((row) => ({ ...row, ...Object.fromEntries(fields.map((field) => [field, Number(row[field]) || 0])) }));
 
 /**
@@ -39,18 +58,35 @@ export async function trafficReport(query, { days, now = Date.now() }) {
   ]);
   // Later additions, each on its own: one that Analytics Engine refuses leaves the rest of the page standing.
   const optional = (sql) => query(sql).catch(() => []);
-  const [speed, clickDiscounts, clickWeeks] = await Promise.all([
+  const [speed, clickDiscounts, clickWeeks, views, visitorDays] = await Promise.all([
     optional(`SELECT blob2 AS key, blob6 AS device, sum(_sample_interval) AS times, sum(double1 * _sample_interval) AS total ${from} AND blob1 = 'speed'
       GROUP BY key, device ORDER BY key, device`),
     optional(`SELECT floor(double2 / 10) * 10 AS discount, sum(_sample_interval) AS clicks, sum(double1 * _sample_interval) AS euros ${from} AND blob1 = 'click' AND double1 > 0
       GROUP BY discount ORDER BY discount`),
     optional(`SELECT double3 AS weeks, sum(_sample_interval) AS clicks ${from} AND blob1 = 'click' AND double1 > 0 GROUP BY weeks ORDER BY weeks`),
+    // Every page opened, in order: a visitor's first of the day tells where they came from and where they landed.
+    optional(`SELECT timestamp, index1 AS visitor, blob2 AS kind, blob5 AS source ${from} AND blob1 = 'view' ORDER BY timestamp LIMIT ${MAX_ROWS}`),
+    // Per visitor and day: did they open a park, did they click through, and for what price.
+    optional(`SELECT formatDateTime(timestamp, '%Y-%m-%d') AS day, index1 AS visitor,
+        countIf(blob1 = 'park' OR (blob1 = 'view' AND blob2 = 'park')) AS parks,
+        countIf(blob1 = 'click') AS clicks,
+        countIf(blob1 = 'click' AND double1 > 0) AS priced,
+        sumIf(double1, blob1 = 'click') AS euros
+      ${from} GROUP BY day, visitor LIMIT ${MAX_ROWS}`),
   ]);
+  const arrivals = arrivalsOf(views);
+  const visits = numbers(visitorDays, ['parks', 'clicks', 'priced', 'euros']).map((row) => ({ ...row, ...(arrivals.get(`${row.day}|${row.visitor}`) ?? { source: 'onbekend', kind: 'onbekend' }) }));
   return {
     since,
     speed: numbers(speed, ['times', 'total']),
     clickDiscounts: numbers(clickDiscounts, ['discount', 'clicks', 'euros']),
     clickWeeks: numbers(clickWeeks, ['weeks', 'clicks']),
+    bySource: conversion(visits, 'source'),
+    byLanding: conversion(visits, 'kind'),
+    // Per day the clicks that carried a price, and those prices added up: what visitors were about to spend.
+    clickValue: [...Map.groupBy(visits.filter((row) => row.priced), (row) => row.day)]
+      .map(([day, rows]) => ({ day, clicks: rows.reduce((sum, row) => sum + row.priced, 0), euros: rows.reduce((sum, row) => sum + row.euros, 0) }))
+      .sort((a, b) => a.day.localeCompare(b.day)),
     days: numbers(daily, ['visitors', 'views', 'clicks', 'parkVisitors', 'clickers']),
     sources: numbers(sources, ['visitors']),
     pages: numbers(pages, ['views', 'visitors']),

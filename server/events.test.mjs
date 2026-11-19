@@ -136,7 +136,7 @@ test('the admin traffic report says when it cannot read, and names the parks it 
   assert.equal(report.configured, true);
   assert.deepEqual(report.days, [{ day: '2026-11-18', visitors: 10, views: 25, clicks: 3, parkVisitors: 6, clickers: 2 }]);
   assert.deepEqual(report.parkNames, { HOT: 'Hof van Saksen' });
-  assert.equal(statements.length, 10);
+  assert.equal(statements.length, 12);
   assert.ok(statements.every((sql) => sql.includes(`FROM parkjeweg_events WHERE timestamp >= toDateTime('${report.since} 00:00:00')`)));
 
   const failing = createApiHandler(db, { ...admin, queryEvents: async () => Promise.reject(new Error('Analytics Engine answered 422: unknown table')) });
@@ -195,6 +195,34 @@ test('a day shows what each visitor did, in order, the busiest visitor first', a
   assert.match(statements[0], /timestamp >= toDateTime\('2026-11-19 00:00:00'\) AND timestamp < toDateTime\('2026-11-20 00:00:00'\)/);
   assert.equal((await handle(request("/api/admin/traffic/day?day=2026-11-19'%20OR%201=1"))).status, 400, 'only a date gets into the query');
   db.close();
+});
+
+test('the report tells per source and per landing page who clicked through, and what the clicks were worth', async () => {
+  const query = async (sql) => {
+    if (sql.includes('blob2 AS kind, blob5 AS source')) {
+      return [
+        { timestamp: '2026-11-18 08:00:00', visitor: 'aaaa', kind: 'feestdag', source: 'google' },
+        { timestamp: '2026-11-18 08:01:00', visitor: 'aaaa', kind: 'home', source: 'intern' },
+        { timestamp: '2026-11-18 09:00:00', visitor: 'bbbb', kind: 'home', source: 'direct' },
+        { timestamp: '2026-11-18 10:00:00', visitor: 'cccc', kind: 'park', source: 'google' },
+      ];
+    }
+    if (sql.includes('AS priced')) {
+      return [
+        { day: '2026-11-18', visitor: 'aaaa', parks: '2', clicks: '1', priced: '1', euros: '284' },
+        { day: '2026-11-18', visitor: 'bbbb', parks: '0', clicks: '0', priced: '0', euros: '0' },
+        { day: '2026-11-18', visitor: 'cccc', parks: '1', clicks: '0', priced: '0', euros: '0' },
+      ];
+    }
+    return [];
+  };
+  const report = await trafficReport(query, { days: 7, now: Date.parse('2026-11-18T12:00:00Z') });
+  assert.deepEqual(report.bySource, [
+    { source: 'google', visitors: 2, parkVisitors: 2, clickers: 1 },
+    { source: 'direct', visitors: 1, parkVisitors: 0, clickers: 0 },
+  ]);
+  assert.deepEqual(report.byLanding.map((row) => [row.kind, row.visitors, row.clickers]), [['feestdag', 1, 1], ['home', 1, 0], ['park', 1, 0]]);
+  assert.deepEqual(report.clickValue, [{ day: '2026-11-18', clicks: 1, euros: 284 }]);
 });
 
 test('the report starts at the first day of the period', async () => {
