@@ -16,6 +16,7 @@ import { activeProviders, PROVIDERS, providerBrand } from './providers.mjs';
 import { roundInProgress } from './status.mjs';
 import { fetchSurroundings } from './surroundings.mjs';
 import { fetchSchoolHolidays } from './holidays.mjs';
+import { updatePageSpeed } from './pagespeed.mjs';
 import { serviceAccount, updateSearchConsole } from './search-console.mjs';
 import { fetchForecast } from './weather.mjs';
 
@@ -406,6 +407,13 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
     log(`search console: ${read.rows} rows, ${read.inspected} pages inspected`);
   }
 
+  /** Google's speed scores of a few pages for the admin's SEO page, once a day; skipped without a key (PAGESPEED_API_KEY). */
+  async function refreshPageSpeed() {
+    if (!process.env.PAGESPEED_API_KEY || cancelled) return;
+    const read = await updatePageSpeed(db, process.env.PAGESPEED_API_KEY, { log });
+    if (read !== null) log(`pagespeed: ${read} pages read`);
+  }
+
   /** Rebuilds the screen's data of each collected party whose data is missing or outdated. */
   async function updateOverviews() {
     if (cancelled) return;
@@ -524,6 +532,7 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
       await refreshWeather().catch((error) => log(`weather failed: ${error.message}`));
       await refreshSchoolHolidays().catch((error) => log(`school holidays failed: ${error.message}`));
       await refreshSearchConsole().catch((error) => log(`search console failed: ${error.message}`));
+      await refreshPageSpeed().catch((error) => log(`pagespeed failed: ${error.message}`));
     });
 
     if (rerunRequested && !cancelled) {

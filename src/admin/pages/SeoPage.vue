@@ -12,6 +12,8 @@ const search = ref({ days: [], queries: [], pages: [] });
 const index = ref([]);
 const sitemaps = ref(null);
 const pageCount = ref(0);
+// Google's PageSpeed of a page of each kind, read once a day (server/pagespeed.mjs).
+const speed = ref(null);
 // loading, failed or ready
 const state = ref('loading');
 
@@ -19,7 +21,7 @@ onMounted(async () => {
   try {
     const response = await fetch('/api/admin/seo');
     if (!response.ok) throw new Error(`SEO failed with ${response.status}`);
-    ({ audit: audit.value, kinds: kinds.value, search: search.value, index: index.value, sitemaps: sitemaps.value, pageCount: pageCount.value } = await response.json());
+    ({ audit: audit.value, kinds: kinds.value, search: search.value, index: index.value, sitemaps: sitemaps.value, pageCount: pageCount.value, speed: speed.value } = await response.json());
     state.value = 'ready';
   } catch {
     state.value = 'failed';
@@ -47,6 +49,9 @@ const searchTables = computed(() => [
   { id: 'queries', title: 'Zoekwoorden', first: 'Zoekwoord', rows: search.value.queries.map((row) => [row.query, row]) },
   { id: 'search-pages', title: "Pagina's in Google", first: 'Pagina', rows: search.value.pages.map((row) => [row.path, row]) },
 ]);
+const seconds = (milliseconds) => `${(milliseconds / 1000).toLocaleString('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
+// Google's own bands: 90 and up is good, under 50 is poor.
+const scoreClass = (score) => (score >= 90 ? 'text-good-ink' : score >= 50 ? 'text-warning-ink' : 'text-serious');
 const byKind = computed(() =>
   Object.entries(audit.value?.counts ?? {})
     .sort((a, b) => b[1] - a[1])
@@ -103,6 +108,36 @@ const byKind = computed(() =>
         </table>
       </section>
     </div>
+
+    <h2 class="text-lg font-semibold">Snelheid volgens Google</h2>
+    <p v-if="!speed" class="text-sm text-ink-secondary">Nog niet gemeten. Dit heeft een eigen sleutel nodig (scripts/setup-pagespeed.sh) en loopt daarna één keer per dag mee met een prijsronde.</p>
+    <section v-else class="rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="seo-speed">
+      <h3 id="seo-speed" class="border-b border-line px-4 py-3 text-sm text-ink-secondary sm:px-5">
+        Eén pagina van elke soort, geladen als op een telefoon, op {{ formatTimestamp(speed.checkedAt) }}. Scores van 0 tot 100.
+      </h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="text-ink-secondary">
+            <tr class="border-b border-line">
+              <th scope="col" class="px-4 py-2.5 font-medium sm:px-5">Pagina</th>
+              <th v-for="column in ['Snelheid', 'SEO', 'Toegankelijk', 'Techniek', 'Grootste beeld']" :key="column" scope="col" class="px-4 py-2.5 text-right font-medium sm:px-5">{{ column }}</th>
+            </tr>
+          </thead>
+          <tbody class="tabular-nums">
+            <template v-for="page in speed.pages" :key="page.path">
+              <tr class="border-t border-line">
+                <th scope="row" class="px-4 py-2 font-normal sm:px-5"><a :href="page.path" target="_blank" rel="noopener" class="font-medium text-accent hover:underline">{{ page.path }}</a></th>
+                <td v-for="field in ['performance', 'seo', 'accessibility', 'bestPractices']" :key="field" class="px-4 py-2 text-right font-semibold sm:px-5" :class="scoreClass(page[field])">{{ page[field] }}</td>
+                <td class="px-4 py-2 text-right font-semibold sm:px-5">{{ seconds(page.paintMs) }}</td>
+              </tr>
+              <tr v-if="page.markedDown.length">
+                <td colspan="6" class="px-4 pb-2 text-xs text-ink-secondary sm:px-5">Aftrek voor: {{ page.markedDown.join(' · ') }}</td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <h2 class="text-lg font-semibold">Eigen controle van de pagina's</h2>
     <p class="max-w-3xl text-ink-secondary">

@@ -52,6 +52,7 @@ jobs:
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
           GSC_SERVICE_ACCOUNT: ${{ secrets.GSC_SERVICE_ACCOUNT }}
+          PAGESPEED_API_KEY: ${{ secrets.PAGESPEED_API_KEY }}
           WORKER_URL: ${{ secrets.WORKER_URL }}
           TURSO_API_TOKEN: ${{ secrets.TURSO_API_TOKEN }}
           TURSO_ORG: weekenddeals

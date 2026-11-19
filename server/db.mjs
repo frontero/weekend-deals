@@ -758,6 +758,15 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       await writeSetting('searchSitemaps', JSON.stringify(state));
     },
 
+    /** The last PageSpeed check (server/pagespeed.mjs): { checkedAt, pages, history }, or null before the first. */
+    async pageSpeed() {
+      return parseJson(await readSetting('pageSpeed'), null);
+    },
+
+    async savePageSpeed(state) {
+      await writeSetting('pageSpeed', JSON.stringify(state));
+    },
+
     /** The last check of the public pages (server/seo.mjs), or null before the first. */
     async seoAudit() {
       return parseJson(await readSetting('seoAudit'), null);
