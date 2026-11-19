@@ -40,4 +40,13 @@ const COUNTRY_NAMES = {
   HU: 'Hongarije',
   FR: 'Frankrijk',
 };
-export const countryName = (code) => COUNTRY_NAMES[code] ?? code;
+// Any other country by its Dutch name, as the browser knows it; the code itself where it does not.
+const regionNames = new Intl.DisplayNames(['nl'], { type: 'region' });
+export function countryName(code) {
+  if (COUNTRY_NAMES[code]) return COUNTRY_NAMES[code];
+  try {
+    return regionNames.of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
