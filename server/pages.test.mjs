@@ -209,6 +209,13 @@ test('a park page tells search engines its lowest and highest weekend price', ()
   assert.doesNotMatch(pageAt('/park/vakantiepark-sohojlandet').body, /"@type":"Product"/, 'nothing without a free weekend');
 });
 
+test("a park's large photo is asked for first and in a width that fits the screen", () => {
+  const built = buildPages({ parks: [{ ...gulpen, imageUrl: 'https://photos.test/gulpen-3x2?t=cw500' }, { ...hoogduin, imageUrl: 'https://molecaten.test/hoogduin.jpg' }], allParks, computedAt: '2026-10-29T06:39:10.572Z', details });
+  const at = (path) => built.find((page) => page.path === path).body;
+  assert.match(at('/park/vakantiepark-gulpen'), /<img src="https:\/\/photos.test\/gulpen-3x2\?t=cw1200" srcset="https:\/\/photos.test\/gulpen-3x2\?t=cw480 480w, [^"]*cw800 800w, [^"]*cw1200 1200w" sizes="[^"]+" alt="Landal Vakantiepark Gulpen" fetchpriority="high"/);
+  assert.match(at('/park/hoogduin-b'), /<img src="https:\/\/molecaten.test\/hoogduin.jpg" alt="[^"]+" fetchpriority="high"/, 'one width where the provider serves one');
+});
+
 test("providers' names are escaped", () => {
   const body = pageAt('/weekend/2026-11-06').body;
   assert.match(body, /Hoogduin &#60;b&#62;/);

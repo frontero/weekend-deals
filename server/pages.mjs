@@ -641,7 +641,18 @@ const sectionTitle = (id, emoji, text) =>
   html`<h2 id="${id}" class="flex items-center gap-2 text-2xl font-black"><span aria-hidden="true">${emoji}</span>${text}</h2>`;
 
 /** Landal's photos come in any width; the big one on top of a park's page asks for a sharp one. */
-const largePhoto = (url) => url?.replace(/([?&]t=)cw\d+/, '$1cw1600') ?? null;
+// Only widths Landal has a name for: any other gets the original back, two thousand pixels wide and close to a megabyte.
+const HERO_WIDTHS = [480, 800, 1200];
+const largePhoto = (url) => url?.replace(/([?&]t=)cw\d+/, `$1cw${HERO_WIDTHS.at(-1)}`) ?? null;
+/**
+ * The photo on top of a park's page: asked for first, as it is the largest thing on screen, and in a width that fits
+ * the screen where the provider serves widths (a phone took over six seconds for the widest one).
+ */
+function heroPhoto(url, alt) {
+  const sized = /([?&]t=)cw\d+/.test(url);
+  const widths = sized && new Html(` srcset="${HERO_WIDTHS.map((width) => `${escapeHtml(url.replace(/([?&]t=)cw\d+/, `$1cw${width}`))} ${width}w`).join(', ')}" sizes="(min-width: 1024px) 976px, 100vw"`);
+  return html`<img src="${largePhoto(url)}"${widths} alt="${alt}" fetchpriority="high" class="aspect-[16/9] w-full rounded-[2rem] bg-line object-cover sm:aspect-[5/2]" />`;
+}
 
 function compared(weekend) {
   if (weekend.discount == null) return '';
@@ -1070,7 +1081,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
   const body = html`
     ${breadcrumb(name, ['/parken', 'Alle parken'], ...regionPages.slice(0, 1).map((region) => [regionPath(region), region]))}
     ${cheapest && jsonLd(parkOfferData(park, pathOf(park)))}
-    ${park.imageUrl && html`<div class="relative mt-3"><img src="${largePhoto(park.imageUrl)}" alt="${name}" class="aspect-[16/9] w-full rounded-[2rem] bg-line object-cover sm:aspect-[5/2]" />${photoSticker(cheapest)}</div>`}
+    ${park.imageUrl && html`<div class="relative mt-3">${heroPhoto(park.imageUrl, name)}${photoSticker(cheapest)}</div>`}
     <h1 class="mt-5 text-4xl font-black tracking-tight sm:text-5xl">${name}</h1>
     <p class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-semibold text-ink-secondary">${place && html`<span><span aria-hidden="true">📍</span> ${place}</span>`}<span>bij ${providerName(park.provider)}</span>${rating(park)}${park.popular > 0 && html`<span class="rounded-full bg-cta-wash px-3 py-1 text-sm font-extrabold text-ink" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair deze week</span>`}</p>
     ${
