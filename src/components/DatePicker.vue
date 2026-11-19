@@ -1,4 +1,5 @@
 <script setup>
+import { closeOnBackdrop } from '../lib/dialog.js';
 import { computed, ref, watch } from 'vue';
 import { addMonths, monthGrid, pickRange, rangeDays } from '../lib/calendar.js';
 import { formatShortDate } from '../lib/format.js';
@@ -101,6 +102,7 @@ const dayClass = (day) => {
 <template>
   <dialog
     ref="dialog"
+    @click="closeOnBackdrop"
     class="m-auto max-h-[92dvh] w-[min(46rem,calc(100vw-1rem))] overflow-hidden rounded-3xl bg-surface p-0 text-ink shadow-2xl"
     aria-labelledby="dates-title"
     @close="open = false"

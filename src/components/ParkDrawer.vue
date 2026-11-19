@@ -1,4 +1,5 @@
 <script setup>
+import { closeOnBackdrop } from '../lib/dialog.js';
 import { computed, nextTick, ref, watch } from 'vue';
 import { partyLabel } from '../../shared/party.mjs';
 import { useQuote } from '../composables/useQuote.js';
@@ -127,21 +128,25 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
 <template>
   <dialog
     ref="dialog"
+    @click="closeOnBackdrop"
     class="m-0 ml-auto h-dvh max-h-dvh w-full max-w-xl overflow-y-auto bg-surface p-0 text-ink shadow-2xl"
     aria-labelledby="park-title"
     @close="emit('close')"
   >
     <template v-if="park">
-      <div class="relative h-56 bg-line">
-        <PhotoCarousel :photos="photos" />
+      <!-- Sticks to the top while the panel scrolls, so closing never takes scrolling back up. -->
+      <div class="sticky top-0 z-20 h-0">
         <button
           type="button"
-          class="absolute top-3 right-3 grid size-9 place-items-center rounded-full bg-surface/95 shadow hover:bg-hover"
+          class="absolute top-3 right-3 grid size-9 place-items-center rounded-full bg-surface/95 shadow ring-1 ring-line hover:bg-hover"
           aria-label="Sluiten"
           @click="dialog.close()"
         >
           <Icon name="x" class="size-5" />
         </button>
+      </div>
+      <div class="relative h-56 bg-line">
+        <PhotoCarousel :photos="photos" />
       </div>
 
       <div class="flex flex-col gap-6 p-5">

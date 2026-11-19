@@ -1,4 +1,5 @@
 <script setup>
+import { closeOnBackdrop } from '../lib/dialog.js';
 import { computed, ref, watch } from 'vue';
 import { groupKey, partyLabel, seriesFor } from '../../shared/party.mjs';
 import { isTopic, useAlerts } from '../composables/useAlerts.js';
@@ -137,6 +138,7 @@ async function switchTopic() {
 <template>
   <dialog
     ref="dialog"
+    @click="closeOnBackdrop"
     class="m-auto max-h-[90dvh] w-[min(40rem,calc(100vw-1.5rem))] overflow-hidden rounded-3xl bg-surface p-0 text-ink shadow-2xl"
     aria-labelledby="alerts-title"
     @close="open = false"

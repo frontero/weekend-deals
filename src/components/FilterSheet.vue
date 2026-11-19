@@ -1,4 +1,5 @@
 <script setup>
+import { closeOnBackdrop } from '../lib/dialog.js';
 import { ref, watch } from 'vue';
 import Icon from './Icon.vue';
 
@@ -20,6 +21,7 @@ watch(open, (isOpen) => {
   <!-- Phone-sized filters: the same panel as the sidebar, as a sheet from the bottom. -->
   <dialog
     ref="dialog"
+    @click="closeOnBackdrop"
     class="m-0 mt-auto max-h-[92dvh] w-full max-w-none rounded-t-2xl bg-plane p-0 text-ink shadow-2xl"
     aria-labelledby="filters-title"
     @close="open = false"

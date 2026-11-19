@@ -1,4 +1,5 @@
 <script setup>
+import { closeOnBackdrop } from '../lib/dialog.js';
 import { reactive, ref, watch } from 'vue';
 import { ROUND_SCHEDULES } from '../../shared/schedule.mjs';
 import Icon from './Icon.vue';
@@ -38,6 +39,7 @@ function save() {
 <template>
   <dialog
     ref="dialog"
+    @click="closeOnBackdrop"
     class="m-auto max-h-[90dvh] w-[min(44rem,calc(100vw-1.5rem))] overflow-hidden rounded-3xl bg-surface p-0 text-ink shadow-2xl"
     aria-labelledby="settings-title"
     @close="open = false"
