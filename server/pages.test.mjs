@@ -275,6 +275,12 @@ test('the last-minute page shows the coming weekends, the biggest deals first', 
   const first = page.body.slice(page.body.indexOf('Eerstvolgende'), page.body.indexOf('Het weekend daarna'));
   assert.ok(first.indexOf('Gulpen') < first.indexOf('Hoogduin'), 'the 25% deal before the cheaper park without one');
   assert.match(page.body, /from=lastminute/);
+  assert.match(page.body, /href="#soon-0"[^>]+>Grootste besparing/);
+  assert.match(page.body, /href="#cheapest"[^>]+>Laagste totaalprijs/);
+  const lowest = page.body.slice(page.body.indexOf('id="cheapest"'), page.body.indexOf('id="tips"'));
+  assert.ok(lowest.indexOf('Hoogduin') < lowest.indexOf('Gulpen'), 'the cheapest park before the biggest deal');
+  assert.match(first, /Gulpen[^]*data-last-minute-offer[^]*from=lastminute[^]*Hoogduin/);
+  assert.match(page.body, /data-last-minute-booking hidden[^]*Vakantiepark Gulpen[^]*from=lastminutebalk/);
 });
 
 test('a brand has a list of its parks, and one per region where that is a list of its own', () => {
@@ -317,7 +323,7 @@ test('the figures page says what the prices show, names its source and leaves ou
 
 test('the last-minute page says how many parks have room and gives tips', () => {
   const page = pageAt('/last-minute');
-  assert.match(page.body, /Voor vr 6 nov – ma 9 nov hebben nog 2 parken plek, waarvan 1 onder zijn normale weekendprijs\. De grootste korting is 25% bij [^.]*Gulpen/);
+  assert.match(page.body, /Voor vr 6 nov – ma 9 nov hebben nog 2 parken plek, waarvan 1 onder zijn normale weekendprijs\. De grootste besparing is 25% bij [^.]*Gulpen/);
   assert.match(page.body, /Zo boek je een last minute vakantiepark/);
 });
 
@@ -587,12 +593,11 @@ test('a park page always has a booking link in view: the bar with the cheapest w
   assert.match(full, /Bekijk bij Landal/);
 });
 
-test('every list page keeps its best deal in view, named, with a booking link of its own', () => {
+test('other list pages keep their best deal in view, named, with a booking link of its own', () => {
   for (const [path, source] of [
     ['/weekend/2026-11-06', 'weekendbalk'],
     ['/regio/limburg', 'regiobalk'],
     ['/land/nederland', 'regiobalk'],
-    ['/last-minute', 'lastminutebalk'],
     ['/parken', 'overzichtbalk'],
     ['/weekenden', 'overzichtbalk'],
   ]) {

@@ -8,7 +8,7 @@
 import { reasonText, verdictLabel } from '../src/lib/advice.js';
 import { brandName } from '../src/lib/brands.js';
 import { countryName, formatDay, formatEuros, formatWeekend, nights } from '../src/lib/format.js';
-import { providerHomeLinks, providerName, trackedBookingUrl } from '../src/lib/providers.js';
+import { bookingBrandNote, providerHomeLinks, providerName, trackedBookingUrl } from '../src/lib/providers.js';
 import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
@@ -655,7 +655,7 @@ const GROUP_TINTS = {
 const emojiDot = (emoji, tint = 'bg-accent-wash') =>
   emoji && html`<span aria-hidden="true" class="grid size-8 shrink-0 place-items-center rounded-full ${tint} text-base">${emoji}</span>`;
 const sectionTitle = (id, emoji, text) =>
-  html`<h2 id="${id}" class="flex items-center gap-2 text-2xl font-black"><span aria-hidden="true">${emoji}</span>${text}</h2>`;
+  html`<h2 id="${id}" class="flex scroll-mt-20 items-center gap-2 text-2xl font-black"><span aria-hidden="true">${emoji}</span>${text}</h2>`;
 
 /** Landal's photos come in any width; the big one on top of a park's page asks for a sharp one. */
 // Only widths Landal has a name for: any other gets the original back, two thousand pixels wide and close to a megabyte.
@@ -706,6 +706,14 @@ function bookButton(park, weekend, source, party = PAGE_PARTY) {
   return html`<a href="${trackedBookingUrl(park, weekend, party, source)}" target="_blank" rel="sponsored noopener" class="inline-flex shrink-0 items-center justify-center rounded-full bg-cta px-5 py-2.5 font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover hover:shadow-md">Boek bij ${provider}<span class="sr-only"> (opent ${provider} in een nieuw tabblad)</span></a>`;
 }
 
+const bookingExplanation = (park) => {
+  const note = bookingBrandNote(park);
+  return note === '' ? '' : html`<p class="text-xs text-ink-secondary">${note}</p>`;
+};
+
+const priceComparison = (park) =>
+  park.baselineCents > 0 && html`<p class="text-xs text-ink-secondary">Gebruikelijk bij dit park ${formatEuros(park.baselineCents)}</p>`;
+
 /** The provider's own page of a park through the tracked link, for a park without a free weekend to book. */
 const trackedParkUrl = (park, source) =>
   (park.url ?? park.pricesUrl) && `/api/go?${new URLSearchParams({ url: park.url ?? park.pricesUrl, park: park.code, from: source })}`;
@@ -717,7 +725,7 @@ const ctaLink = (href, label, provider) =>
  * weekend with its booking link, or the provider's page of a park without a free weekend.
  * @param named whether to name the park: on a page of many parks, the bar holds its best deal
  */
-function bookingBar(park, weekend, { source = 'parkbalk', party = PAGE_PARTY, named = false } = {}) {
+function bookingBar(park, weekend, { source = 'parkbalk', party = PAGE_PARTY, named = false, afterOfferSeen = false } = {}) {
   if (!park) return '';
   const provider = providerName(park.provider);
   const parkUrl = trackedParkUrl(park, source);
@@ -727,7 +735,7 @@ function bookingBar(park, weekend, { source = 'parkbalk', party = PAGE_PARTY, na
     return html`<div class="${bar}"><p class="min-w-0 flex-1 text-sm font-bold">Andere datums of meer personen?</p>${ctaLink(parkUrl, `Bekijk bij ${provider}`, provider)}</div>`;
   }
   const percent = discountPercent(weekend);
-  return html`<div class="${bar}">
+  return html`<div ${afterOfferSeen && new Html('data-last-minute-booking hidden')} class="${bar}">
     <div class="min-w-0 flex-1 leading-tight">
       <p class="flex flex-wrap items-center gap-x-2"><span class="text-xl font-black tabular-nums">${formatEuros(weekend.priceCents)}</span>${percent >= NOTEWORTHY_PERCENT && html`<span class="rounded-full bg-sun px-2 py-0.5 text-xs font-black whitespace-nowrap text-on-sun">${percent}% voordeliger</span>`}</p>
       <p class="truncate text-xs font-semibold text-ink-secondary">${named && html`<span class="font-extrabold text-ink">${fullName(park)}</span> · `}${formatWeekend(weekend)} · ${partyLabel(party)}</p>
@@ -912,11 +920,12 @@ function parkCard(park, { pathOf, source, party = PAGE_PARTY, showStay = false, 
       ${stayName && html`<p class="text-sm font-bold"><span aria-hidden="true">🏡</span> ${stayName}</p>`}
       ${
         shown
-          ? html`<p class="mt-auto flex flex-wrap items-baseline gap-2 pt-3"><span class="text-3xl font-black tabular-nums">${formatEuros(shown.priceCents)}</span>${discountPercent(shown) >= NOTEWORTHY_PERCENT && park.baselineCents && html`<s class="text-sm text-ink-muted">${formatEuros(park.baselineCents)}</s>`}</p>
+          ? html`<p class="mt-auto pt-3 text-3xl font-black tabular-nums">${formatEuros(shown.priceCents)}</p>
+            ${priceComparison(park)}
             <p class="text-xs font-semibold text-ink-secondary">${formatWeekend(shown)} · ${partyLabel(party)}</p>
             ${checkedLine(shown)}
             ${cheapest !== shown && html`<p class="text-xs font-bold text-ink-secondary">Of vanaf ${formatEuros(cheapest.priceCents)} op ${formatWeekend(cheapest)}</p>`}
-            <div class="mt-3">${bookButton(park, shown, source, party)}</div>`
+            <div class="mt-3 space-y-1">${bookingExplanation(park)}${bookButton(park, shown, source, party)}</div>`
           : html`<p class="mt-auto pt-3 text-sm text-ink-secondary">Geen vrij weekend voor ${partyLabel(party)} in de komende maanden</p>`
       }
     </div>
@@ -924,15 +933,17 @@ function parkCard(park, { pathOf, source, party = PAGE_PARTY, showStay = false, 
 }
 
 /** One park's offer for one weekend as a card: the weekend and last-minute pages. */
-const offerCard = ({ park, weekend: offer }, { pathOf, source }) =>
+const offerCard = ({ park, weekend: offer }, { pathOf, source, bookingTrigger = false }) =>
   html`<li class="${card} flex flex-col transition hover:-translate-y-0.5 hover:shadow-lg">
     <div class="relative">${park.imageUrl && photo(park.imageUrl, fullName(park))}${photoSticker(offer)}${popularBadge(park, 'absolute top-3 right-3 shadow-sm')}</div>
     <div class="flex flex-1 flex-col gap-2 p-4">
       <a href="${pathOf(park)}" class="text-lg font-extrabold hover:underline">${fullName(park)}</a>
       <span class="text-sm text-ink-secondary"><span aria-hidden="true">📍</span> ${placeOf(park)}</span>
-      <p class="mt-auto flex flex-wrap items-baseline gap-2"><span class="text-3xl font-black tabular-nums">${formatEuros(offer.priceCents)}</span>${discountPercent(offer) >= NOTEWORTHY_PERCENT && park.baselineCents && html`<s class="text-sm text-ink-muted">${formatEuros(park.baselineCents)}</s>`}</p>
+      <p ${bookingTrigger && new Html('data-last-minute-offer')} class="mt-auto text-3xl font-black tabular-nums">${formatEuros(offer.priceCents)}</p>
+      ${priceComparison(park)}
       ${checkedLine(offer)}
       ${offer.weather && html`<p>${weatherChip(offer.weather)}</p>`}
+      ${bookingExplanation(park)}
       ${bookButton(park, offer, source)}
     </div>
   </li>`;
@@ -943,6 +954,7 @@ const offerRow = ({ park, weekend: offer }, { pathOf, source }) =>
     <div class="min-w-0 basis-full sm:basis-0 sm:flex-1">
       <a href="${pathOf(park)}" class="${link}">${fullName(park)}</a>
       <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-secondary">${placeOf(park)} ${compared(offer)} ${weatherChip(offer.weather)}</p>
+      ${bookingExplanation(park)}
     </div>
     <p class="flex-1 text-xl font-black tabular-nums sm:flex-none">${formatEuros(offer.priceCents)}</p>
     ${bookButton(park, offer, source)}
@@ -1395,17 +1407,20 @@ function themePage(theme, parks, { pathOf, themes, party }) {
   };
 }
 
+const compareOffersByDiscount = (a, b) =>
+  discountPercent(b.weekend) - discountPercent(a.weekend) || a.weekend.priceCents - b.weekend.priceCents;
+
 /** One weekend's best offers as cards with a link to all of them: on the last-minute and holiday pages. */
-function weekendSection({ weekend, offers }, { id, emoji, title, source, pathOf, occasions }) {
+function weekendSection({ weekend, offers }, { id, emoji, title, source, pathOf, occasions, bookingOffer = null }) {
   // The biggest deals first, then the cheapest: a weekend without deals still shows its best prices.
   const shown = [...offers]
-    .sort((a, b) => discountPercent(b.weekend) - discountPercent(a.weekend) || a.weekend.priceCents - b.weekend.priceCents)
+    .sort(compareOffersByDiscount)
     .slice(0, LAST_MINUTE_CARDS);
   const sunny = offers.filter((offer) => offer.weekend.weather).length;
   return html`<section aria-labelledby="${id}" class="mt-10">
     ${sectionTitle(id, emoji, title)}
     <p class="mt-2 flex flex-wrap items-center gap-2 text-sm font-semibold text-ink-secondary">${count(offers.length, 'park', 'parken')} met plek, vanaf ${formatEuros(cheapestOf(offers.map((offer) => offer.weekend)).priceCents)}. ${occasionChips(occasions)}${sunny > 0 && html` <span>Bij ${count(sunny, 'park', 'parken')} zonnig verwacht.</span>`}</p>
-    <ul class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${shown.map((offer) => offerCard(offer, { pathOf, source }))}</ul>
+    <ul class="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">${shown.map((offer) => offerCard(offer, { pathOf, source, bookingTrigger: offer === bookingOffer }))}</ul>
     <p class="mt-4"><a href="${weekendPath(weekend.arrival)}" class="${chip}">${offers.length === 1 ? 'Bekijk dit weekend' : `Alle ${offers.length} parken van dit weekend`} →</a></p>
   </section>`;
 }
@@ -1563,14 +1578,26 @@ function figuresPage(weekends, { regions, brands, occasionsOf, updated, computed
   };
 }
 
+function lastMinuteIntro(first, underCount, bestOffer) {
+  const available = first?.offers.length ?? 0;
+  return html`<p class="mt-3 max-w-3xl leading-relaxed font-semibold text-ink-secondary">Vakantieparken met plek voor ${partyLabel(PAGE_PARTY)} in de komende weekenden. Bijgewerkt na elke prijsronde.</p>${
+    available > 0 && html`<p class="mt-3 max-w-3xl leading-relaxed text-ink-secondary">Voor ${formatWeekend(first.weekend)} ${available === 1 ? 'heeft nog 1 park' : `hebben nog ${available} parken`} plek${underCount > 0 && `, waarvan ${underCount} onder ${underCount === 1 ? 'zijn' : 'hun'} normale weekendprijs`}.${discountPercent(bestOffer.weekend) >= NOTEWORTHY_PERCENT && ` De grootste besparing is ${discountPercent(bestOffer.weekend)}% bij ${fullName(bestOffer.park)}.`}</p>
+    <nav aria-label="Last minutes vergelijken" class="mt-4 flex flex-wrap gap-2">
+      <a href="#cheapest" class="${chip}">Laagste totaalprijs</a>
+      <a href="#soon-0" class="${chip}">Grootste besparing</a>
+    </nav>`
+  }`;
+}
+
 /** The coming weekends with room, the biggest deals first: for whoever wants to go away now. */
 function lastMinutePage(weekends, { pathOf, occasionsOf, parks, regions = [], brands = [] }) {
   const soon = weekends.slice(0, LAST_MINUTE_WEEKENDS);
-  const now = soon[0]?.offers ?? [];
+  const [first] = soon;
+  const now = first?.offers ?? [];
   const free = new Set(now.map((offer) => offer.park.code));
   const cheapest = [...now].sort((a, b) => a.weekend.priceCents - b.weekend.priceCents).slice(0, LAST_MINUTE_LISTED);
-  const under = now.filter((offer) => discountPercent(offer.weekend) >= NOTEWORTHY_PERCENT);
-  const deepest = under.reduce((best, offer) => (!best || offer.weekend.discount > best.weekend.discount ? offer : best), null);
+  const underCount = now.filter((offer) => discountPercent(offer.weekend) >= NOTEWORTHY_PERCENT).length;
+  const bestOffer = now.reduce((best, offer) => (best === null || compareOffersByDiscount(offer, best) < 0 ? offer : best), null);
   // Where there is still room the coming weekend: a region or brand with one park left is no list.
   const withRoom = (lists, pathTo, nameOf) =>
     lists
@@ -1589,18 +1616,16 @@ function lastMinutePage(weekends, { pathOf, occasionsOf, parks, regions = [], br
       source: 'lastminute',
       pathOf,
       occasions: occasionsOf(entry.weekend),
+      bookingOffer: index === 0 ? bestOffer : null,
     });
   const body = html`
-    ${banner('⏰', html`Last minute <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">vakantiepark</span>`, html`<p class="mt-3 max-w-3xl leading-relaxed font-semibold text-ink-secondary">Zin om er snel tussenuit te gaan? Dit zijn de vakantieparken die de komende weekenden nog plek hebben voor ${partyLabel(PAGE_PARTY)}, de grootste buitenkansjes eerst. Bijgewerkt na elke prijsronde.</p>${
-      now.length > 0 &&
-      html`<p class="mt-3 max-w-3xl leading-relaxed text-ink-secondary">Voor ${formatWeekend(soon[0].weekend)} ${now.length === 1 ? 'heeft nog 1 park' : `hebben nog ${now.length} parken`} plek${under.length > 0 && `, waarvan ${under.length} onder ${under.length === 1 ? 'zijn' : 'hun'} normale weekendprijs`}.${deepest && ` De grootste korting is ${discountPercent(deepest.weekend)}% bij ${fullName(deepest.park)}.`}</p>`
-    }`)}
+    ${banner('⏰', html`Last minute <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">vakantiepark</span>`, lastMinuteIntro(first, underCount, bestOffer))}
     ${soon.map(section)}
     ${
-      cheapest.length > LAST_MINUTE_CARDS &&
+      cheapest.length > 0 &&
       html`<section aria-labelledby="cheapest" class="mt-10">
-        ${sectionTitle('cheapest', '💶', 'De goedkoopste last minutes')}
-        <p class="mt-1 text-sm text-ink-secondary">${stay(soon[0].weekend)}. Het goedkoopste huisje per park, de laagste prijs eerst.</p>
+        ${sectionTitle('cheapest', '💶', 'Laagste totaalprijs')}
+        <p class="mt-1 text-sm text-ink-secondary">${formatWeekend(first.weekend)} · ${stay(first.weekend)}. Het goedkoopste huisje per park, de laagste prijs eerst.</p>
         <ul class="mt-4 space-y-2">${cheapest.map((offer) => offerRow(offer, { pathOf, source: 'lastminutelijst' }))}</ul>
       </section>`
     }
@@ -1630,15 +1655,14 @@ function lastMinutePage(weekends, { pathOf, occasionsOf, parks, regions = [], br
     </section>
     ${popularSection(parks, { pathOf })}
     ${soon.some(({ offers }) => offers.some((offer) => offer.weekend.weather)) && html`<p class="mt-4 text-xs text-ink-muted">${WEATHER_CREDIT}</p>`}
-    ${soon[0] && bestBar(soon[0].offers.map(({ park, weekend }) => ({ ...park, weekends: [weekend] })), { source: 'lastminutebalk' })}`;
-  const [first] = soon;
+    ${bestOffer !== null && bookingBar(bestOffer.park, bestOffer.weekend, { source: 'lastminutebalk', named: true, afterOfferSeen: true })}`;
   return {
     path: '/last-minute',
     title: 'Last minute vakantiepark: dit of volgend weekend weg',
     description: first
       ? `Last minute een weekendje weg: ${first.offers.length} vakantieparken met plek van ${formatWeekend(first.weekend)}, vanaf ${formatEuros(cheapestOf(first.offers.map((offer) => offer.weekend)).priceCents)} voor ${partyLabel(PAGE_PARTY)}.`
       : 'Last minute een weekendje weg: de vakantieparken die de komende weekenden nog plek hebben.',
-    image: first ? ([...first.offers].sort((a, b) => discountPercent(b.weekend) - discountPercent(a.weekend))[0]?.park.imageUrl ?? null) : null,
+    image: bestOffer?.park.imageUrl ?? null,
     body: body.text,
   };
 }
@@ -2109,7 +2133,7 @@ const howPage = () => ({
         <li>De pagina's die je via Google vindt, rekenen met ${partyLabel(PAGE_PARTY)}. Op de <a href="/" class="${link}">zoekpagina</a> stel je je eigen gezelschap in.</li>
         <li>Prijzen kunnen veranderen nadat wij ze zagen. De prijs bij de aanbieder geldt.</li>
       </ul>
-      <h2 class="${heading} text-ink">Wat de normale prijs is</h2>
+      <h2 id="normale-prijs" class="${heading} scroll-mt-20 text-ink">Wat de gebruikelijke prijs bij een park is</h2>
       <p class="mt-2">De normale prijs van een park is de middelste weekendprijs die we er zelf voor zagen, over het afgelopen half jaar en de komende weekenden. Het is dus geen adviesprijs van de aanbieder. Van een park waarvan we nog te weinig weekenden kennen, tonen we geen normale prijs en geen korting.</p>
       <h2 class="${heading} text-ink">Wanneer iets een buitenkansje is</h2>
       <p class="mt-2">Een weekend heet een buitenkansje als het minstens ${Math.round(DEAL_SHARE * 100)}% onder de normale prijs van dat park ligt. Een doorgestreepte prijs is altijd die normale prijs. We tellen niet af en doen niet alsof iets bijna op is.</p>
@@ -2154,6 +2178,19 @@ const privacyPage = (hostname) => ({
 // question in the footer. How far down the visitor scrolled, how fast the page came and what broke go off when the
 // page is left; the answer is counted at once and a remark is kept for the admin (POST /api/feedback).
 const pageScript = `(() => {
+  const bookingBar = document.querySelector('[data-last-minute-booking]');
+  const featuredOffer = document.querySelector('[data-last-minute-offer]');
+  if (bookingBar !== null && featuredOffer !== null && typeof IntersectionObserver === 'function') {
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.intersectionRatio === 1) === false) {
+        return;
+      }
+      bookingBar.hidden = false;
+      observer.disconnect();
+    }, { threshold: 1 });
+    observer.observe(featuredOffer);
+  }
+
   // The same switch as the app's (src/composables/useTheme.js): the choice follows the visitor from page to page.
   const themeToggle = document.getElementById('theme-toggle');
   if (themeToggle) {

@@ -4,7 +4,7 @@ import { partyLabel, persons } from '../../shared/party.mjs';
 import { accommodationFor, accommodationSummary, photosFor } from '../lib/accommodations.js';
 import { reasonText } from '../lib/advice.js';
 import { formatEuros, formatPercent, formatTimestamp, formatWeekend, nights } from '../lib/format.js';
-import { providerName, trackedBookingUrl } from '../lib/providers.js';
+import { bookingBrandNote, providerName, trackedBookingUrl } from '../lib/providers.js';
 import AdviceBadge from './AdviceBadge.vue';
 import BrandBadge from './BrandBadge.vue';
 import GoogleRating from './GoogleRating.vue';
@@ -32,8 +32,10 @@ const emit = defineEmits(['open']);
 const park = computed(() => props.deal.park);
 const weekend = computed(() => props.deal.weekend);
 const provider = computed(() => providerName(park.value.provider));
+const bookingNote = computed(() => bookingBrandNote(park.value));
 const bookUrl = computed(() => trackedBookingUrl(park.value, weekend.value, props.settings, 'kaartje'));
 const saving = computed(() => formatEuros(park.value.baselineCents - weekend.value.priceCents));
+const referencePrice = computed(() => park.value.baselineCents ? formatEuros(park.value.baselineCents) : '');
 // With the discount filter off, cards also show weekends at or above the park's normal price.
 const belowNormal = computed(() => Math.round((weekend.value.discount ?? 0) * 100) > 0);
 const comparedLabel = computed(() => {
@@ -61,8 +63,11 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
     class="group relative flex flex-col overflow-hidden rounded-3xl bg-surface ring-1 ring-line transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-field has-[h3_button:focus-visible]:ring-2 has-[h3_button:focus-visible]:ring-accent"
   >
     <!-- Above the card's click area so the photos can be swiped; a click still opens the park. -->
-    <div class="relative z-10 aspect-[3/2] cursor-pointer overflow-hidden bg-line" @click="emit('open')">
-      <PhotoCarousel :photos="photos" :first="first" />
+    <div class="relative z-10 h-28 cursor-pointer overflow-hidden bg-line sm:h-auto sm:aspect-[3/2]" @click="emit('open')">
+      <PhotoCarousel
+        :photos="photos"
+        :first="first"
+      />
       <span
         v-if="belowNormal"
         class="absolute top-3 left-3 inline-flex -rotate-3 items-center gap-1 rounded-full bg-sun px-3 py-1 text-sm font-black text-on-sun shadow-md"
@@ -87,7 +92,7 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
       </span>
     </div>
 
-    <div class="flex flex-1 flex-col gap-1.5 p-4">
+    <div class="flex flex-1 flex-col gap-1.5 p-3 sm:p-4">
       <p class="flex flex-wrap items-center gap-2">
         <BrandBadge :brand="park.brand" />
         <PopularBadge v-if="popular" />
@@ -106,30 +111,31 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
           · +{{ otherWeekends }} {{ otherWeekends === 1 ? 'weekend' : 'weekenden' }}
         </span>
       </p>
-      <WeekendTags :weather="weekend.weather" :occasions="occasions" />
+      <div class="mt-1">
+        <p class="text-3xl leading-tight font-black tabular-nums"><span class="sr-only">Totaalprijs </span>{{ formatEuros(weekend.priceCents) }}</p>
+        <p class="text-xs text-ink-secondary">{{ stay }}</p>
+        <p v-if="referencePrice" class="mt-1 text-xs text-ink-secondary tabular-nums">
+          Gebruikelijk bij dit park {{ referencePrice }}
+        </p>
+        <p v-if="belowNormal" class="text-xs font-semibold text-good-ink">{{ saving }} voordeliger</p>
+        <p v-if="weekend.observedAt" class="text-xs text-ink-muted">Prijs gecontroleerd {{ formatTimestamp(weekend.observedAt) }}</p>
+      </div>
+      <WeekendTags
+        :weather="weekend.weather"
+        :occasions="occasions"
+      />
       <p v-if="accommodation" class="flex min-w-0 items-center gap-1.5 text-sm text-ink-secondary" :title="accommodation">
         <Icon name="home" class="size-4" />
         <span class="truncate">{{ accommodation }}</span>
       </p>
 
-      <div class="mt-auto pt-3">
-        <div>
-          <p v-if="belowNormal" class="text-sm text-ink-muted tabular-nums">
-            <span class="sr-only">Normaal </span><span class="line-through">{{ formatEuros(park.baselineCents) }}</span>
-          </p>
-          <p v-else-if="park.baselineCents" class="text-sm text-ink-muted tabular-nums">
-            normaal {{ formatEuros(park.baselineCents) }}
-          </p>
-          <p class="text-3xl leading-tight font-black tabular-nums"><span class="sr-only">Nu </span>{{ formatEuros(weekend.priceCents) }}</p>
-          <p class="text-xs text-ink-secondary">{{ stay }}</p>
-          <p v-if="weekend.observedAt" class="text-xs text-ink-muted">Prijs gecontroleerd {{ formatTimestamp(weekend.observedAt) }}</p>
-          <p v-if="belowNormal" class="mt-1 text-sm font-medium text-good-ink">{{ saving }} onder normaal</p>
-        </div>
+      <div class="mt-auto pt-2">
+        <p v-if="bookingNote" class="mb-1 text-xs text-ink-secondary">{{ bookingNote }}</p>
         <a
           :href="bookUrl"
           target="_blank"
           rel="sponsored noopener"
-          class="relative z-10 mt-3 flex w-full items-center justify-center gap-1.5 rounded-full bg-cta font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover hover:shadow-md px-4 py-2.5"
+          class="relative z-10 flex w-full items-center justify-center gap-1.5 rounded-full bg-cta px-4 py-2.5 font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover hover:shadow-md"
         >
           Boek bij {{ provider }}
           <Icon name="external" class="size-4" />

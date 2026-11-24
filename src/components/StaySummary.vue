@@ -27,15 +27,21 @@ const accommodation = computed(
 <template>
   <button
     type="button"
-    class="inline-flex max-w-full items-center gap-2 rounded-full bg-surface px-3 py-1 text-left ring-1 ring-line transition hover:ring-field"
-    aria-label="Gezelschap en huisje wijzigen"
+    class="inline-flex min-w-0 max-w-full items-center gap-2 rounded-lg bg-surface px-3 py-2 text-left text-sm ring-1 ring-line transition hover:ring-field"
     @click="emit('edit')"
   >
-    <Icon name="users" class="size-4 shrink-0 text-ink-secondary" />
-    <span class="font-medium whitespace-nowrap">{{ party }}</span>
-    <span class="h-4 w-px shrink-0 bg-line" />
-    <Icon name="home" class="size-4 shrink-0 text-ink-secondary" />
-    <span class="min-w-0 truncate">{{ accommodation }}</span>
-    <span class="font-medium text-accent">Wijzig</span>
+    <span class="sr-only">Gezelschap:</span>
+    <Icon
+      name="users"
+      class="size-4 shrink-0 text-ink-secondary"
+    />
+    <span class="min-w-0 font-medium">{{ party }}</span>
+    <span class="hidden h-4 w-px shrink-0 bg-line sm:block" />
+    <Icon
+      name="home"
+      class="hidden size-4 shrink-0 text-ink-secondary sm:block"
+    />
+    <span class="min-w-0 truncate max-sm:sr-only">{{ accommodation }}</span>
+    <span class="font-medium text-accent max-[360px]:sr-only">Wijzig</span>
   </button>
 </template>

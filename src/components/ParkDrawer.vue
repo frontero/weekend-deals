@@ -7,7 +7,7 @@ import { accommodationFor, accommodationSummary, photosFor } from '../lib/accomm
 import { bestWeekend } from '../lib/deals.js';
 import { formatEuros, formatPercent, formatShortDate, formatWeekend, nights } from '../lib/format.js';
 import { priceInsight } from '../lib/insights.js';
-import { providerName, trackedBookingUrl } from '../lib/providers.js';
+import { bookingBrandNote, providerName, trackedBookingUrl } from '../lib/providers.js';
 import { describePartyShort } from '../lib/stay.js';
 import AdvicePanel from './AdvicePanel.vue';
 import BrandBadge from './BrandBadge.vue';
@@ -89,6 +89,13 @@ const saving = computed(() =>
   props.park?.baselineCents && focus.value ? props.park.baselineCents - focus.value.priceCents : 0,
 );
 const provider = computed(() => providerName(props.park?.provider));
+const bookingNote = computed(() => props.park === null ? '' : bookingBrandNote(props.park));
+const bookingParty = computed(() => {
+  if (quote.value !== null) {
+    return party.value;
+  }
+  return props.pricedFor === null ? '' : partyLabel(props.pricedFor);
+});
 const bookUrl = computed(() =>
   focus.value ? trackedBookingUrl(quotedPark.value, quotedWeekend.value, props.settings, 'parkvenster') : '',
 );
@@ -122,7 +129,7 @@ const parkFacilities = computed(() =>
     }))
     .filter((group) => group.names),
 );
-const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselineCents ?? 0)}`);
+const referenceLabel = computed(() => `Gebruikelijk bij dit park ${formatEuros(props.park?.baselineCents ?? 0)}`);
 </script>
 
 <template>
@@ -173,11 +180,12 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
           <div class="mt-2 flex flex-wrap items-baseline gap-x-3">
             <span class="text-4xl font-black tabular-nums">{{ formatEuros(focus.priceCents) }}</span>
             <span v-if="pricedFor" class="text-sm text-ink-secondary">voor {{ partyLabel(pricedFor) }}</span>
-            <span v-if="park.baselineCents" class="text-sm text-ink-muted tabular-nums">
-              normaal <span class="line-through">{{ formatEuros(park.baselineCents) }}</span>
-            </span>
-            <span v-if="saving > 0" class="text-sm font-medium text-good-ink">{{ formatEuros(saving) }} onder normaal</span>
+            <span v-if="saving > 0" class="text-sm font-medium text-good-ink">{{ formatEuros(saving) }} voordeliger</span>
           </div>
+          <p v-if="park.baselineCents" class="mt-1 text-sm text-ink-secondary tabular-nums">
+            {{ referenceLabel }}
+            <a href="/zo-werkt-het#normale-prijs" class="inline-flex min-h-6 items-center font-semibold text-accent underline">Hoe berekend?</a>
+          </p>
           <!-- The exact party's price, asked from the provider when the park opens. -->
           <div class="mt-3 rounded-xl bg-plane px-3 py-2.5 text-sm" aria-live="polite">
             <p v-if="live.state === 'loading'" class="flex items-center gap-2 text-ink-secondary">
@@ -265,21 +273,28 @@ const referenceLabel = computed(() => `normaal ${formatEuros(props.park?.baselin
       </div>
 
       <!-- The booking button stays in view while reading reviews, prices and facilities. -->
-      <div v-if="focus" class="sticky bottom-0 z-20 flex items-center gap-3 border-t border-line bg-surface/95 px-5 py-3 backdrop-blur">
-        <div class="min-w-0 flex-1">
-          <p class="text-xl leading-tight font-black tabular-nums">{{ formatEuros((quote ?? focus).priceCents) }}</p>
-          <p class="truncate text-xs text-ink-secondary">{{ formatWeekend(focus) }} · incl. toeslagen</p>
+      <div v-if="focus" class="sticky bottom-0 z-20 border-t border-line bg-surface/95 px-3 py-2 backdrop-blur sm:px-5 sm:py-3">
+        <div class="flex items-center gap-2 sm:gap-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-xl leading-tight font-black tabular-nums">{{ formatEuros((quote ?? focus).priceCents) }}</p>
+            <p class="text-xs text-ink-secondary">{{ formatWeekend(focus) }}</p>
+            <p v-if="bookingParty" class="text-xs text-ink-secondary">{{ bookingParty }} · incl. toeslagen</p>
+          </div>
+          <a
+            :href="bookUrl"
+            target="_blank"
+            rel="sponsored noopener"
+            class="flex shrink-0 items-center gap-1.5 rounded-full bg-cta px-3 py-2.5 text-sm font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover hover:shadow-md sm:px-5 sm:py-3 sm:text-base"
+          >
+            Boek bij {{ provider }}
+            <Icon
+              name="external"
+              class="size-4"
+            />
+            <span class="sr-only">(opent {{ provider }} in een nieuw tabblad)</span>
+          </a>
         </div>
-        <a
-          :href="bookUrl"
-          target="_blank"
-          rel="sponsored noopener"
-          class="flex shrink-0 items-center gap-1.5 rounded-full bg-cta font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover hover:shadow-md px-5 py-3"
-        >
-          Boek bij {{ provider }}
-          <Icon name="external" class="size-4" />
-          <span class="sr-only">(opent {{ provider }} in een nieuw tabblad)</span>
-        </a>
+        <p v-if="bookingNote" class="mt-1 text-xs text-ink-secondary">{{ bookingNote }}</p>
       </div>
     </template>
   </dialog>

@@ -9,7 +9,6 @@ const to = defineModel('to', { type: String, required: true });
 const props = defineProps({
   // Market weekends with a low/typical/high `level`, see weekendLevels().
   weekends: { type: Array, required: true },
-  parkCount: { type: Number, required: true },
 });
 const emit = defineEmits(['open-calendar']);
 
@@ -32,10 +31,15 @@ const items = computed(() =>
 );
 
 const calendarLabel = computed(() => {
-  if (!from.value) return 'Kies datums';
-  if (!to.value || to.value === from.value) return `Weekend ${formatShortDate(from.value)}`;
+  if (from.value === '') {
+    return 'Kies datums';
+  }
+  if (to.value === '' || to.value === from.value) {
+    return `Weekend ${formatShortDate(from.value)}`;
+  }
   return `${formatShortDate(from.value)} – ${formatShortDate(to.value)}`;
 });
+const calendarClass = computed(() => chipClass(from.value !== ''));
 
 function choose(arrival) {
   const onlyThis = from.value === arrival && (to.value || from.value) === arrival;
@@ -51,55 +55,60 @@ const chipClass = (active) =>
 </script>
 
 <template>
-  <section aria-labelledby="weekends-title">
-    <div class="mb-2 flex items-end justify-between gap-3">
-      <div>
-        <h2 id="weekends-title" class="font-semibold">Wanneer is het goedkoop?</h2>
-        <p class="hidden text-xs text-ink-secondary sm:block">Middelste prijs over {{ parkCount }} parken, vr–ma</p>
-      </div>
+  <section aria-label="Datum en gezelschap">
+    <div class="flex flex-wrap items-stretch gap-2 sm:justify-end">
       <button
+        :class="calendarClass"
         type="button"
-        class="inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition"
-        :class="from ? 'bg-accent-wash ring-2 ring-accent' : 'bg-surface ring-1 ring-line hover:ring-field'"
+        class="inline-flex min-w-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition"
         @click="emit('open-calendar')"
       >
-        <Icon name="calendar" class="size-4" />
+        <Icon
+          name="calendar"
+          class="size-4 shrink-0"
+        />
         {{ calendarLabel }}
       </button>
+      <slot />
     </div>
-    <!-- The padding leaves room for the selected ring and the focus outline; the scroll padding makes snapping
-         keep that room, instead of pulling a chip against the edge where its ring gets cut off. -->
-    <div
-      class="-mx-4 flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 pt-1 pb-2 [scrollbar-width:thin] sm:-mx-6 sm:scroll-px-6 sm:px-6 lg:-mx-1 lg:scroll-px-1 lg:px-1"
-    >
-      <button
-        type="button"
-        class="w-28 shrink-0 snap-start rounded-xl px-3 py-2 text-left transition"
-        :class="chipClass(!from)"
-        :aria-pressed="!from"
-        @click="showAll"
+    <div v-if="items.length > 0" class="mt-3 sm:mt-2">
+      <h2 id="weekends-title" class="text-sm font-semibold sm:text-base">Richtprijs per weekend</h2>
+      <p id="weekends-explanation" class="text-xs text-ink-secondary">Middelste prijs van de parken met plek, vr–ma.</p>
+      <!-- Scroll padding keeps focus outlines visible when a chip snaps to the edge. -->
+      <div
+        aria-labelledby="weekends-title"
+        aria-describedby="weekends-explanation"
+        role="group"
+        class="-mx-4 mt-1 flex snap-x scroll-px-4 gap-2 overflow-x-auto px-4 pt-1 pb-2 [scrollbar-width:thin] sm:-mx-6 sm:scroll-px-6 sm:px-6 lg:-mx-1 lg:scroll-px-1 lg:px-1"
       >
-        <span class="block text-xs text-ink-secondary">Alle</span>
-        <span class="block text-base font-semibold">weekenden</span>
-        <span class="block text-xs text-ink-secondary">{{ weekends.length }} weken</span>
-      </button>
-      <button
-        v-for="item in items"
-        :key="item.arrival"
-        type="button"
-        class="w-28 shrink-0 snap-start rounded-xl px-3 py-2 text-left transition"
-        :class="chipClass(item.active)"
-        :aria-pressed="item.active"
-        :aria-label="`Weekend ${item.day}: ${item.price}, ${item.label.toLowerCase()}`"
-        @click="choose(item.arrival)"
-      >
-        <span class="block text-xs text-ink-secondary">{{ item.day }}</span>
-        <span class="block text-base font-semibold tabular-nums">{{ item.price }}</span>
-        <span class="flex items-center gap-1.5 text-xs" :class="item.text">
-          <span class="size-2 rounded-full" :class="item.dot" />
-          {{ item.label }}
-        </span>
-      </button>
+        <button
+          :class="chipClass(from === '')"
+          :aria-pressed="from === ''"
+          type="button"
+          class="w-26 shrink-0 snap-start rounded-xl px-2.5 py-1 text-left transition sm:w-28 sm:px-3 sm:py-2"
+          @click="showAll"
+        >
+          <span class="block text-sm leading-tight font-semibold">Alle weekenden</span>
+          <span class="block text-xs text-ink-secondary">{{ weekends.length }} weken</span>
+        </button>
+        <button
+          v-for="item in items"
+          :key="item.arrival"
+          :class="chipClass(item.active)"
+          :aria-pressed="item.active"
+          :aria-label="`Weekend ${item.day}: ${item.price}, ${item.label.toLowerCase()}`"
+          type="button"
+          class="w-26 shrink-0 snap-start rounded-xl px-2.5 py-1 text-left transition sm:w-28 sm:px-3 sm:py-2"
+          @click="choose(item.arrival)"
+        >
+          <span class="block text-xs text-ink-secondary">{{ item.day }}</span>
+          <span class="block text-sm font-semibold tabular-nums sm:text-base">{{ item.price }}</span>
+          <span :class="item.text" class="flex items-center gap-1.5 text-xs">
+            <span :class="item.dot" class="size-2 rounded-full" />
+            {{ item.label }}
+          </span>
+        </button>
+      </div>
     </div>
   </section>
 </template>

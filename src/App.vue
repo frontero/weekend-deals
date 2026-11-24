@@ -97,9 +97,10 @@ const discountLabel = computed(() =>
   filters.minDiscountPercent ? `${filters.minDiscountPercent}%+ onder normaal` : 'Alle prijzen',
 );
 // The pages next to this one (server/pages.mjs): the coming holidays first, as the last overview named them.
+const occasionLinks = computed(() => overview.value?.occasionLinks ?? []);
 const pageLinks = computed(() => [
   { path: '/last-minute', emoji: '⏰', label: 'Last minute' },
-  ...(overview.value?.occasionLinks ?? []),
+  ...occasionLinks.value,
   { path: '/weekenden', emoji: '📅', label: 'Alle weekenden' },
   { path: '/parken', emoji: '🏕️', label: 'Alle parken' },
 ]);
@@ -298,23 +299,23 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
   <!-- What and when, on a band of its own above the results, like the search area of the big booking sites.
        Tighter on phones, so the first deals show without scrolling far. -->
   <section class="rounded-b-[2.5rem] bg-accent-wash" aria-labelledby="page-title">
-    <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:gap-6 sm:px-6 sm:py-8">
+    <div class="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 sm:gap-6 sm:px-6 sm:py-8">
       <div>
         <h1 id="page-title" class="text-2xl font-black tracking-tight sm:text-4xl">
           Buitenkansjes voor een
           <span class="inline-block -rotate-1 rounded-3xl bg-sun px-2 text-on-sun">weekendje weg</span>
         </h1>
         <p class="mt-2 max-w-2xl text-sm font-semibold text-ink-secondary sm:text-base">
-          <span class="sm:hidden">Echte weekendprijzen bij Landal, Topparken en Molecaten.{{ ' ' }}</span>
+          <span class="sm:hidden">Vergelijk totaalprijzen.{{ ' ' }}</span>
           <span class="hidden sm:inline">
-            Weekenden (vrijdag tot maandag) bij Landal, Topparken en Molecaten die duidelijk onder de normale prijs van
-            het park zitten. Je ziet de echte prijs per weekend, zoals wij die bij de aanbieder zagen: geen "tot 40%
-            korting".
+            Vergelijk totaalprijzen voor vrijdag tot maandag bij Landal, Topparken, Molecaten en andere aanbieders.
+            Je ziet welke weekenden minder kosten dan gebruikelijk bij het park.
             {{ ' ' }}
           </span>
-          <a href="/zo-werkt-het" class="font-bold text-accent hover:underline">Zo werkt het</a>
+          <a href="/zo-werkt-het" class="inline-flex min-h-6 items-center font-bold text-accent hover:underline">Zo werkt het</a>
+          <a href="/last-minute" class="ml-3 inline-flex min-h-6 items-center font-bold text-accent hover:underline sm:hidden">Last minute</a>
         </p>
-        <nav aria-label="Meer manieren om te zoeken" class="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 text-sm sm:mx-0 sm:flex-wrap sm:px-0">
+        <nav aria-label="Meer manieren om te zoeken" class="mt-3 hidden flex-wrap gap-2 pb-1 text-sm sm:flex">
           <a
             v-for="item in pageLinks"
             :key="item.path"
@@ -326,19 +327,24 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
         </nav>
       </div>
       <!-- Holds the strip's place while the prices load, so the list below does not jump down when they arrive. -->
-      <div v-if="!overview" class="h-32 sm:h-28" aria-hidden="true"></div>
+      <div v-if="overview === null" class="h-32 sm:h-28" aria-hidden="true"></div>
       <WeekendStrip
-        v-else-if="strip.length"
+        v-else
         v-model:from="filters.from"
         v-model:to="filters.to"
         :weekends="strip"
-        :park-count="stripParks.length"
         @open-calendar="calendarOpen = true"
-      />
+      >
+        <StaySummary
+          :settings="overview.settings"
+          :accommodation-groups="overview.accommodationGroups"
+          @edit="settingsOpen = true"
+        />
+      </WeekendStrip>
     </div>
   </section>
 
-  <main class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:gap-6 sm:px-6 sm:py-8">
+  <main class="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-4 sm:gap-6 sm:px-6 sm:py-8">
     <StatusNotices
       :failed="failed && Boolean(overview)"
       :scan="overview?.scan ?? null"
@@ -386,8 +392,8 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
         </div>
       </aside>
 
-      <div class="flex min-w-0 flex-col gap-4">
-        <div class="flex flex-wrap items-center gap-3">
+      <div class="flex min-w-0 flex-col gap-3 sm:gap-4">
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3">
           <h2 class="text-xl font-black sm:text-2xl" aria-live="polite">
             <template v-if="overview">
               {{ cards.length }} {{ cards.length === 1 ? 'park' : 'parken' }}
@@ -439,18 +445,15 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
           </div>
         </div>
 
-        <ActiveFilters :chips="chips" @remove="removeChip" @clear="clearFilters">
-          <StaySummary
-            v-if="overview"
-            :settings="overview.settings"
-            :accommodation-groups="overview.accommodationGroups"
-            @edit="settingsOpen = true"
-          />
-        </ActiveFilters>
+        <ActiveFilters
+          :chips="chips"
+          @remove="removeChip"
+          @clear="clearFilters"
+        />
 
         <div v-if="isLoading" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-label="Laden">
           <div v-for="index in 6" :key="index" class="animate-pulse overflow-hidden rounded-3xl bg-surface ring-1 ring-line">
-            <div class="aspect-[3/2] bg-line" />
+            <div class="h-28 bg-line sm:h-auto sm:aspect-[3/2]" />
             <div class="flex flex-col gap-2 p-4">
               <div class="h-4 w-2/3 rounded bg-line" />
               <div class="h-3 w-1/2 rounded bg-line" />
@@ -570,6 +573,20 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
         </div>
       </div>
     </div>
+    <nav
+      v-if="occasionLinks.length > 0"
+      aria-label="Feestdagen en vakanties"
+      class="flex flex-wrap gap-x-4 gap-y-2 text-sm sm:hidden"
+    >
+      <a
+        v-for="item in occasionLinks"
+        :key="item.path"
+        :href="item.path"
+        class="inline-flex min-h-6 items-center font-bold text-accent hover:underline"
+      >
+        {{ item.label }}
+      </a>
+    </nav>
   </main>
 
   <footer class="mt-16 rounded-t-[2.5rem] bg-accent-wash">

@@ -2,7 +2,7 @@
 // its live price must come back, and the admin pages must show their charts and the rounds, on a desktop and on a phone,
 // without errors in the page. Unit tests check the
 // calculations; this checks that the screen works. Run after `vite build`; `npm run cloud:deploy` does both.
-// Uses the Chrome installed on this Mac, without a window. Usage: node scripts/smoke.mjs
+// Uses the Microsoft Edge installed on this Mac, without a window. Usage: node scripts/smoke.mjs
 import { chromium } from 'playwright-core';
 import { preview } from 'vite';
 import { axeFindings, dialogFindings, layoutFindings } from './ux-rules.mjs';
@@ -19,7 +19,7 @@ const harmless = (message) => /Failed to load resource/.test(message);
 // A second server next to the app (the price data is the same); it serves the API without fetching prices.
 process.env.WEEKEND_DEALS_COLLECT = 'off';
 const server = await preview({ logLevel: 'error', preview: { port: PORT, strictPort: true } });
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
 const failures = [];
 
 try {
@@ -41,6 +41,15 @@ try {
 
     await page.goto(`http://localhost:${PORT}/`);
     await check('the page shows parks', () => page.locator('article').first().waitFor({ timeout: TIMEOUT_MS }));
+    if (viewport.name === 'phone') {
+      await check('the first total price is visible without scrolling', async () => {
+        const price = page.locator('article').first().locator('p').filter({ hasText: /^Totaalprijs\s+€/ });
+        const box = await price.boundingBox();
+        if (box === null || box.y < 0 || box.y + box.height > viewport.height) {
+          throw new Error('the first deal price is outside the opening viewport');
+        }
+      });
+    }
     await check('a park opens', async () => {
       await page.locator('article h3 button').first().click();
       await page.locator('dialog[open] h2').first().waitFor({ timeout: TIMEOUT_MS });
@@ -66,7 +75,7 @@ try {
       park: () => page.locator('article h3 button').first().click(),
       'price alert': () => page.getByRole('button', { name: 'Prijsalarm' }).first().click(),
       dates: () => page.getByRole('button', { name: 'Kies datums' }).click(),
-      party: () => page.getByText('Wijzig').first().click(),
+      party: () => page.getByRole('button', { name: /^Gezelschap:/ }).click(),
       ...(viewport.width < 1024 ? { filters: () => page.getByRole('button', { name: /^Filters/ }).click() } : {}),
     };
     for (const [label, open] of Object.entries(panels)) await rules(`the ${label} panel keeps the house rules`, () => dialogFindings(page, label, open));

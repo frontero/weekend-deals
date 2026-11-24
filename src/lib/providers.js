@@ -1,5 +1,7 @@
 import { groupKey } from '../../shared/party.mjs';
+import { parkBrand } from '../../shared/brands.mjs';
 import { accommodationFor } from './accommodations.js';
+import { brandName } from './brands.js';
 import { nights } from './format.js';
 import { accommodationUrl as landalAccommodationUrl, weekendUrl as landalWeekendUrl } from './landal.js';
 
@@ -48,6 +50,17 @@ const PROVIDERS = {
 const providerOf = (id) => PROVIDERS[id ?? 'landal'];
 
 export const providerName = (id) => providerOf(id)?.name ?? id;
+
+/** A park can carry a different brand from the site that handles its bookings. */
+export function bookingBrandNote(park) {
+  const brand = brandName(park.brand ?? parkBrand(park));
+  const provider = providerName(park.provider);
+  if (brand === provider) {
+    return '';
+  }
+
+  return `Dit park van ${brand} boek je via ${provider}.`;
+}
 
 // The providers' own sites, so a visitor can still book while our prices are out of reach.
 const HOMES = { landal: 'https://www.landal.nl/', topparken: 'https://www.topparken.nl/', molecaten: 'https://www.molecaten.nl/' };
