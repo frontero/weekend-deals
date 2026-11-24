@@ -7,7 +7,7 @@ const envelope = (operation, inner) =>
 
 const ANSWERS = {
   authenticate: '',
-  getAffiliateSites: '<affiliateSites SOAP-ENC:arrayType="ns1:AffiliateSite[1]"><item xsi:type="ns1:AffiliateSite"><ID xsi:type="xsd:nonNegativeInteger">520731</ID><name>Parkje weg</name><URL>https://parkjeweg.nl</URL></item></affiliateSites>',
+  getAffiliateSites: '<affiliateSites SOAP-ENC:arrayType="ns1:AffiliateSite[1]"><item xsi:type="ns1:AffiliateSite"><ID xsi:type="xsd:nonNegativeInteger">520731</ID><name>Parkje weg</name><URL>https://parkjeweg.nl</URL></item><item><ID>9</ID><name>Andere site</name><URL>https://example.com</URL></item></affiliateSites>',
   getConversionTransactions: `<conversionTransactions><item>
     <ID>901</ID><campaign><ID>30138</ID><name>TopParken.nl</name><URL>https://www.topparken.nl</URL><info xsi:nil="true"/></campaign>
     <affiliateSite><ID>520731</ID><name>Parkje weg</name></affiliateSite><campaignProduct><ID>1</ID><name>Boeking</name></campaignProduct>

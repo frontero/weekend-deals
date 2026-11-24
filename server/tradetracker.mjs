@@ -8,6 +8,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const KEPT_DAYS = 180;
 const REPORT_DAYS = 30;
 const MOST = 500;
+// The account may hold other sites; only this one's figures belong here.
+const SITE_HOST = 'parkjeweg.nl';
 
 const escapeXml = (value) => String(value).replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]);
 const unescapeXml = (value) =>
@@ -71,9 +73,11 @@ const items = (list) => (Array.isArray(list?.item) ? list.item : []);
 const amount = (value) => (value == null ? null : Number(value));
 
 /** The account's sites: the ones the reports are per. */
+export const ownSites = (sites) => sites.filter((site) => site.url.includes(SITE_HOST));
+
 export async function affiliateSites(session, { fetcher = fetch } = {}) {
   const { answer } = await call('getAffiliateSites', '<options><excludeInfo>true</excludeInfo></options>', { session, fetcher });
-  return items(answer.affiliateSites).map((site) => ({ id: site.ID, name: site.name }));
+  return items(answer.affiliateSites).map((site) => ({ id: site.ID, name: site.name, url: site.URL ?? '' }));
 }
 
 /**
@@ -131,7 +135,7 @@ export async function updateAffiliateSales(db, account, { fetcher = fetch, now =
   const session = await signIn(account, { fetcher });
   const transactions = [];
   const report = [];
-  for (const site of await affiliateSites(session, { fetcher })) {
+  for (const site of ownSites(await affiliateSites(session, { fetcher }))) {
     transactions.push(...(await conversions(session, site.id, new Date(now - KEPT_DAYS * DAY_MS).toISOString().slice(0, 19), { fetcher })));
     report.push(...(await campaignReport(session, site.id, day(now - REPORT_DAYS * DAY_MS), day(now), { fetcher })));
   }
