@@ -42,11 +42,16 @@ export function useOverview() {
   async function load() {
     clearTimeout(timer);
     try {
+      // On the first load the park list is asked for next to the status rather than after it: one round trip less
+      // before the first parks show. It is this party's own list in all but the rare case the status names another.
+      const guess = groupKey(seriesFor(party));
+      const early = parksOf === undefined ? request(`/overview?party=${encodeURIComponent(guess)}`).catch(() => null) : null;
       const status = await request(`/status${sizeQuery(party)}`);
       // The park list is large and only changes after a round, so it is fetched again only then.
       const current = `${status.shownParty}|${status.overviewAt}`;
       if (current !== parksOf) {
-        parks = status.shownParty ? await request(`/overview?party=${encodeURIComponent(status.shownParty)}`) : [];
+        const ahead = status.shownParty === guess ? await early : null;
+        parks = ahead ?? (status.shownParty ? await request(`/overview?party=${encodeURIComponent(status.shownParty)}`) : []);
         parksOf = current;
       }
       overview.value = {

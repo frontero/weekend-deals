@@ -24,6 +24,8 @@ const props = defineProps({
   occasions: { type: Array, default: () => [] },
   // Visitors clicked through to this park often this week.
   popular: { type: Boolean, default: false },
+  // One of the first cards of the list: its photo is what a visitor sees first.
+  first: { type: Boolean, default: false },
 });
 const emit = defineEmits(['open']);
 
@@ -60,7 +62,7 @@ const accommodation = computed(() => accommodationSummary(accommodationFor(park.
   >
     <!-- Above the card's click area so the photos can be swiped; a click still opens the park. -->
     <div class="relative z-10 aspect-[3/2] cursor-pointer overflow-hidden bg-line" @click="emit('open')">
-      <PhotoCarousel :photos="photos" />
+      <PhotoCarousel :photos="photos" :first="first" />
       <span
         v-if="belowNormal"
         class="absolute top-3 left-3 inline-flex -rotate-3 items-center gap-1 rounded-full bg-sun px-3 py-1 text-sm font-black text-on-sun shadow-md"

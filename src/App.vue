@@ -325,8 +325,10 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
           </a>
         </nav>
       </div>
+      <!-- Holds the strip's place while the prices load, so the list below does not jump down when they arrive. -->
+      <div v-if="!overview" class="h-32 sm:h-28" aria-hidden="true"></div>
       <WeekendStrip
-        v-if="strip.length"
+        v-else-if="strip.length"
         v-model:from="filters.from"
         v-model:to="filters.to"
         :weekends="strip"
@@ -466,9 +468,10 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
           />
           <div v-else-if="cards.length" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <DealCard
-              v-for="deal in shownDeals"
+              v-for="(deal, position) in shownDeals"
               :key="`${deal.park.code}-${deal.weekend.arrival}`"
               :deal="deal"
+              :first="position < 2"
               :settings="overview.settings"
               :priced-for="overview.pricedFor"
               :occasions="overview.occasions?.[deal.weekend.arrival] ?? []"

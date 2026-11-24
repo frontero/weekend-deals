@@ -10,6 +10,8 @@
     />
     <!-- The search page has one address: a link with a weekend or a search in it shows the same page. -->
     <link rel="canonical" href="https://parkjeweg.nl/" />
+    <!-- Where most park photos come from: the connection is opened while the prices are still on their way. -->
+    <link rel="preconnect" href="https://mss-p-014-delivery.stylelabs.cloud" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <meta name="theme-color" content="#fffaf0" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0e1b29" media="(prefers-color-scheme: dark)" />
@@ -30,6 +32,15 @@
     <meta name="tradetracker-site-verification" content="d975563bda5f364690aaf67427f41541e05b1c58" />
     <script type="application/ld+json">
       { "@context": "https://schema.org", "@type": "WebSite", "name": "Parkje weg", "url": "https://parkjeweg.nl/" }
+    </script>
+    <script>
+      // The first prices, asked for while the app's script is still on its way (src/lib/api.js picks them up): for the
+      // search page and the party of two it starts with, which is what a new visitor sees.
+      try {
+        if (location.pathname === '/' && !localStorage.getItem('weekend-deals:party')) {
+          window.__early = Object.fromEntries(['/status?party=a2-c0', '/overview?party=a2-c0'].map((path) => [path, fetch('/api' + path)]));
+        }
+      } catch {}
     </script>
     <script>
       // A theme chosen in the app (see src/composables/useTheme.js), applied before the first paint.

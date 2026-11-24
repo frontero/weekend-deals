@@ -10,6 +10,8 @@ import Icon from './Icon.vue';
 const props = defineProps({
   // Photo URLs
   photos: { type: Array, required: true },
+  // In view as soon as the page shows, so its first photo is asked for ahead of everything else.
+  first: { type: Boolean, default: false },
 });
 
 const track = ref(null);
@@ -64,7 +66,8 @@ const arrowClass =
         :key="photo"
         :src="position === 0 || awake ? photo : undefined"
         alt=""
-        loading="lazy"
+        :loading="first && position === 0 ? 'eager' : 'lazy'"
+        :fetchpriority="first && position === 0 ? 'high' : undefined"
         draggable="false"
         class="size-full shrink-0 snap-start object-cover"
       />
