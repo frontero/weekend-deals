@@ -89,6 +89,8 @@ const pageAt = (path) => pages.find((page) => page.path === path);
 
 test('one page per park with something to tell, per weekend, per country, region and theme with three parks, and the lists', () => {
   assert.deepEqual(pages.map((page) => page.path).sort(), [
+    '/aanbieder/landal',
+    '/aanbieder/landal/limburg',
     '/feestdag/carnaval',
     '/feestdag/hemelvaart',
     '/feestdag/kerst',
@@ -97,8 +99,6 @@ test('one page per park with something to tell, per weekend, per country, region
     '/feestdag/pinksteren',
     '/land/nederland',
     '/last-minute',
-    '/merk/landal',
-    '/merk/landal/limburg',
     '/park/hoogduin-b',
     '/park/mheerbos',
     '/park/vakantiepark-gulpen',
@@ -277,22 +277,22 @@ test('the last-minute page shows the coming weekends, the biggest deals first', 
 });
 
 test('a brand has a list of its parks, and one per region where that is a list of its own', () => {
-  const brand = pageAt('/merk/landal');
+  const brand = pageAt('/aanbieder/landal');
   assert.equal(brand.title, 'Landal vakantieparken: alle parken met weekendprijzen');
   assert.match(brand.body, /Vakantieparken van <span[^>]*>Landal<\/span>/);
-  assert.match(brand.body, /href="\/merk\/landal\/limburg"/);
+  assert.match(brand.body, /href="\/aanbieder\/landal\/limburg"/);
   assert.doesNotMatch(brand.body, /Uitjes/);
-  const place = pageAt('/merk/landal/limburg');
+  const place = pageAt('/aanbieder/landal/limburg');
   assert.equal(place.title, 'Landal Limburg: alle parken met weekendprijzen');
   assert.match(place.body, /Landal in <span[^>]*>Limburg<\/span>/);
   assert.match(place.body, /href="\/regio\/limburg"[^>]*>.*Alle parken in Limburg/);
-  assert.match(place.body, /from=merkpagina/);
+  assert.match(place.body, /from=aanbiederpagina/);
   assert.doesNotMatch(place.body, /Hoogduin/);
   assert.match(place.description, /vakantieparken van Landal in Limburg/);
-  assert.match(pageAt('/regio/limburg').body, /href="\/merk\/landal\/limburg"/);
-  assert.match(pageAt('/parken').body, /Per merk[^]*href="\/merk\/landal"/);
-  assert.equal(pageAt('/merk/landal/nederland'), undefined, 'the same parks as the Limburg list');
-  assert.ok(isPagePath('/merk/roompot/zeeland') && isPagePath('/merk/roompot') && !isPagePath('/merk/roompot/zeeland/x'));
+  assert.match(pageAt('/regio/limburg').body, /href="\/aanbieder\/landal\/limburg"/);
+  assert.match(pageAt('/parken').body, /Per aanbieder[^]*href="\/aanbieder\/landal"/);
+  assert.equal(pageAt('/aanbieder/landal/nederland'), undefined, 'the same parks as the Limburg list');
+  assert.ok(isPagePath('/aanbieder/roompot/zeeland') && isPagePath('/aanbieder/roompot') && !isPagePath('/aanbieder/roompot/zeeland/x'));
 });
 
 test('the last-minute page says how many parks have room and gives tips', () => {

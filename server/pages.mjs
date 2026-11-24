@@ -45,7 +45,7 @@ const SITE_NAME = 'Parkje weg';
 const SITE_URL = 'https://parkjeweg.nl';
 
 const PAGE_PATH =
-  /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|regio\/[a-z0-9-]+|thema\/[a-z0-9-]+|land\/[a-z0-9-]+|merk\/[a-z0-9-]+(?:\/[a-z0-9-]+)?|feestdag\/[a-z0-9-]+|vakantie\/[a-z0-9-]+|last-minute|privacy|zo-werkt-het|sitemap\.xml|robots\.txt)$/;
+  /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|regio\/[a-z0-9-]+|thema\/[a-z0-9-]+|land\/[a-z0-9-]+|aanbieder\/[a-z0-9-]+(?:\/[a-z0-9-]+)?|feestdag\/[a-z0-9-]+|vakantie\/[a-z0-9-]+|last-minute|privacy|zo-werkt-het|sitemap\.xml|robots\.txt)$/;
 /** Whether a path is one of these pages (or their sitemap and robots.txt) rather than the app. */
 export const isPagePath = (pathname) => PAGE_PATH.test(pathname);
 
@@ -486,7 +486,7 @@ export const regionOf = (park) => {
 const regionPath = (region) => `/regio/${slugify(region)}`;
 const countryPath = (country) => `/land/${slugify(countryName(country))}`;
 /** A brand's own list, of all its parks or of those in one region or country: people search "roompot zeeland". */
-const brandPath = (brand, place) => `/merk/${slugify(brandName(brand))}${place ? `/${slugify(place)}` : ''}`;
+const brandPath = (brand, place) => `/aanbieder/${slugify(brandName(brand))}${place ? `/${slugify(place)}` : ''}`;
 
 const WADDEN = 'Waddeneilanden';
 /** Areas people search for that the providers file under a larger region: by place, or by where a park lies. */
@@ -1338,7 +1338,7 @@ function placePage(name, parks, { path, place, emoji, pathOf, surroundings, link
     ? `Alle ${parks.length} vakantieparken van ${label}${place ? ` ${place}` : ''} naast elkaar, met de prijs van elk komend weekend. ${listIntro(parks).join(' ')}`
     : (PLACE_INTROS[name] ?? `Alle vakantieparken ${place}, met de prijs van elk komend weekend.`);
   const preposition = where.slice(0, where.length - name.length).trim();
-  const sources = brand ? ['merkpagina', 'merkbalk'] : ['regiopagina', 'regiobalk'];
+  const sources = brand ? ['aanbiederpagina', 'aanbiederbalk'] : ['regiopagina', 'regiobalk'];
   const titled = brand && place ? `${label} ${name}` : brand ? `${label} vakantieparken` : `Vakantiepark ${name}`;
   const body = html`
     ${breadcrumb(brand && place ? `${label} ${place}` : name, ['/parken', 'Alle parken'], ...(brand && place ? [[brandPath(brand), label]] : []))}
@@ -1457,7 +1457,7 @@ function lastMinutePage(weekends, { pathOf, occasionsOf, parks, regions = [], br
     ${
       labels.length > 0 &&
       html`<section aria-labelledby="whose" class="mt-10">
-        ${sectionTitle('whose', '🏷️', 'Last minute per merk')}
+        ${sectionTitle('whose', '🏷️', 'Last minute per aanbieder')}
         ${chipList(labels, '🏷️')}
       </section>`
     }
@@ -1614,7 +1614,7 @@ function parksIndex(parks, { pathOf, regions, themes, countries: countryPages, b
     ${popularSection(parks, { pathOf })}
     <section aria-labelledby="themes" class="mt-10">${sectionTitle('themes', '✨', 'Per thema')}${chips(themes.map(([theme, list]) => [themePath(theme), themeIcon(theme), theme.label, list.length]))}</section>
     <section aria-labelledby="countries" class="mt-10">${sectionTitle('countries', '🌍', 'Per land')}${chips(countryPages.map(([country, list]) => [countryPath(country), '📍', countryName(country), list.length]))}</section>
-    <section aria-labelledby="brands" class="mt-10">${sectionTitle('brands', '🏷️', 'Per merk')}${chips(brands.map(([brand, list]) => [brandPath(brand), '🏷️', brandName(brand), list.length]))}</section>
+    <section aria-labelledby="brands" class="mt-10">${sectionTitle('brands', '🏷️', 'Per aanbieder')}${chips(brands.map(([brand, list]) => [brandPath(brand), '🏷️', brandName(brand), list.length]))}</section>
     <section aria-labelledby="regions" class="mt-10">${sectionTitle('regions', '🗺️', 'Per regio')}${chips(regions.map(([region, list]) => [regionPath(region), '📍', region, list.length]))}</section>
     ${countries.map(
       ([country, list]) => html`<section class="mt-10">
