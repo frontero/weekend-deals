@@ -2259,7 +2259,7 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
     </script>
   </head>
   <body>
-    <header class="border-b border-line bg-surface">
+    <header class="border-b border-line bg-surface/90 backdrop-blur sm:sticky sm:top-0 sm:z-30">
       <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:gap-x-6 sm:px-6">
         <a href="/" class="flex items-center gap-2 text-lg font-black tracking-tight"><span aria-hidden="true" class="grid size-9 -rotate-6 place-items-center rounded-full bg-sun text-on-sun shadow-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="size-5"><path d="M3 10.5 12 3l9 7.5M5 9v11h5v-6h4v6h5V9" /></svg></span>${SITE_NAME}</a>
         <nav aria-label="Hoofdmenu" class="order-last flex basis-full gap-4 text-sm sm:order-none sm:basis-auto">

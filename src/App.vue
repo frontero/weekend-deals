@@ -572,18 +572,20 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
     </div>
   </main>
 
-  <footer class="border-t border-line bg-surface">
+  <footer class="mt-16 rounded-t-[2.5rem] bg-accent-wash">
     <FeedbackPrompt />
-    <p class="mx-auto max-w-7xl px-4 py-6 text-sm text-ink-secondary sm:px-6">
+    <p class="mx-auto max-w-7xl px-4 pt-8 pb-4 text-sm font-semibold text-ink-secondary sm:px-6">
       Parkje weg vergelijkt prijzen van Landal, Topparken en Molecaten. Links naar een aanbieder zijn
       affiliate-links: boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra,
       en het bepaalt niet welke parken je hier ziet.
     </p>
-    <nav aria-label="Meer op de site" class="mx-auto flex max-w-7xl flex-wrap gap-x-4 gap-y-2 px-4 pb-6 text-sm sm:px-6">
-      <a href="/weekenden" class="inline-flex min-h-6 items-center font-medium text-accent hover:underline">Alle weekenden</a>
-      <a href="/parken" class="inline-flex min-h-6 items-center font-medium text-accent hover:underline">Alle parken</a>
-      <a href="/zo-werkt-het" class="inline-flex min-h-6 items-center font-medium text-accent hover:underline">Zo werkt het</a>
-      <a href="/privacy" class="inline-flex min-h-6 items-center font-medium text-accent hover:underline">Privacy</a>
+    <nav aria-label="Over de site" class="mx-auto flex max-w-7xl flex-wrap gap-x-4 gap-y-2 px-4 pb-8 text-sm sm:px-6">
+      <a href="/weekenden" class="inline-flex min-h-6 items-center font-bold text-accent hover:underline">Alle weekenden</a>
+      <a href="/parken" class="inline-flex min-h-6 items-center font-bold text-accent hover:underline">Alle parken</a>
+      <a href="/cijfers" class="inline-flex min-h-6 items-center font-bold text-accent hover:underline">Cijfers</a>
+      <a href="/last-minute" class="inline-flex min-h-6 items-center font-bold text-accent hover:underline">Last minute</a>
+      <a href="/zo-werkt-het" class="inline-flex min-h-6 items-center font-bold text-accent hover:underline">Zo werkt het</a>
+      <a href="/privacy" class="inline-flex min-h-6 items-center font-bold text-accent hover:underline">Privacy</a>
     </nav>
   </footer>
 

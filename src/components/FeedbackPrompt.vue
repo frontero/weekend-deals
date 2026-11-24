@@ -26,8 +26,8 @@ function send() {
 </script>
 
 <template>
-  <section aria-labelledby="feedback-title" class="mx-auto max-w-7xl px-4 pt-6 text-sm sm:px-6">
-    <div class="max-w-xl rounded-2xl bg-plane p-4 ring-1 ring-line">
+  <section aria-labelledby="feedback-title" class="mx-auto max-w-7xl px-4 pt-8 text-sm sm:px-6">
+    <div class="max-w-xl rounded-2xl bg-surface p-4 ring-1 ring-line">
       <h2 id="feedback-title" class="font-semibold">Heb je gevonden wat je zocht?</h2>
       <p v-if="step === 'thanked'" class="mt-2 text-ink-secondary" role="status">Bedankt, daar hebben we wat aan.</p>
       <div v-else-if="step === 'asking'" class="mt-3 flex gap-2">
