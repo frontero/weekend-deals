@@ -85,10 +85,11 @@ const byKind = computed(() =>
       </div>
     </section>
     <div class="grid gap-4 xl:grid-cols-2">
-      <section v-for="table in searchTables" :key="table.id" class="rounded-2xl bg-surface ring-1 ring-line" :aria-labelledby="`seo-${table.id}`">
+      <section v-for="table in searchTables" :key="table.id" class="min-w-0 rounded-2xl bg-surface ring-1 ring-line" :aria-labelledby="`seo-${table.id}`">
         <h2 :id="`seo-${table.id}`" class="border-b border-line px-4 py-3 font-semibold sm:px-5">{{ table.title }}</h2>
         <p v-if="!table.rows.length" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Google heeft de site nog niet in zoekresultaten getoond.</p>
-        <table v-else class="w-full text-left text-sm">
+        <div v-else class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
           <thead class="text-ink-secondary">
             <tr class="border-b border-line">
               <th scope="col" class="px-4 py-2.5 font-medium sm:px-5">{{ table.first }}</th>
@@ -106,6 +107,7 @@ const byKind = computed(() =>
             </tr>
           </tbody>
         </table>
+        </div>
       </section>
     </div>
 

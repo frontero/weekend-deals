@@ -81,6 +81,8 @@ const LANDINGS = {
   onbekend: 'Onbekend',
 };
 const percent = (part, whole) => (whole ? `${Math.round((part / whole) * 100)}%` : '–');
+// Short column names so five columns fit a phone; this line under the title says what they stand for.
+const CONVERSION_NOTE = 'Park: bekeek een park. Klik: klikte door naar een aanbieder. %: het deel van de bezoekers dat doorklikte.';
 const conversionRows = (rows, label) => rows.map((row) => ({ cells: [label(row), count(row.visitors), count(row.parkVisitors), count(row.clickers), percent(row.clickers, row.visitors)] }));
 // What the clicks could bring in: both shares are guesses the admin can change, never figures of the site's own.
 const bookingPercent = ref(5);
@@ -261,9 +263,20 @@ const clickValue = computed(() => {
   const euros = rows.reduce((sum, row) => sum + row.euros, 0);
   return { rows, euros, clicks: rows.reduce((sum, row) => sum + row.clicks, 0), estimate: euros * (bookingPercent.value / 100) * (feePercent.value / 100) };
 });
+// The tables in the order a reader looks for them, under a heading each; the links on top jump to a heading.
+const GROUPS = [
+  ['days', 'Per dag'],
+  ['origin', 'Herkomst'],
+  ['use', 'Gebruik'],
+  ['clicks', 'Doorkliks'],
+  ['tech', 'Techniek'],
+  ['remarks', 'Reacties'],
+];
+const groups = computed(() => GROUPS.map(([id, title]) => ({ id, title, tables: tables.value.filter((table) => table.group === id) })));
 const tables = computed(() => [
   {
     id: 'days',
+    group: 'days',
     title: 'Per dag: klik op een dag voor wat bezoekers deden',
     columns: ['Dag', 'Bezoekers', "Pagina's", 'Doorgeklikt'],
     rows: [...perDay.value]
@@ -273,12 +286,14 @@ const tables = computed(() => [
   },
   {
     id: 'actions',
+    group: 'use',
     title: 'Wat bezoekers gebruiken',
     columns: ['Onderdeel', 'Bezoekers', 'Keer'],
     rows: (report.value?.actions ?? []).map((row) => ({ cells: [actionLabel(row), count(row.visitors), count(row.uses)] })),
   },
   {
     id: 'choices',
+    group: 'use',
     title: 'Wat ze kiezen',
     columns: ['Onderdeel', 'Keuze', 'Bezoekers'],
     rows: Object.entries(CHOICES).flatMap(([control, format]) =>
@@ -290,54 +305,65 @@ const tables = computed(() => [
   },
   {
     id: 'parks',
+    group: 'use',
     title: 'Parken: bekeken en doorgeklikt',
     columns: ['Park', 'Bekeken', 'Doorgeklikt'],
     rows: parks.value.map((park) => ({ cells: [park.name, count(park.opened), count(park.clicked)], to: park.to })),
   },
   {
     id: 'by-source',
+    group: 'origin',
     title: 'Welke bron klikt door',
-    columns: ['Bron van het eerste bezoek', 'Bezoekers', 'Bekeek een park', 'Klikte door', 'Aandeel'],
+    columns: ['Bron', 'Bezoekers', 'Park', 'Klik', '%'],
+    note: CONVERSION_NOTE,
     rows: conversionRows(report.value?.bySource ?? [], (row) => SOURCES[row.source] ?? row.source),
   },
   {
     id: 'by-landing',
+    group: 'origin',
     title: 'Welke pagina werkt als binnenkomer',
-    columns: ['Eerste pagina van het bezoek', 'Bezoekers', 'Bekeek een park', 'Klikte door', 'Aandeel'],
+    columns: ['Eerste pagina', 'Bezoekers', 'Park', 'Klik', '%'],
+    note: CONVERSION_NOTE,
     rows: conversionRows(report.value?.byLanding ?? [], (row) => LANDINGS[row.kind] ?? row.kind),
   },
   {
     id: 'regions',
+    group: 'origin',
     title: 'Provincie of regio',
     columns: ['Regio, geschat uit het netwerk', 'Bezoekers'],
     rows: (report.value?.regions ?? []).map((row) => ({ cells: [[regionName(row.region), row.country && countryName(row.country)].filter(Boolean).join(', '), count(row.visitors)] })),
   },
   {
     id: 'browsers',
+    group: 'origin',
     title: 'Browser en systeem',
     columns: ['Browser', 'Bezoekers'],
     rows: (report.value?.browsers ?? []).map((row) => ({ cells: [row.browser, count(row.visitors)] })),
   },
   {
     id: 'screens',
+    group: 'origin',
     title: 'Schermgrootte',
     columns: ['Scherm', 'Bezoekers'],
     rows: (report.value?.screens ?? []).map((row) => ({ cells: [SCREENS[row.screen] ?? row.screen, count(row.visitors)] })),
   },
   {
     id: 'campaigns',
+    group: 'origin',
     title: 'Campagnes',
     columns: ['Label van de link (utm_campaign)', 'Bezoekers'],
     rows: (report.value?.choices ?? []).filter((row) => row.name === 'view').map((row) => ({ cells: [row.value, count(row.visitors)] })),
   },
   {
     id: 'empty',
+    group: 'use',
     title: 'Zoeken zonder resultaat',
     columns: ['Ingestelde filters', 'Bezoekers'],
     rows: (report.value?.choices ?? []).filter((row) => row.name === 'empty').map((row) => ({ cells: [filterNames(row.value), count(row.visitors)] })),
   },
   {
     id: 'click-discounts',
+    group: 'clicks',
     title: 'Kliks naar korting',
     columns: ['Korting op de normale prijs', 'Kliks', 'Gemiddelde prijs'],
     rows: (report.value?.clickDiscounts ?? []).map((row) => ({
@@ -346,12 +372,14 @@ const tables = computed(() => [
   },
   {
     id: 'click-weeks',
+    group: 'clicks',
     title: 'Kliks: hoeveel weken vooruit',
     columns: ['Weken tot het weekend', 'Kliks'],
     rows: (report.value?.clickWeeks ?? []).map((row) => ({ cells: [count(row.weeks), count(row.clicks)] })),
   },
   {
     id: 'speed',
+    group: 'tech',
     title: 'Snelheid',
     columns: ['Meting', 'Apparaat', 'Gemiddeld', 'Metingen'],
     left: 2,
@@ -359,19 +387,23 @@ const tables = computed(() => [
   },
   {
     id: 'errors',
+    group: 'tech',
     title: 'Fouten in de browser',
     columns: ['Melding', 'Bezoekers'],
     rows: (report.value?.choices ?? []).filter((row) => row.name === 'error').map((row) => ({ cells: [row.value, count(row.visitors)] })),
   },
   {
     id: 'feedback',
+    group: 'remarks',
     title: 'Opmerkingen van bezoekers',
-    columns: ['Opmerking', 'Gevonden', 'Pagina', 'Wanneer'],
-    left: 4,
-    rows: (report.value?.feedback ?? []).map((row) => ({ cells: [row.comment, row.found, row.path, formatTimestamp(row.at)] })),
+    // Read as sentences, not as columns: on a phone four columns leave a remark a few letters wide.
+    remarks: (report.value?.feedback ?? []).map((row) => ({ text: row.comment, note: `Gevonden wat ze zochten: ${row.found} · ${row.path} · ${formatTimestamp(row.at)}` })),
+    columns: [],
+    rows: (report.value?.feedback ?? []).map((row) => ({ cells: [row.comment] })),
   },
   {
     id: 'pages',
+    group: 'use',
     title: "Meest bekeken pagina's",
     columns: ['Pagina', 'Weergaven', 'Bezoekers'],
     rows: (report.value?.pages ?? []).map((row) => ({ cells: [row.path, count(row.views), count(row.visitors)] })),
@@ -393,7 +425,7 @@ const tables = computed(() => [
     </p>
   </div>
   <div v-else class="flex flex-col gap-6">
-    <div class="flex flex-wrap items-center gap-3">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
       <p class="max-w-3xl flex-1 text-ink-secondary">
         Anoniem geteld, zonder cookies: een bezoeker is een code die één dag geldt. Zoekmachines en je eigen bezoeken
         als beheerder tellen niet mee.
@@ -406,7 +438,19 @@ const tables = computed(() => [
       </label>
     </div>
 
-    <section aria-label="Kerncijfers" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <nav aria-label="Op deze pagina" class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 text-sm sm:mx-0 sm:flex-wrap sm:px-0">
+      <a
+        v-for="group in groups"
+        :key="group.id"
+        :href="`#${group.id}`"
+        class="inline-flex min-h-8 shrink-0 items-center rounded-full bg-surface px-3 font-medium ring-1 ring-line hover:ring-accent"
+      >
+        {{ group.title }}
+      </a>
+      <a href="#click-value-title" class="inline-flex min-h-8 shrink-0 items-center rounded-full bg-surface px-3 font-medium ring-1 ring-line hover:ring-accent">Waarde in euro's</a>
+    </nav>
+
+    <section aria-label="Kerncijfers" class="grid grid-cols-2 gap-3 xl:grid-cols-4">
       <StatTile v-for="tile in tiles" :key="tile.label" v-bind="tile" />
     </section>
 
@@ -429,18 +473,29 @@ const tables = computed(() => [
       </ChartCard>
     </div>
 
-    <div class="grid gap-4 xl:grid-cols-2">
-      <section v-for="table in tables" :key="table.id" class="rounded-2xl bg-surface ring-1 ring-line" :aria-labelledby="`${table.id}-title`">
-        <h2 :id="`${table.id}-title`" class="border-b border-line px-4 py-3 font-semibold sm:px-5">{{ table.title }}</h2>
-        <p v-if="!table.rows.length" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Nog niets geteld.</p>
-        <table v-else class="w-full text-left text-sm">
+    <section v-for="group in groups" :id="group.id" :key="group.id" class="flex scroll-mt-20 flex-col gap-3" :aria-labelledby="`${group.id}-heading`">
+      <h2 :id="`${group.id}-heading`" class="text-lg font-semibold">{{ group.title }}</h2>
+      <div class="grid gap-4 xl:grid-cols-2">
+      <section v-for="table in group.tables" :key="table.id" class="min-w-0 rounded-2xl bg-surface ring-1 ring-line" :aria-labelledby="`${table.id}-title`">
+        <h3 :id="`${table.id}-title`" class="border-b border-line px-3 py-3 font-semibold sm:px-5">{{ table.title }}</h3>
+        <p v-if="table.note" class="px-3 pt-2 text-xs text-ink-secondary sm:px-5">{{ table.note }}</p>
+        <p v-if="!table.rows.length" class="px-3 py-3 text-sm text-ink-secondary sm:px-5">Nog niets geteld.</p>
+        <ul v-else-if="table.remarks" class="divide-y divide-line text-sm">
+          <li v-for="(remark, index) in table.remarks" :key="index" class="px-3 py-3 sm:px-5">
+            <p class="break-words">{{ remark.text }}</p>
+            <p class="mt-1 text-xs break-words text-ink-secondary">{{ remark.note }}</p>
+          </li>
+        </ul>
+        <!-- A table wider than a phone scrolls sideways inside its card, so the page itself never does. -->
+        <div v-else class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
           <thead class="text-ink-secondary">
             <tr class="border-b border-line">
               <th
                 v-for="(column, index) in table.columns"
                 :key="column"
                 scope="col"
-                class="px-4 py-2.5 font-medium sm:px-5"
+                class="px-3 py-2.5 font-medium sm:px-5"
                 :class="index >= (table.left ?? (column === 'Keuze' ? 2 : 1)) ? 'text-right' : ''"
               >
                 {{ column }}
@@ -449,7 +504,7 @@ const tables = computed(() => [
           </thead>
           <tbody class="tabular-nums">
             <tr v-for="(row, rowIndex) in table.rows" :key="rowIndex" class="border-b border-line last:border-0 hover:bg-hover">
-              <th scope="row" class="px-4 py-2 font-normal sm:px-5">
+              <th scope="row" class="px-3 py-2 font-normal sm:px-5">
                 <RouterLink v-if="row.to" :to="row.to" class="font-medium text-accent hover:underline">{{ row.cells[0] }}</RouterLink>
                 <button v-else-if="row.day" type="button" class="min-h-6 font-medium text-accent hover:underline" @click="openDay(row.day)">
                   {{ row.cells[0] }}
@@ -459,7 +514,7 @@ const tables = computed(() => [
               <td
                 v-for="(cell, index) in row.cells.slice(1)"
                 :key="index"
-                class="px-4 py-2 sm:px-5"
+                class="px-3 py-2 sm:px-5"
                 :class="index + 1 < (table.left ?? (table.columns[index + 1] === 'Keuze' ? 2 : 1)) ? '' : 'text-right font-semibold'"
               >
                 {{ cell }}
@@ -467,8 +522,10 @@ const tables = computed(() => [
             </tr>
           </tbody>
         </table>
+        </div>
       </section>
-    </div>
+      </div>
+    </section>
 
     <section class="rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="click-value-title">
       <h2 id="click-value-title" class="border-b border-line px-4 py-3 font-semibold sm:px-5">Waarop geklikt is, in euro's</h2>
@@ -480,13 +537,17 @@ const tables = computed(() => [
           <span class="text-2xl font-black tabular-nums">{{ formatEuros(clickValue.euros * 100) }}</span>
           <span class="text-ink-secondary"> aan weekenden waar bezoekers voor doorklikten, in {{ count(clickValue.clicks) }} {{ clickValue.clicks === 1 ? 'klik' : 'klikken' }}.</span>
         </p>
-        <p class="flex flex-wrap items-center gap-2">
-          Als
-          <input v-model.number="bookingPercent" type="number" min="0" max="100" step="1" aria-label="Aandeel klikken dat boekt, in procenten" class="h-8 w-16 rounded-lg bg-plane px-2 ring-1 ring-field" />
-          % van de klikken een boeking wordt en de aanbieder
-          <input v-model.number="feePercent" type="number" min="0" max="100" step="0.5" aria-label="Vergoeding van de aanbieder, in procenten" class="h-8 w-16 rounded-lg bg-plane px-2 ring-1 ring-field" />
-          % betaalt, is dat ongeveer <strong class="tabular-nums">{{ formatEuros(clickValue.estimate * 100) }}</strong>.
-        </p>
+        <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6">
+          <label class="flex items-center justify-between gap-2 sm:justify-start">
+            <span>Deel van de klikken dat boekt</span>
+            <span class="flex items-center gap-1"><input v-model.number="bookingPercent" type="number" min="0" max="100" step="1" class="h-9 w-16 rounded-lg bg-plane px-2 ring-1 ring-field" /> %</span>
+          </label>
+          <label class="flex items-center justify-between gap-2 sm:justify-start">
+            <span>Vergoeding van de aanbieder</span>
+            <span class="flex items-center gap-1"><input v-model.number="feePercent" type="number" min="0" max="100" step="0.5" class="h-9 w-16 rounded-lg bg-plane px-2 ring-1 ring-field" /> %</span>
+          </label>
+        </div>
+        <p>Dat is dan ongeveer <strong class="text-lg tabular-nums">{{ formatEuros(clickValue.estimate * 100) }}</strong>.</p>
         <p class="text-xs text-ink-secondary">Een schatting: beide percentages zijn aannames die je zelf invult. Wat een klik echt opleverde, staat straks bij het affiliate-netwerk.</p>
         <ul class="divide-y divide-line tabular-nums">
           <li v-for="row in [...clickValue.rows].reverse()" :key="row.day" class="flex justify-between gap-4 py-1.5">
@@ -509,9 +570,9 @@ const tables = computed(() => [
       </p>
       <p v-else-if="!opened.visitors.length" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Niets geteld op deze dag.</p>
       <template v-else>
-        <div class="flex flex-wrap items-center gap-3 px-4 pt-3 text-sm sm:px-5">
+        <div class="flex flex-col gap-3 px-3 pt-3 text-sm sm:flex-row sm:items-center sm:px-5">
           <p class="flex-1 text-ink-secondary">
-            {{ count(opened.visitors.length) }} bezoekers. Een bezoeker is een code die alleen deze dag geldt; tijden zijn die van jouw computer.
+            {{ count(opened.visitors.length) }} {{ opened.visitors.length === 1 ? 'bezoeker' : 'bezoekers' }}. Een bezoeker is een code die alleen deze dag geldt; tijden zijn die van jouw computer.
           </p>
           <label class="flex items-center gap-2">
             <span class="text-ink-secondary">Sorteer op</span>
@@ -521,7 +582,7 @@ const tables = computed(() => [
             </select>
           </label>
         </div>
-        <ol class="grid gap-3 p-4 sm:p-5 xl:grid-cols-2">
+        <ol class="grid gap-3 p-3 sm:p-5 xl:grid-cols-2">
           <li v-for="(visitor, index) in dayVisitors" :key="visitor.visitor" class="rounded-xl bg-plane p-3 ring-1 ring-line">
             <p class="text-sm font-semibold">
               Bezoeker {{ index + 1 }}

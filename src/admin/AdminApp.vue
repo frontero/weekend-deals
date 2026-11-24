@@ -91,7 +91,7 @@ watch(() => route.fullPath, closeMenu);
 
     <dialog
       ref="menu"
-      class="m-0 h-dvh max-h-dvh w-72 max-w-[85vw] bg-surface p-0 text-ink shadow-2xl lg:hidden"
+      class="m-0 h-dvh max-h-dvh w-72 max-w-[85vw] bg-surface p-0 text-ink shadow-2xl [--dialog-from:-100%_0] lg:hidden"
       aria-label="Menu"
       @click.self="closeMenu"
     >

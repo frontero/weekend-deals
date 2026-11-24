@@ -18,8 +18,9 @@ const TONES = { good: 'text-good-ink', bad: 'text-warning-ink', neutral: 'text-i
   <div class="flex min-w-0 flex-col rounded-2xl bg-surface p-4 ring-1 ring-line">
     <p class="text-sm text-ink-secondary">{{ label }}</p>
     <div class="mt-1 flex items-end justify-between gap-3">
-      <p class="truncate text-2xl font-semibold tracking-tight">{{ value }}</p>
-      <Sparkline v-if="trend" :values="trend" class="mb-1 shrink-0" />
+      <!-- The number always shows whole; in a narrow tile it is the trend line that gives way. -->
+      <p class="shrink-0 text-2xl font-semibold tracking-tight">{{ value }}</p>
+      <div v-if="trend" class="flex min-w-0 justify-end overflow-hidden"><Sparkline :values="trend" class="mb-1 shrink-0" /></div>
     </div>
     <p class="mt-1 text-sm">
       <span v-if="delta" class="font-medium" :class="TONES[delta.tone ?? 'neutral']">{{ delta.text }}</span>
