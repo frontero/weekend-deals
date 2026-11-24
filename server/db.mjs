@@ -725,6 +725,19 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       return { days, queries, pages };
     },
 
+    async searchTotals() {
+      return parseJson(await readSetting('googleSearchTotals'), null);
+    },
+
+    async saveSearchTotals(totals) {
+      await client.execute({
+        sql: `INSERT INTO settings (key, value) VALUES ('googleSearchTotals', ?)
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value
+              WHERE COALESCE(json_extract(settings.value, '$.checkedAt'), '') <= ?`,
+        args: [JSON.stringify(totals), totals.checkedAt],
+      });
+    },
+
     /** The stored pages Google was asked about longest ago, never-asked ones first. */
     async pagesToInspect(limit) {
       const rows = await all(

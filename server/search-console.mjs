@@ -2,6 +2,7 @@
 // click. Signed in as a service account that was added to the property as a restricted user
 // (scripts/setup-search-console.sh). Node only: the rounds run it, not the Worker.
 import { createSign } from 'node:crypto';
+import { shiftDays } from '../shared/weekends.mjs';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
@@ -82,6 +83,20 @@ const DAYS_BACK = 7;
 // Pages asked about per round: Google allows 2,000 a day, and a round should not take minutes longer for it.
 const INSPECTIONS = 60;
 const TOGETHER = 6;
+// Two adjacent 28-day periods plus a week for final data to arrive, using Google's Pacific calendar.
+const TOTAL_LOOKBACK = 63;
+const searchDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Los_Angeles', dateStyle: 'short' });
+
+export async function updateSearchTotals(db, token, { fetcher = fetch, now = Date.now() } = {}) {
+  const today = searchDate.format(now);
+  const rows = await searchAnalytics(token, {
+    startDate: shiftDays(today, -TOTAL_LOOKBACK),
+    endDate: shiftDays(today, -1),
+    dimensions: ['date'],
+  }, { fetcher });
+  const days = rows.map(({ keys: [day], clicks, impressions }) => ({ day, clicks, impressions }));
+  await db.saveSearchTotals({ checkedAt: new Date(now).toISOString(), days });
+}
 
 /**
  * One round's reading of Search Console into the database: the search figures of the last days, the sitemap's state
@@ -92,6 +107,11 @@ export async function updateSearchConsole(db, account, { fetcher = fetch, now = 
   const token = await accessToken(account, { fetcher, now });
   const day = (back) => new Date(now - back * DAY_MS).toISOString().slice(0, 10);
   const read = { rows: 0, inspected: 0 };
+  try {
+    await updateSearchTotals(db, token, { fetcher, now });
+  } catch (error) {
+    log(`search totals failed: ${error.message}`);
+  }
   try {
     const rows = await searchAnalytics(token, { startDate: day(DAYS_BACK), endDate: day(0), dimensions: ['date', 'page', 'query'], rowLimit: 5000 }, { fetcher });
     await db.saveSearchStats(

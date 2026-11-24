@@ -92,6 +92,13 @@ try {
     await check('the admin page shows the rounds', () =>
       page.getByRole('heading', { name: 'Prijsrondes' }).waitFor({ timeout: TIMEOUT_MS }),
     );
+    await page.goto(`http://localhost:${PORT}/beheer/seo`);
+    await check('the SEO page offers both comparison periods', async () => {
+      const period = page.getByRole('combobox', { name: 'Vergelijkingsperiode' });
+      await period.selectOption('7');
+      await period.selectOption('28');
+      await page.getByText('Opgenomen door Google', { exact: true }).waitFor({ timeout: TIMEOUT_MS });
+    });
     if (errors.length) failures.push(`${viewport.name}: errors in the page: ${[...new Set(errors)].join(' | ')}`);
     await page.close();
   }

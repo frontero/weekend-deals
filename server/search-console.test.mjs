@@ -52,6 +52,12 @@ test("a round's reading stores the search figures, the sitemap state and what Go
   const fetcher = async (url, init) => {
     if (url.includes('oauth2')) return Response.json({ access_token: 't' });
     if (url.endsWith('/searchAnalytics/query')) {
+      const request = JSON.parse(init.body);
+      if (request.dimensions.length === 1) {
+        assert.deepEqual(request.dimensions, ['date']);
+        assert.equal(request.endDate, '2026-11-18');
+        return Response.json({ rows: [{ keys: ['2026-11-17'], clicks: 5, impressions: 70, ctr: 5 / 70, position: 7 }] });
+      }
       return Response.json({ rows: [{ keys: ['2026-11-17', 'https://parkjeweg.nl/feestdag/kerst', 'vakantiepark kerst'], clicks: 2, impressions: 30, ctr: 0.07, position: 9 }, { keys: ['2026-11-17', 'https://parkjeweg.nl/', 'parkje weg'], clicks: 1, impressions: 10, ctr: 0.1, position: 1 }] });
     }
     if (url.endsWith('/sitemaps')) return Response.json({ sitemap: [{ path: 'https://parkjeweg.nl/sitemap.xml', lastDownloaded: '2026-11-18T08:58:06Z', errors: '0', warnings: '1', isPending: false }] });
@@ -65,6 +71,10 @@ test("a round's reading stores the search figures, the sitemap state and what Go
 
   const summary = await db.searchSummary('2026-11-01');
   assert.deepEqual(summary.days, [{ day: '2026-11-17', clicks: 3, impressions: 40, position: 7 }]);
+  await db.saveSearchTotals({ checkedAt: '2026-11-18T12:00:00.000Z', days: [] });
+  assert.deepEqual(await db.searchTotals(), {
+    checkedAt: '2026-11-19T12:00:00.000Z', days: [{ day: '2026-11-17', clicks: 5, impressions: 70 }],
+  });
   assert.deepEqual(summary.pages.map((row) => [row.path, row.impressions]), [['/feestdag/kerst', 30], ['/', 10]]);
   assert.equal(summary.queries[0].query, 'vakantiepark kerst');
   assert.equal((await db.searchSitemaps()).sitemaps[0].warnings, 1);

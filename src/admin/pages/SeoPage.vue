@@ -1,14 +1,17 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { formatTimestamp } from '../../lib/format.js';
+import { formatShortDate, formatTimestamp } from '../../lib/format.js';
 import StatTile from '../components/StatTile.vue';
+import { SEARCH_PERIODS, searchProgress } from '../seoProgress.js';
 import { count } from '../useRounds.js';
 
 // What the check after each price round found on the public pages (server/seo.mjs).
 const audit = ref(null);
 const kinds = ref({});
 // From Google Search Console, read in each price round (server/search-console.mjs).
-const search = ref({ days: [], queries: [], pages: [] });
+const search = ref({ queries: [], pages: [] });
+const searchTotals = ref(null);
+const searchPeriod = ref(28);
 const index = ref([]);
 const sitemaps = ref(null);
 const pageCount = ref(0);
@@ -23,7 +26,7 @@ onMounted(async () => {
   try {
     const response = await fetch('/api/admin/seo');
     if (!response.ok) throw new Error(`SEO failed with ${response.status}`);
-    ({ audit: audit.value, kinds: kinds.value, search: search.value, index: index.value, sitemaps: sitemaps.value, pageCount: pageCount.value, speed: speed.value, bing: bing.value } = await response.json());
+    ({ audit: audit.value, kinds: kinds.value, search: search.value, searchTotals: searchTotals.value, index: index.value, sitemaps: sitemaps.value, pageCount: pageCount.value, speed: speed.value, bing: bing.value } = await response.json());
     state.value = 'ready';
   } catch {
     state.value = 'failed';
@@ -37,14 +40,48 @@ const tiles = computed(() => [
   { label: 'Bevindingen', value: count(total.value), hint: total.value ? '' : 'Niets gevonden' },
   { label: "Pagina's met een bevinding", value: count(affected.value), hint: total.value > (audit.value?.issues.length ?? 0) ? 'Van de eerste 300 bevindingen' : '' },
 ]);
-const sum = (field) => search.value.days.reduce((total, row) => total + row[field], 0);
 const place = (position) => position.toLocaleString('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const indexed = computed(() => index.value.filter((row) => row.verdict === 'PASS').length);
-const searchTiles = computed(() => [
-  { label: 'Getoond in Google, laatste 28 dagen', value: count(sum('impressions')), trend: search.value.days.map((row) => row.impressions) },
-  { label: 'Klikken vanuit Google', value: count(sum('clicks')), trend: search.value.days.map((row) => row.clicks) },
-  { label: 'Opgenomen door Google', value: `${count(indexed.value)} van ${count(index.value.length)}`, hint: `${count(pageCount.value - index.value.length)} pagina's nog niet nagevraagd` },
-]);
+const progress = computed(() => searchProgress(searchTotals.value?.days ?? [], searchPeriod.value));
+const percent = new Intl.NumberFormat('nl-NL', { style: 'percent', maximumFractionDigits: 2 });
+const signed = new Intl.NumberFormat('nl-NL', { signDisplay: 'exceptZero', maximumFractionDigits: 2 });
+const formatCtr = (value) => value === null ? '–' : percent.format(value);
+const searchDelta = (change, suffix = '') => ({
+  text: `${signed.format(change)}${suffix}`,
+  tone: change === 0 ? 'neutral' : change > 0 ? 'good' : 'bad',
+});
+const periodLabel = computed(() => {
+  if (progress.value === null) {
+    return 'De sitetotalen verschijnen zodra Google dagcijfers levert.';
+  }
+  const { start, end, previousStart, previousEnd, currentRows, previousAvailable, previous } = progress.value;
+  const currentLabel = `${formatShortDate(start)} t/m ${formatShortDate(end)}`;
+  if (previous === null) {
+    return `${currentLabel} · ${currentRows.length} van ${searchPeriod.value} dagen beschikbaar, vorige periode ${previousAvailable} van ${searchPeriod.value}. Meer dagcijfers nodig voor vergelijking.`;
+  }
+  return `${currentLabel} tegenover ${formatShortDate(previousStart)} t/m ${formatShortDate(previousEnd)}`;
+});
+const searchTiles = computed(() => {
+  if (progress.value === null) {
+    return [];
+  }
+  const { current, currentRows, previous } = progress.value;
+  const counts = [['impressions', 'Vertoningen in Google'], ['clicks', 'Klikken vanuit Google']];
+  return [
+    ...counts.map(([field, label]) => ({
+      label,
+      value: count(current[field]),
+      trend: currentRows.map((row) => row[field]),
+      delta: previous === null ? null : searchDelta(current[field] - previous[field]),
+      hint: previous === null ? '' : `Vorige periode ${count(previous[field])}`,
+    })),
+    {
+      label: 'Doorklikpercentage (CTR)', value: formatCtr(current.ctr),
+      delta: previous === null || previous.ctr === null || current.ctr === null ? null : searchDelta((current.ctr - previous.ctr) * 100, ' pp'),
+      hint: previous === null ? '' : `Vorige periode ${formatCtr(previous.ctr)}`,
+    },
+  ];
+});
 const notIndexed = computed(() => index.value.filter((row) => row.verdict !== 'PASS'));
 const coverage = computed(() => [...Map.groupBy(notIndexed.value, (row) => row.coverage || 'Onbekend')].sort((a, b) => b[1].length - a[1].length));
 const searchTables = computed(() => [
@@ -78,9 +115,29 @@ const byKind = computed(() =>
     De controle kon niet worden geladen.
   </p>
   <div v-else class="flex flex-col gap-6">
-    <h2 class="text-lg font-semibold">Google Search Console</h2>
-    <section aria-label="Kerncijfers van Google" class="grid gap-3 sm:grid-cols-3">
-      <StatTile v-for="tile in searchTiles" :key="tile.label" v-bind="tile" />
+    <section aria-labelledby="seo-google" class="space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="seo-google" class="text-lg font-semibold">Google Search Console</h2>
+        <label class="flex items-center gap-2 text-sm">
+          Vergelijkingsperiode
+          <select v-model.number="searchPeriod" class="rounded-lg bg-surface px-3 py-2 font-medium ring-1 ring-field">
+            <option v-for="period in SEARCH_PERIODS" :key="period" :value="period">{{ period }} dagen</option>
+          </select>
+        </label>
+      </div>
+      <p class="text-sm text-ink-secondary" aria-live="polite">{{ periodLabel }}</p>
+      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile
+          v-for="tile in searchTiles"
+          :key="tile.label"
+          v-bind="tile"
+        />
+        <StatTile
+          :value="`${count(indexed)} van ${count(index.length)}`"
+          :hint="`${count(pageCount - index.length)} pagina's nog niet nagevraagd`"
+          label="Opgenomen door Google"
+        />
+      </div>
     </section>
     <p v-if="sitemaps" class="text-sm text-ink-secondary">
       <template v-for="map in sitemaps.sitemaps" :key="map.path">
@@ -99,8 +156,8 @@ const byKind = computed(() =>
     </section>
     <div class="grid gap-4 xl:grid-cols-2">
       <section v-for="table in searchTables" :key="table.id" class="min-w-0 rounded-2xl bg-surface ring-1 ring-line" :aria-labelledby="`seo-${table.id}`">
-        <h2 :id="`seo-${table.id}`" class="border-b border-line px-4 py-3 font-semibold sm:px-5">{{ table.title }}</h2>
-        <p v-if="!table.rows.length" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Google heeft de site nog niet in zoekresultaten getoond.</p>
+        <h2 :id="`seo-${table.id}`" class="border-b border-line px-4 py-3 font-semibold sm:px-5">{{ table.title }} <span class="text-sm font-normal text-ink-secondary">· laatste 28 dagen</span></h2>
+        <p v-if="table.rows.length === 0" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Google heeft nog geen detailcijfers voor dit overzicht geleverd.</p>
         <div v-else class="overflow-x-auto">
         <table class="w-full text-left text-sm">
           <thead class="text-ink-secondary">
