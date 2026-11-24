@@ -767,6 +767,15 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       await writeSetting('pageSpeed', JSON.stringify(state));
     },
 
+    /** TradeTracker's bookings and report as last read (server/tradetracker.mjs), or null before the first. */
+    async affiliateSales() {
+      return parseJson(await readSetting('affiliateSales'), null);
+    },
+
+    async saveAffiliateSales(state) {
+      await writeSetting('affiliateSales', JSON.stringify(state));
+    },
+
     /** The last check of the public pages (server/seo.mjs), or null before the first. */
     async seoAudit() {
       return parseJson(await readSetting('seoAudit'), null);

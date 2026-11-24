@@ -12,6 +12,7 @@ import { scanStatus, statusBody } from './status.mjs';
 import { clientEventPoints, countsAsVisit, eventPoint } from './events.mjs';
 import { ISSUE_KINDS } from './seo.mjs';
 import { trafficReport, dayReport } from './traffic.mjs';
+import { withClickOrigin } from './tradetracker.mjs';
 
 const JSON_TYPE = 'application/json; charset=utf-8';
 // Group keys are short; anything longer is not one.
@@ -258,7 +259,8 @@ export function createApiHandler(
     // The clicks to providers: what earns the site its fees.
     'GET /admin/clicks': forAdmins(async (request) => {
       const days = Math.min(365, Math.max(1, Number(new URL(request.url).searchParams.get('days')) || 30));
-      return json(await db.clickStats(new Date(Date.now() - days * DAY_MS).toISOString()));
+      const [stats, sales, parks] = await Promise.all([db.clickStats(new Date(Date.now() - days * DAY_MS).toISOString()), db.affiliateSales(), db.parks()]);
+      return json({ ...stats, sales: sales && { ...sales, transactions: withClickOrigin(sales.transactions, [...parks.values()]) } });
     }),
 
     // Visitors, where they came from and what they used: the counts from POST /events, /go and the pages.

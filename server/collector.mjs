@@ -17,6 +17,7 @@ import { roundInProgress } from './status.mjs';
 import { fetchSurroundings } from './surroundings.mjs';
 import { fetchSchoolHolidays } from './holidays.mjs';
 import { updatePageSpeed } from './pagespeed.mjs';
+import { tradeTrackerAccount, updateAffiliateSales } from './tradetracker.mjs';
 import { serviceAccount, updateSearchConsole } from './search-console.mjs';
 import { fetchForecast } from './weather.mjs';
 
@@ -414,6 +415,13 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
     if (read !== null) log(`pagespeed: ${read} pages read`);
   }
 
+  /** TradeTracker's bookings for the admin's Klikken page; skipped without the account's key (TRADETRACKER_*). */
+  async function refreshAffiliateSales() {
+    const account = tradeTrackerAccount();
+    if (!account || cancelled) return;
+    log(`tradetracker: ${await updateAffiliateSales(db, account)} bookings read`);
+  }
+
   /** Rebuilds the screen's data of each collected party whose data is missing or outdated. */
   async function updateOverviews() {
     if (cancelled) return;
@@ -533,6 +541,7 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
       await refreshSchoolHolidays().catch((error) => log(`school holidays failed: ${error.message}`));
       await refreshSearchConsole().catch((error) => log(`search console failed: ${error.message}`));
       await refreshPageSpeed().catch((error) => log(`pagespeed failed: ${error.message}`));
+      await refreshAffiliateSales().catch((error) => log(`tradetracker failed: ${error.message}`));
     });
 
     if (rerunRequested && !cancelled) {

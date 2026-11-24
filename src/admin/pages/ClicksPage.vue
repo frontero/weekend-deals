@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { formatShortDate } from '../../lib/format.js';
+import { formatShortDate, formatTimestamp } from '../../lib/format.js';
 import { providerName } from '../../lib/providers.js';
 import ChartCard from '../components/ChartCard.vue';
 import EChart from '../components/EChart.vue';
@@ -14,6 +14,9 @@ const PERIODS = [7, 30, 90];
 // Where on the page a click came from, as trackedBookingUrl names it.
 const SOURCES = { kaartje: 'Knop op een kaartje', parkvenster: 'Knop in het parkvenster' };
 const DAY_MS = 24 * 60 * 60 * 1000;
+// TradeTracker's own words for where a booking stands.
+const STATUSES = { pending: 'In afwachting', accepted: 'Goedgekeurd', rejected: 'Afgekeurd' };
+const money = new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' });
 
 const palette = usePalette();
 const days = ref(30);
@@ -74,6 +77,32 @@ const sourceChart = computed(() => splitChart(stats.value?.sources ?? [], (row) 
 const parks = computed(() =>
   (stats.value?.parks ?? []).map((row) => ({ ...row, to: `/beheer/parken/${encodeURIComponent(row.parkCode)}`, provider: providerName(row.provider) })),
 );
+
+// What TradeTracker registered: the clicks that became a booking, and what they pay.
+const sales = computed(() => stats.value?.sales ?? null);
+const bookings = computed(() =>
+  (sales.value?.transactions ?? []).map((entry) => ({
+    ...entry,
+    when: formatTimestamp(entry.registeredAt),
+    status: STATUSES[entry.status] ?? entry.status,
+    rejected: entry.status === 'rejected',
+    to: entry.parkCode ? `/beheer/parken/${encodeURIComponent(entry.parkCode)}` : null,
+    place: entry.source ? (SOURCES[entry.source] ?? entry.source) : entry.parkCode ? '' : entry.reference,
+    order: entry.orderAmount == null ? '–' : money.format(entry.orderAmount),
+    fee: money.format(entry.commission),
+  })),
+);
+const salesTiles = computed(() => {
+  const kept = (sales.value?.transactions ?? []).filter((entry) => entry.status !== 'rejected');
+  const sum = (status) => kept.filter((entry) => entry.status === status).reduce((total, entry) => total + entry.commission, 0);
+  const theirs = (sales.value?.report ?? []).reduce((total, row) => total + row.clicks, 0);
+  return [
+    { label: 'Boekingen', value: count(kept.length), hint: 'laatste 180 dagen, zonder afgekeurde' },
+    { label: 'Commissie goedgekeurd', value: money.format(sum('accepted')) },
+    { label: 'Commissie in afwachting', value: money.format(sum('pending')), hint: 'de aanbieder keurt na het verblijf' },
+    { label: 'Klikken volgens TradeTracker', value: count(theirs), hint: `laatste ${sales.value?.reportDays ?? 30} dagen` },
+  ];
+});
 </script>
 
 <template>
@@ -131,6 +160,47 @@ const parks = computed(() =>
           </tr>
         </tbody>
       </table>
+    </section>
+
+    <section class="flex flex-col gap-4" aria-labelledby="sales-title">
+      <div>
+        <h2 id="sales-title" class="text-lg font-semibold">Boekingen via TradeTracker</h2>
+        <p v-if="sales" class="text-sm text-ink-secondary">Wat TradeTracker zelf registreerde. Bijgewerkt op {{ formatTimestamp(sales.checkedAt) }}.</p>
+        <p v-else class="text-sm text-ink-secondary">
+          Nog niet gekoppeld. Draai <code>scripts/setup-tradetracker.sh</code>; daarna staan hier na elke prijsronde de boekingen en de commissie.
+        </p>
+      </div>
+      <template v-if="sales">
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <StatTile v-for="tile in salesTiles" :key="tile.label" v-bind="tile" />
+        </div>
+        <p v-if="!bookings.length" class="rounded-2xl bg-surface px-4 py-3 text-sm text-ink-secondary ring-1 ring-line">Nog geen boekingen geregistreerd.</p>
+        <div v-else class="overflow-x-auto rounded-2xl bg-surface ring-1 ring-line">
+          <table class="w-full min-w-xl text-left text-sm">
+            <thead class="text-ink-secondary">
+              <tr class="border-b border-line">
+                <th scope="col" class="px-4 py-2.5 font-medium sm:px-5">Geboekt</th>
+                <th scope="col" class="px-4 py-2.5 font-medium">Park en plek</th>
+                <th scope="col" class="px-4 py-2.5 text-right font-medium">Bedrag</th>
+                <th scope="col" class="px-4 py-2.5 text-right font-medium">Commissie</th>
+                <th scope="col" class="px-4 py-2.5 font-medium sm:px-5">Status</th>
+              </tr>
+            </thead>
+            <tbody class="tabular-nums">
+              <tr v-for="booking in bookings" :key="booking.id" class="border-b border-line last:border-0" :class="booking.rejected && 'text-ink-secondary'">
+                <td class="px-4 py-2 whitespace-nowrap sm:px-5">{{ booking.when }}</td>
+                <td class="px-4 py-2">
+                  <RouterLink v-if="booking.to" :to="booking.to" class="font-medium text-accent hover:underline">{{ booking.parkName }}</RouterLink>
+                  <span class="block text-xs text-ink-secondary">{{ [booking.campaign, booking.place].filter(Boolean).join(' · ') }}</span>
+                </td>
+                <td class="px-4 py-2 text-right">{{ booking.order }}</td>
+                <td class="px-4 py-2 text-right font-semibold">{{ booking.fee }}</td>
+                <td class="px-4 py-2 sm:px-5">{{ booking.status }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </template>
     </section>
   </div>
 </template>
