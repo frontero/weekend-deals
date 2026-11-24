@@ -2154,6 +2154,30 @@ const privacyPage = (hostname) => ({
 // question in the footer. How far down the visitor scrolled, how fast the page came and what broke go off when the
 // page is left; the answer is counted at once and a remark is kept for the admin (POST /api/feedback).
 const pageScript = `(() => {
+  // The same switch as the app's (src/composables/useTheme.js): the choice follows the visitor from page to page.
+  const themeToggle = document.getElementById('theme-toggle');
+  if (themeToggle) {
+    const system = matchMedia('(prefers-color-scheme: dark)');
+    const root = document.documentElement;
+    const isDark = () => (root.dataset.theme ?? (system.matches ? 'dark' : 'light')) === 'dark';
+    const show = () => {
+      themeToggle.setAttribute('aria-pressed', String(isDark()));
+      themeToggle.querySelector('path').setAttribute('d', isDark() ? 'M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4' : 'M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z');
+    };
+    show();
+    system.addEventListener('change', show);
+    themeToggle.addEventListener('click', () => {
+      const next = isDark() ? 'light' : 'dark';
+      const chosen = next === (system.matches ? 'dark' : 'light') ? null : next;
+      if (chosen) root.dataset.theme = chosen;
+      else delete root.dataset.theme;
+      try {
+        if (chosen) localStorage.setItem('weekend-deals:theme', chosen);
+        else localStorage.removeItem('weekend-deals:theme');
+      } catch {}
+      show();
+    });
+  }
   const events = [];
   const seen = new Set();
   const add = (name, key, value = '', number = 0) => {
@@ -2236,14 +2260,17 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
   </head>
   <body>
     <header class="border-b border-line bg-surface">
-      <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 sm:px-6">
-        <a href="/" class="flex items-center gap-2 text-lg font-black"><span aria-hidden="true" class="grid size-9 -rotate-6 place-items-center rounded-full bg-sun text-lg shadow-sm">🏡</span>${SITE_NAME}</a>
-        <nav aria-label="Hoofdmenu" class="flex gap-4 text-sm">
+      <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:gap-x-6 sm:px-6">
+        <a href="/" class="flex items-center gap-2 text-lg font-black tracking-tight"><span aria-hidden="true" class="grid size-9 -rotate-6 place-items-center rounded-full bg-sun text-on-sun shadow-sm"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="size-5"><path d="M3 10.5 12 3l9 7.5M5 9v11h5v-6h4v6h5V9" /></svg></span>${SITE_NAME}</a>
+        <nav aria-label="Hoofdmenu" class="order-last flex basis-full gap-4 text-sm sm:order-none sm:basis-auto">
           <a href="/weekenden" class="${navLink}">Weekenden</a>
           <a href="/parken" class="${navLink}">Parken</a>
           <a href="/last-minute" class="${navLink}">Last minute</a>
         </nav>
-        <a href="/" class="ml-auto rounded-full bg-cta px-4 py-2 text-sm font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover">Zoek een weekend</a>
+        <div class="ml-auto flex items-center gap-2">
+          <a href="/" class="rounded-full bg-cta px-4 py-2 text-sm font-extrabold text-on-cta shadow-sm transition hover:bg-cta-hover">Zoek<span class="max-sm:sr-only"> een weekend</span></a>
+          <button type="button" id="theme-toggle" class="grid size-9 place-items-center rounded-full ring-1 ring-line transition hover:bg-hover" title="Donkere weergave" aria-label="Donkere weergave" aria-pressed="false"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" class="size-4"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" /></svg></button>
+        </div>
       </div>
     </header>
     <main class="mx-auto max-w-5xl px-4 py-6 sm:px-6">${new Html(body)}</main>

@@ -29,13 +29,18 @@ const progressLabel = computed(() =>
 
 <template>
   <header class="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
-    <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:gap-x-6 sm:px-6">
       <a href="/" class="flex items-center gap-2 text-lg font-black tracking-tight">
         <span class="grid size-9 -rotate-6 place-items-center rounded-full bg-sun text-on-sun shadow-sm">
           <Icon name="home" class="size-5" />
         </span>
         Parkje weg
       </a>
+      <nav aria-label="Hoofdmenu" class="hidden gap-4 text-sm sm:flex">
+        <a href="/weekenden" class="inline-flex min-h-6 items-center font-bold text-accent hover:underline">Weekenden</a>
+        <a href="/parken" class="inline-flex min-h-6 items-center font-bold text-accent hover:underline">Parken</a>
+        <a href="/last-minute" class="inline-flex min-h-6 items-center font-bold text-accent hover:underline">Last minute</a>
+      </nav>
 
       <div class="ml-auto flex items-center gap-2 text-sm">
         <span v-if="scan.running" class="text-ink-secondary" aria-live="polite">
