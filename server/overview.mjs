@@ -62,11 +62,16 @@ export async function buildOverview(db, { googleEnabled, party }) {
   const { parks } = analysePrices(summaries, today);
   const availability = availabilityTrends(availabilityRows);
   // Good weather only: a forecast of rain sells no weekend, so it is left out rather than shown.
-  const withAdvice = (provider, code) => (weekend) => ({
-    ...weekend,
-    advice: bookingAdvice({ ...weekend, today, availability: availability.get(`${provider}|${weekend.arrival}`) }),
-    weather: goodWeekendWeather(weather.get(code) ?? [], weekend) ?? undefined,
-  });
+  // The advice is worked out here; the figures only it needed stay behind, which makes what the app downloads a
+  // third smaller.
+  const withAdvice = (provider, code) => (weekend) => {
+    const { typicalCents, lowestCents, firstObservedAt, referenceCents, referenceAt, observations, ...shown } = weekend;
+    return {
+      ...shown,
+      advice: bookingAdvice({ ...weekend, today, availability: availability.get(`${provider}|${weekend.arrival}`) }),
+      weather: goodWeekendWeather(weather.get(code) ?? [], weekend) ?? undefined,
+    };
+  };
   const arrivals = [...new Map(parks.flatMap((park) => park.weekends).map((weekend) => [weekend.arrival, weekend])).values()];
   // Only the accommodations behind a shown price: the whole list is downloaded on every new overview.
   const accommodationsFor = (park) => {
