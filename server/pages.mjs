@@ -1045,8 +1045,12 @@ function parkIntro(park, { accommodations, weekendCount }) {
  * @param regionPages the regions the park belongs to that have a page, the most specific first
  * @param themes the themes with a page that list this park; `themeOf` those of a single facility, by that facility
  */
-function parkPage(park, { pathOf, nearby, updated, accommodations, places, weekendCount, regionPages, themes: themePages, themeOf, occasionsOf, holidayOffers = [] }) {
+function parkPage(park, { pathOf, nearby, updated, accommodations, places, weekendCount, regionPages, themes: themePages, themeOf, occasionsOf, holidayOffers = [], brandPages = [] }) {
   const name = fullName(park);
+  // People search a park by its town too ("roompot breskens"): the title names it when the park's name does not.
+  // As a word of its own: "Weerterbergen" does not name Weert.
+  const named = park.city && new RegExp(`(^|[^\\p{L}])${park.city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}])`, 'iu').test(name);
+  const located = park.city && !named ? `${name} in ${park.city}` : null;
   const place = placeOf(park);
   const region = regionOf(park);
   const cheapest = cheapestOf(park.weekends);
@@ -1174,9 +1178,10 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
       </section>`
     }
     ${
-      (regionPages.length > 0 || themes.length > 0) &&
+      (regionPages.length > 0 || themes.length > 0 || brandPages.length > 0) &&
       html`<nav aria-labelledby="more-like" class="mt-10">${sectionTitle('more-like', '✨', 'Meer zoals dit')}<ul class="mt-4 flex flex-wrap gap-2">
         ${regionPages.map((name) => html`<li><a href="${regionPath(name)}" class="${chip}"><span aria-hidden="true">🗺️</span> Alle parken ${inPlace(name)}</a></li>`)}
+        ${brandPages.map(([href, label]) => html`<li><a href="${href}" class="${chip}"><span aria-hidden="true">🏷️</span> ${label}</a></li>`)}
         ${themes.map((theme) => html`<li><a href="${themePath(theme)}" class="${chip}"><span aria-hidden="true">${themeIcon(theme)}</span> ${theme.name}</a></li>`)}
       </ul></nav>`
     }
@@ -1185,7 +1190,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
 
   return {
     path: pathOf(park),
-    title: fitting(`${name}: weekendprijzen en aanbiedingen`, `${name}: prijzen en aanbiedingen`, `${name}: weekendprijzen`, name),
+    title: fitting(...(located ? [`${located}: weekendprijzen en aanbiedingen`, `${located}: weekendprijzen`, `${located}: prijzen`] : []), `${name}: weekendprijzen en aanbiedingen`, `${name}: prijzen en aanbiedingen`, `${name}: weekendprijzen`, name),
     description: cheapest
       ? `Weekendje weg naar ${name}${place ? ` in ${place}` : ''}? Vanaf ${formatEuros(cheapest.priceCents)} voor ${partyLabel(PAGE_PARTY)} (${formatWeekend(cheapest)}). Zie de prijs van elk weekend, wat er te doen is en of je nu moet boeken.`
       : `${name}${place ? ` in ${place}` : ''}: wat er te doen is op het park en in de omgeving, de huisjes en de weekendprijzen voor ${partyLabel(PAGE_PARTY)}.`,
@@ -1769,6 +1774,12 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
   const brandLinks = (general) =>
     brandPlaces.filter((entry) => entry.general === general).map(({ brand, name, list }) => [brandPath(brand, name), brandName(brand), list.length, '🏷️']);
 
+  // A park points to its brand's lists it is on: the regions first, its country after, then all of the brand.
+  const brandPagesOf = (park) => [
+    ...brandPlaces.filter(({ brand, list }) => brand === park.brand && list.includes(park)).map(({ brand, name, place }) => [brandPath(brand, name), `${brandName(brand)} ${place}`]),
+    ...brands.filter(([brand]) => brand === park.brand).map(([brand]) => [brandPath(brand), `Alle parken van ${brandName(brand)}`]),
+  ];
+
   // A theme with a party of its own lists that party's overview, where its parks have a page; none before it has one.
   const facilitiesOf = new Map(everyPark.map((park) => [park.code, park.facilities]));
   const themeParks = (theme) => {
@@ -1848,6 +1859,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
         themeOf,
         occasionsOf: details.occasionsOf,
         holidayOffers: holidayOffersOf(park),
+        brandPages: brandPagesOf(park),
       }),
     ),
     ...weekends.map(({ weekend, offers }, index) =>

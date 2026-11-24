@@ -290,9 +290,16 @@ test('a brand has a list of its parks, and one per region where that is a list o
   assert.doesNotMatch(place.body, /Hoogduin/);
   assert.match(place.description, /vakantieparken van Landal in Limburg/);
   assert.match(pageAt('/regio/limburg').body, /href="\/aanbieder\/landal\/limburg"/);
+  assert.match(pageAt('/park/vakantiepark-gulpen').body, /Meer zoals dit[^]*href="\/aanbieder\/landal\/limburg"[^>]*>.*Landal in Limburg[^]*href="\/aanbieder\/landal"[^>]*>.*Alle parken van Landal/);
   assert.match(pageAt('/parken').body, /Per aanbieder[^]*href="\/aanbieder\/landal"/);
   assert.equal(pageAt('/aanbieder/landal/nederland'), undefined, 'the same parks as the Limburg list');
   assert.ok(isPagePath('/aanbieder/roompot/zeeland') && isPagePath('/aanbieder/roompot') && !isPagePath('/aanbieder/roompot/zeeland/x'));
+});
+
+test("a park's title names its town when its name does not", () => {
+  assert.match(pageAt('/park/hoogduin-b').title, / in Cadzand: /);
+  assert.doesNotMatch(pageAt('/park/vakantiepark-gulpen').title, / in Gulpen/);
+  assert.ok(pages.every((page) => page.title.length <= 60), 'no title is cut off in a search result');
 });
 
 test('the last-minute page says how many parks have room and gives tips', () => {
