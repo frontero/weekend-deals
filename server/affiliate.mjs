@@ -24,11 +24,21 @@ export function providerOfUrl(url) {
 
 /**
  * @param templates per provider, the affiliate network's deep link with `{url}` where the encoded provider page goes,
- *   e.g. { "landal": "https://network.example/c/?si=1&li=2&dl={url}" }; a provider without one gets its plain link
+ *   e.g. { "landal": "https://network.example/c/?si=1&li=2&dl={url}" }, or `{path}` for a network that links on the
+ *   provider's own domain and takes only the page's path, as TradeTracker does:
+ *   "https://www.topparken.nl/tt/?tt=1_12_3_{ref}&r={path}". `{ref}` is where the click came from, for the network's
+ *   own reports. A provider without a template gets its plain link.
+ * @param reference a short note on the click (the park and the place on the site); only letters, digits and dashes go out
  */
-export function affiliateUrl(provider, url, templates = {}) {
+export function affiliateUrl(provider, url, templates = {}, reference = '') {
   const template = templates[provider];
-  return typeof template === 'string' && template.includes('{url}') ? template.replaceAll('{url}', encodeURIComponent(url)) : url;
+  if (typeof template !== 'string' || !/\{(url|path)\}/.test(template)) return url;
+  const { pathname, search } = new URL(url);
+  const note = reference.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50);
+  return template
+    .replaceAll('{url}', encodeURIComponent(url))
+    .replaceAll('{path}', encodeURIComponent(`${pathname}${search}`))
+    .replaceAll('{ref}', note);
 }
 
 /** The templates from the AFFILIATE_LINKS setting (JSON); none when it is missing or unreadable. */

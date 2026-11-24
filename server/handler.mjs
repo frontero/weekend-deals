@@ -164,7 +164,7 @@ export function createApiHandler(
           })
           .catch(() => {});
       }
-      return Response.redirect(affiliateUrl(provider, url, affiliateLinks), 302);
+      return Response.redirect(affiliateUrl(provider, url, affiliateLinks, `${text('park', 64) ?? ''} ${text('from', 32) ?? ''}`), 302);
     },
 
     // What visitors use on the site, in batches from src/lib/track.js. A beacon reads no answer, so there is no error.

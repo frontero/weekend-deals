@@ -22,3 +22,15 @@ test('puts the provider page into its affiliate link, or leaves it as it is', ()
   assert.deepEqual(parseAffiliateLinks('not json'), {});
   assert.deepEqual(parseAffiliateLinks(undefined), {});
 });
+
+test("a network that links on the provider's own domain gets the page's path, and a note on where the click came from", () => {
+  const templates = { topparken: 'https://www.topparken.nl/tt/?tt=1_12_3_{ref}&r={path}' };
+  const page = 'https://www.topparken.nl/vakantieparken/parc-de-ijsselhoeve/vakantiehuizen?startDate=2026-11-27&adults=2';
+  assert.equal(
+    affiliateUrl('topparken', page, templates, 'topparken:12 kaartje'),
+    'https://www.topparken.nl/tt/?tt=1_12_3_topparken-12-kaartje&r=%2Fvakantieparken%2Fparc-de-ijsselhoeve%2Fvakantiehuizen%3FstartDate%3D2026-11-27%26adults%3D2',
+  );
+  assert.equal(affiliateUrl('topparken', page, templates), 'https://www.topparken.nl/tt/?tt=1_12_3_&r=%2Fvakantieparken%2Fparc-de-ijsselhoeve%2Fvakantiehuizen%3FstartDate%3D2026-11-27%26adults%3D2');
+  assert.equal(affiliateUrl('landal', 'https://www.landal.nl/parken/x', templates, 'x'), 'https://www.landal.nl/parken/x', 'no template, no detour');
+  assert.equal(affiliateUrl('topparken', page, { topparken: 'https://elsewhere.test/fixed' }), page, 'a template without a place for the page is not used');
+});
