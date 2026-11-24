@@ -18,6 +18,8 @@ import { fetchSurroundings } from './surroundings.mjs';
 import { fetchSchoolHolidays } from './holidays.mjs';
 import { updatePageSpeed } from './pagespeed.mjs';
 import { tradeTrackerAccount, updateAffiliateSales } from './tradetracker.mjs';
+import { updateBing } from './bing.mjs';
+import { announceNewPages } from './indexnow.mjs';
 import { serviceAccount, updateSearchConsole } from './search-console.mjs';
 import { fetchForecast } from './weather.mjs';
 
@@ -415,6 +417,23 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
     if (read !== null) log(`pagespeed: ${read} pages read`);
   }
 
+  /** New pages go to Bing and the engines that share IndexNow; in the cloud only, where the pages are public. */
+  async function announcePages() {
+    if (!process.env.GITHUB_ACTIONS || cancelled) return;
+    const sent = await announceNewPages(db);
+    if (sent) log(`indexnow: ${sent} new pages announced`);
+  }
+
+  /** Bing's figures for the admin's SEO page, once a day; skipped without a key (BING_WEBMASTER_API_KEY). */
+  async function refreshBing() {
+    if (!process.env.BING_WEBMASTER_API_KEY || cancelled) return;
+    // The size is asked of the searches Google shows the site for most.
+    const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const searches = (await db.searchSummary(since)).queries.map((row) => row.query);
+    const read = await updateBing(db, process.env.BING_WEBMASTER_API_KEY, { searches, log });
+    if (read !== null) log(`bing: ${read} reads`);
+  }
+
   /** TradeTracker's bookings for the admin's Klikken page; skipped without the account's key (TRADETRACKER_*). */
   async function refreshAffiliateSales() {
     const account = tradeTrackerAccount();
@@ -542,6 +561,8 @@ export function createCollector(db, { log = () => {}, googleApiKey = null, appUr
       await refreshSearchConsole().catch((error) => log(`search console failed: ${error.message}`));
       await refreshPageSpeed().catch((error) => log(`pagespeed failed: ${error.message}`));
       await refreshAffiliateSales().catch((error) => log(`tradetracker failed: ${error.message}`));
+      await announcePages().catch((error) => log(`indexnow failed: ${error.message}`));
+      await refreshBing().catch((error) => log(`bing failed: ${error.message}`));
     });
 
     if (rerunRequested && !cancelled) {

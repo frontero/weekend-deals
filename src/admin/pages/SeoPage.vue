@@ -14,6 +14,8 @@ const sitemaps = ref(null);
 const pageCount = ref(0);
 // Google's PageSpeed of a page of each kind, read once a day (server/pagespeed.mjs).
 const speed = ref(null);
+// Bing Webmaster's figures, read once a day (server/bing.mjs).
+const bing = ref(null);
 // loading, failed or ready
 const state = ref('loading');
 
@@ -21,7 +23,7 @@ onMounted(async () => {
   try {
     const response = await fetch('/api/admin/seo');
     if (!response.ok) throw new Error(`SEO failed with ${response.status}`);
-    ({ audit: audit.value, kinds: kinds.value, search: search.value, index: index.value, sitemaps: sitemaps.value, pageCount: pageCount.value, speed: speed.value } = await response.json());
+    ({ audit: audit.value, kinds: kinds.value, search: search.value, index: index.value, sitemaps: sitemaps.value, pageCount: pageCount.value, speed: speed.value, bing: bing.value } = await response.json());
     state.value = 'ready';
   } catch {
     state.value = 'failed';
@@ -48,6 +50,17 @@ const coverage = computed(() => [...Map.groupBy(notIndexed.value, (row) => row.c
 const searchTables = computed(() => [
   { id: 'queries', title: 'Zoekwoorden', first: 'Zoekwoord', rows: search.value.queries.map((row) => [row.query, row]) },
   { id: 'search-pages', title: "Pagina's in Google", first: 'Pagina', rows: search.value.pages.map((row) => [row.path, row]) },
+]);
+const bingSum = (field) => (bing.value?.days ?? []).reduce((total, row) => total + row[field], 0);
+const bingTiles = computed(() => [
+  { label: `Getoond in Bing, laatste ${bing.value?.periodDays ?? 28} dagen`, value: count(bingSum('impressions')), trend: (bing.value?.days ?? []).map((row) => row.impressions) },
+  { label: 'Klikken vanuit Bing', value: count(bingSum('clicks')), trend: (bing.value?.days ?? []).map((row) => row.clicks) },
+  { label: 'Opgenomen door Bing', value: bing.value?.crawl ? count(bing.value.crawl.inIndex ?? 0) : '–', hint: bing.value?.crawl ? `${count(bing.value.crawl.crawled ?? 0)} pagina's bezocht op ${bing.value.crawl.day}` : '' },
+  { label: 'Links van andere sites', value: bing.value?.crawl ? count(bing.value.crawl.inLinks ?? 0) : '–', hint: 'volgens Bing' },
+]);
+const bingTables = computed(() => [
+  { id: 'bing-queries', title: 'Zoekwoorden in Bing', first: 'Zoekwoord', rows: (bing.value?.queries ?? []).map((row) => [row.label, row]) },
+  { id: 'bing-pages', title: "Pagina's in Bing", first: 'Pagina', rows: (bing.value?.pages ?? []).map((row) => [row.label, row]) },
 ]);
 const seconds = (milliseconds) => `${(milliseconds / 1000).toLocaleString('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
 // Google's own bands: 90 and up is good, under 50 is poor.
@@ -110,6 +123,86 @@ const byKind = computed(() =>
         </div>
       </section>
     </div>
+
+    <h2 class="text-lg font-semibold">Bing</h2>
+    <p v-if="!bing" class="text-sm text-ink-secondary">Nog niet gekoppeld. Dit heeft een eigen sleutel nodig (scripts/setup-bing.sh) en loopt daarna één keer per dag mee met een prijsronde. Bing levert ook de zoekresultaten van DuckDuckGo en Ecosia.</p>
+    <template v-else>
+      <p class="text-sm text-ink-secondary">Bijgewerkt op {{ formatTimestamp(bing.checkedAt) }}. Bing levert ook de zoekresultaten van DuckDuckGo en Ecosia.</p>
+      <section aria-label="Kerncijfers van Bing" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile v-for="tile in bingTiles" :key="tile.label" v-bind="tile" />
+      </section>
+      <div class="grid gap-4 xl:grid-cols-2">
+        <section v-for="table in bingTables" :key="table.id" class="min-w-0 rounded-2xl bg-surface ring-1 ring-line" :aria-labelledby="`seo-${table.id}`">
+          <h2 :id="`seo-${table.id}`" class="border-b border-line px-4 py-3 font-semibold sm:px-5">{{ table.title }}</h2>
+          <p v-if="!table.rows.length" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Bing heeft de site nog niet in zoekresultaten getoond.</p>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="text-ink-secondary">
+                <tr class="border-b border-line">
+                  <th scope="col" class="px-4 py-2.5 font-medium sm:px-5">{{ table.first }}</th>
+                  <th scope="col" class="px-4 py-2.5 text-right font-medium sm:px-5">Getoond</th>
+                  <th scope="col" class="px-4 py-2.5 text-right font-medium sm:px-5">Klikken</th>
+                  <th scope="col" class="px-4 py-2.5 text-right font-medium sm:px-5">Plek</th>
+                </tr>
+              </thead>
+              <tbody class="tabular-nums">
+                <tr v-for="[label, row] in table.rows" :key="label" class="border-b border-line last:border-0 hover:bg-hover">
+                  <th scope="row" class="px-4 py-2 font-normal break-words sm:px-5">{{ label }}</th>
+                  <td class="px-4 py-2 text-right font-semibold sm:px-5">{{ count(row.impressions) }}</td>
+                  <td class="px-4 py-2 text-right font-semibold sm:px-5">{{ count(row.clicks) }}</td>
+                  <td class="px-4 py-2 text-right font-semibold sm:px-5">{{ row.position == null ? '–' : place(row.position) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+      <div class="grid gap-4 xl:grid-cols-2">
+        <section class="min-w-0 rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="seo-bing-sizes">
+          <h2 id="seo-bing-sizes" class="border-b border-line px-4 py-3 font-semibold sm:px-5">Hoe vaak wordt er gezocht</h2>
+          <p class="px-4 pt-3 text-sm text-ink-secondary sm:px-5">Hoe vaak Bing in Nederland resultaten toonde voor je meest getoonde zoekwoorden, in de laatste vier weken. Bij Google ligt dat vele malen hoger; gebruik het om zoekwoorden met elkaar te vergelijken.</p>
+          <p v-if="!bing.sizes?.length" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Bing heeft hier nog geen cijfers voor.</p>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="text-ink-secondary">
+                <tr class="border-b border-line">
+                  <th scope="col" class="px-4 py-2.5 font-medium sm:px-5">Zoekwoord</th>
+                  <th scope="col" class="px-4 py-2.5 text-right font-medium sm:px-5">Precies zo</th>
+                  <th scope="col" class="px-4 py-2.5 text-right font-medium sm:px-5">Ook met extra woorden</th>
+                </tr>
+              </thead>
+              <tbody class="tabular-nums">
+                <tr v-for="size in bing.sizes" :key="size.query" class="border-b border-line last:border-0 hover:bg-hover">
+                  <th scope="row" class="px-4 py-2 font-normal break-words sm:px-5">{{ size.query }}</th>
+                  <td class="px-4 py-2 text-right font-semibold sm:px-5">{{ count(size.exact) }}</td>
+                  <td class="px-4 py-2 text-right font-semibold sm:px-5">{{ count(size.broad) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="min-w-0 rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="seo-bing-links">
+          <h2 id="seo-bing-links" class="border-b border-line px-4 py-3 font-semibold sm:px-5">Pagina's waar andere sites naar linken</h2>
+          <p v-if="!bing.links?.pages.length" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Bing kent nog geen links van andere sites naar parkjeweg.nl.</p>
+          <div v-else class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="text-ink-secondary">
+                <tr class="border-b border-line">
+                  <th scope="col" class="px-4 py-2.5 font-medium sm:px-5">Pagina</th>
+                  <th scope="col" class="px-4 py-2.5 text-right font-medium sm:px-5">Links</th>
+                </tr>
+              </thead>
+              <tbody class="tabular-nums">
+                <tr v-for="row in bing.links.pages" :key="row.path" class="border-b border-line last:border-0 hover:bg-hover">
+                  <th scope="row" class="px-4 py-2 font-normal break-words sm:px-5">{{ row.path }}</th>
+                  <td class="px-4 py-2 text-right font-semibold sm:px-5">{{ count(row.count) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </template>
 
     <h2 class="text-lg font-semibold">Snelheid volgens Google</h2>
     <p v-if="!speed" class="text-sm text-ink-secondary">Nog niet gemeten. Dit heeft een eigen sleutel nodig (scripts/setup-pagespeed.sh) en loopt daarna één keer per dag mee met een prijsronde.</p>

@@ -767,6 +767,24 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       await writeSetting('pageSpeed', JSON.stringify(state));
     },
 
+    /** Bing Webmaster's figures as last read (server/bing.mjs), or null before the first. */
+    async bing() {
+      return parseJson(await readSetting('bing'), null);
+    },
+
+    async saveBing(state) {
+      await writeSetting('bing', JSON.stringify(state));
+    },
+
+    /** The page paths already announced through IndexNow (server/indexnow.mjs). */
+    async announcedPages() {
+      return parseJson(await readSetting('indexNow'), []);
+    },
+
+    async saveAnnouncedPages(paths) {
+      await writeSetting('indexNow', JSON.stringify(paths));
+    },
+
     /** TradeTracker's bookings and report as last read (server/tradetracker.mjs), or null before the first. */
     async affiliateSales() {
       return parseJson(await readSetting('affiliateSales'), null);
