@@ -91,6 +91,7 @@ test('one page per park with something to tell, per weekend, per country, region
   assert.deepEqual(pages.map((page) => page.path).sort(), [
     '/aanbieder/landal',
     '/aanbieder/landal/limburg',
+    '/cijfers',
     '/feestdag/carnaval',
     '/feestdag/hemelvaart',
     '/feestdag/kerst',
@@ -300,6 +301,18 @@ test("a park's title names its town when its name does not", () => {
   assert.match(pageAt('/park/hoogduin-b').title, / in Cadzand: /);
   assert.doesNotMatch(pageAt('/park/vakantiepark-gulpen').title, / in Gulpen/);
   assert.ok(pages.every((page) => page.title.length <= 60), 'no title is cut off in a search result');
+});
+
+test('the figures page says what the prices show, names its source and leaves out groups too small to judge', () => {
+  const page = pageAt('/cijfers');
+  assert.equal(page.title, 'Wanneer is een vakantiepark het goedkoopst? De cijfers');
+  // Five prices in all: no month or region has enough to name a middle.
+  assert.match(page.body, /Een weekend voor 2 personen kost in het midden €\s\d+\./);
+  assert.doesNotMatch(page.body, /Prijs per maand|Prijs per regio/);
+  assert.match(page.body, /Hoe vaak is een weekend goedkoper dan normaal/);
+  assert.match(page.body, /met een link naar <a href="\/cijfers"/);
+  assert.match(page.body, /"@type":"Dataset"/);
+  assert.ok(isPagePath('/cijfers'));
 });
 
 test('the last-minute page says how many parks have room and gives tips', () => {

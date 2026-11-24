@@ -7,7 +7,7 @@
 // No Node imports: the Worker serves these.
 import { reasonText, verdictLabel } from '../src/lib/advice.js';
 import { brandName } from '../src/lib/brands.js';
-import { countryName, formatEuros, formatWeekend, nights } from '../src/lib/format.js';
+import { countryName, formatDay, formatEuros, formatWeekend, nights } from '../src/lib/format.js';
 import { providerHomeLinks, providerName, trackedBookingUrl } from '../src/lib/providers.js';
 import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
@@ -45,7 +45,7 @@ const SITE_NAME = 'Parkje weg';
 const SITE_URL = 'https://parkjeweg.nl';
 
 const PAGE_PATH =
-  /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|regio\/[a-z0-9-]+|thema\/[a-z0-9-]+|land\/[a-z0-9-]+|aanbieder\/[a-z0-9-]+(?:\/[a-z0-9-]+)?|feestdag\/[a-z0-9-]+|vakantie\/[a-z0-9-]+|last-minute|privacy|zo-werkt-het|sitemap\.xml|robots\.txt)$/;
+  /^\/(?:parken|weekenden|park\/[a-z0-9-]+|weekend\/\d{4}-\d{2}-\d{2}|regio\/[a-z0-9-]+|thema\/[a-z0-9-]+|land\/[a-z0-9-]+|aanbieder\/[a-z0-9-]+(?:\/[a-z0-9-]+)?|feestdag\/[a-z0-9-]+|cijfers|vakantie\/[a-z0-9-]+|last-minute|privacy|zo-werkt-het|sitemap\.xml|robots\.txt)$/;
 /** Whether a path is one of these pages (or their sitemap and robots.txt) rather than the app. */
 export const isPagePath = (pathname) => PAGE_PATH.test(pathname);
 
@@ -1410,6 +1410,159 @@ function weekendSection({ weekend, offers }, { id, emoji, title, source, pathOf,
   </section>`;
 }
 
+const FIGURES_PATH = '/cijfers';
+// A group with fewer prices says too little to name a middle.
+const MIN_FIGURE_PRICES = 20;
+const SHOWN_REGIONS = 6;
+const monthAndYear = new Intl.DateTimeFormat('nl-NL', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const middle = (numbers) => {
+  const sorted = [...numbers].sort((a, b) => a - b);
+  const half = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[half] : Math.round((sorted[half - 1] + sorted[half]) / 2);
+};
+
+/**
+ * What the collected prices say: when and where a weekend at a holiday park is cheapest. Every figure is the middle
+ * (median) of the cheapest weekend prices per park, so a few dear parks do not pull it up. For whoever writes about
+ * holiday parks and looks for a number to quote.
+ */
+function figuresPage(weekends, { regions, brands, occasionsOf, updated, computedAt }) {
+  const offers = weekends.flatMap((entry) => entry.offers);
+  const group = (name, list, href = null) => ({ name, href, prices: list.length, cents: list.length ? middle(list.map((offer) => offer.weekend.priceCents)) : 0 });
+  const enough = (row) => row.prices >= MIN_FIGURE_PRICES;
+  const overall = group('Alle parken', offers);
+
+  // A month counts with at least two of its weekends, so the first and last month are not judged by one weekend.
+  const months = [...Map.groupBy(weekends, (entry) => entry.weekend.arrival.slice(0, 7))]
+    .filter(([, list]) => list.length > 1)
+    .map(([month, list]) => group(monthAndYear.format(new Date(`${month}-01T00:00:00Z`)), list.flatMap((entry) => entry.offers)))
+    .filter(enough);
+  const byPrice = [...months].sort((a, b) => a.cents - b.cents);
+  const [cheapMonth, dearMonth] = [byPrice[0], byPrice.at(-1)];
+  const monthsDiffer = cheapMonth && dearMonth && cheapMonth !== dearMonth;
+
+  const kindOf = (weekend) => {
+    const labels = occasionsOf(weekend).map((occasion) => occasion.label ?? '');
+    return labels.some((label) => /vakantie/i.test(label)) ? 'school' : labels.length ? 'special' : 'plain';
+  };
+  const kinds = Map.groupBy(offers, (offer) => kindOf(offer.weekend));
+  const plain = group('Gewoon weekend', kinds.get('plain') ?? []);
+  const school = group('Weekend in een schoolvakantie', kinds.get('school') ?? []);
+  const occasions = [plain, group('Weekend met een feestdag of bijzondere dag', kinds.get('special') ?? []), school].filter(enough);
+
+  const inList = (list) => {
+    const codes = new Set(list.map((park) => park.code));
+    return offers.filter((offer) => codes.has(offer.park.code));
+  };
+  const cheapestFirst = (a, b) => a.cents - b.cents;
+  const regionRows = regions.map(([region, list]) => group(region, inList(list), regionPath(region))).filter(enough).sort(cheapestFirst);
+  const brandRows = brands.map(([brand, list]) => group(brandName(brand), inList(list), brandPath(brand))).filter(enough).sort(cheapestFirst);
+  const shownRegions = regionRows.length > SHOWN_REGIONS * 2 ? [...regionRows.slice(0, SHOWN_REGIONS), ...regionRows.slice(-SHOWN_REGIONS)] : regionRows;
+
+  const perHundred = (number) => Math.round((number / Math.max(offers.length, 1)) * 100);
+  const under = offers.filter((offer) => discountPercent(offer.weekend) >= NOTEWORTHY_PERCENT).length;
+  const deals = offers.filter((offer) => (offer.weekend.discount ?? 0) >= DEAL_SHARE).length;
+  const more = (dear, cheap) => Math.round((dear.cents / cheap.cents - 1) * 100);
+  const parkCount = new Set(offers.map((offer) => offer.park.code)).size;
+  const span = weekends.length > 0 ? `${formatDay(weekends[0].weekend.arrival)} tot en met ${formatDay(weekends.at(-1).weekend.departure)}` : '';
+
+  // The bars compare the rows of one table; the number beside each bar is what counts.
+  const table = (id, first, rows) => {
+    const most = Math.max(...rows.map((row) => row.cents), 1);
+    const line = (row) => html`<tr class="border-b border-line last:border-0">
+      <th scope="row" class="px-4 py-2.5 font-bold">${row.href ? html`<a href="${row.href}" class="${link}">${row.name}</a>` : row.name}</th>
+      <td class="px-4 py-2.5 text-right text-base font-black">${formatEuros(row.cents)}</td>
+      <td class="hidden px-4 py-2.5 sm:table-cell"><div aria-hidden="true" class="h-3 rounded-r-full bg-accent" style="width:${Math.max(2, Math.round((row.cents / most) * 100))}%"></div></td>
+      <td class="px-4 py-2.5 text-right text-ink-secondary">${row.prices.toLocaleString('nl-NL')}</td>
+    </tr>`;
+    return html`<div class="mt-4 overflow-x-auto rounded-2xl bg-surface ring-1 ring-line">
+      <table class="w-full text-left text-sm" aria-labelledby="${id}">
+        <thead class="text-ink-secondary"><tr class="border-b border-line"><th scope="col" class="px-4 py-2.5 font-semibold">${first}</th><th scope="col" class="px-4 py-2.5 text-right font-semibold">Middelste prijs</th><th scope="col" class="hidden w-2/5 px-4 py-2.5 font-semibold sm:table-cell"><span class="sr-only">Vergeleken</span></th><th scope="col" class="px-4 py-2.5 text-right font-semibold">Prijzen</th></tr></thead>
+        <tbody class="tabular-nums">${rows.map(line)}</tbody>
+      </table>
+    </div>`;
+  };
+  const dataset = {
+    '@context': 'https://schema.org',
+    '@type': 'Dataset',
+    name: 'Weekendprijzen van vakantieparken',
+    description: `De middelste prijs van een weekend (vrijdag tot maandag) voor ${partyLabel(PAGE_PARTY)} op ${parkCount} vakantieparken, per maand, regio en aanbieder.`,
+    url: `${SITE_URL}${FIGURES_PATH}`,
+    dateModified: computedAt,
+    creator: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL },
+    isAccessibleForFree: true,
+  };
+  const answer = monthsDiffer
+    ? `In ${cheapMonth.name}. Een weekend voor ${partyLabel(PAGE_PARTY)} kost dan in het midden ${formatEuros(cheapMonth.cents)}. In ${dearMonth.name}, de duurste maand, is dat ${formatEuros(dearMonth.cents)}: ${more(dearMonth, cheapMonth)}% meer.`
+    : `Een weekend voor ${partyLabel(PAGE_PARTY)} kost in het midden ${formatEuros(overall.cents)}.`;
+  const schoolLine = enough(school) && enough(plain) && `Een weekend in een schoolvakantie kost ${more(school, plain) >= 0 ? `${more(school, plain)}% meer` : `${-more(school, plain)}% minder`} dan een gewoon weekend.`;
+  const body = html`
+    ${jsonLd(dataset)}
+    ${banner(
+      '📊',
+      html`Wanneer is een vakantiepark het <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">goedkoopst</span>?`,
+      html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${answer}</p>
+        <p class="mt-3 max-w-3xl leading-relaxed text-ink-secondary">Gemeten over ${offers.length.toLocaleString('nl-NL')} weekendprijzen van ${parkCount} vakantieparken, voor de weekenden van ${span}. Bijgewerkt op ${updated}.</p>`,
+    )}
+    ${
+      months.length > 1 &&
+      html`<section aria-labelledby="per-month" class="mt-10">
+        ${sectionTitle('per-month', '📅', 'Prijs per maand')}
+        <p class="mt-1 max-w-3xl text-sm text-ink-secondary">Een weekend van vrijdag tot maandag, drie nachten, voor ${partyLabel(PAGE_PARTY)}, inclusief toeslagen.</p>
+        ${table('per-month', 'Maand', months)}
+      </section>`
+    }
+    ${
+      occasions.length > 1 &&
+      html`<section aria-labelledby="per-kind" class="mt-10">
+        ${sectionTitle('per-kind', '🎒', 'Schoolvakantie of niet')}
+        ${schoolLine && html`<p class="mt-1 max-w-3xl text-sm text-ink-secondary">${schoolLine}</p>`}
+        ${table('per-kind', 'Soort weekend', occasions)}
+      </section>`
+    }
+    ${
+      shownRegions.length > 1 &&
+      html`<section aria-labelledby="per-region" class="mt-10">
+        ${sectionTitle('per-region', '🗺️', regionRows.length > shownRegions.length ? `De ${SHOWN_REGIONS} goedkoopste en ${SHOWN_REGIONS} duurste regio's` : 'Prijs per regio')}
+        <p class="mt-1 max-w-3xl text-sm text-ink-secondary">Goedkoopst is ${regionRows[0].name} (${formatEuros(regionRows[0].cents)}), duurst ${regionRows.at(-1).name} (${formatEuros(regionRows.at(-1).cents)}).</p>
+        ${table('per-region', 'Regio', shownRegions)}
+      </section>`
+    }
+    ${
+      brandRows.length > 1 &&
+      html`<section aria-labelledby="per-brand" class="mt-10">
+        ${sectionTitle('per-brand', '🏷️', 'Prijs per aanbieder')}
+        <p class="mt-1 max-w-3xl text-sm text-ink-secondary">Dit zegt niets over wat je ervoor krijgt: de parken en huisjes verschillen per aanbieder.</p>
+        ${table('per-brand', 'Aanbieder', brandRows)}
+      </section>`
+    }
+    <section aria-labelledby="how-often" class="mt-10">
+      ${sectionTitle('how-often', '🔥', 'Hoe vaak is een weekend goedkoper dan normaal?')}
+      <p class="mt-3 max-w-3xl leading-relaxed text-ink-secondary">Van elke 100 weekendprijzen liggen er ${perHundred(under)} minstens ${NOTEWORTHY_PERCENT}% onder de normale prijs van dat park. ${perHundred(deals)} van de 100 zijn minstens ${Math.round(DEAL_SHARE * 100)}% goedkoper: die noemen wij een buitenkansje. De normale prijs is de middelste weekendprijs van het park zelf.</p>
+      <p class="mt-3"><a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> De buitenkansjes van komend weekend</a></p>
+    </section>
+    <section aria-labelledby="method" class="mt-10">
+      ${sectionTitle('method', '🔎', 'Zo zijn de cijfers gemaakt')}
+      <ul class="mt-3 max-w-3xl list-disc space-y-2 pl-5 leading-relaxed text-ink-secondary">
+        <li>Elke dag vragen we bij de aanbieders op wat elk komend weekend kost, tot ${weekends.length} weekenden vooruit. Per park telt het goedkoopste huisje dat nog vrij is.</li>
+        <li>De middelste prijs is de mediaan: de helft van de prijzen ligt eronder, de helft erboven. Een paar dure parken trekken hem dus niet omhoog.</li>
+        <li>Een groep met minder dan ${MIN_FIGURE_PRICES} prijzen laten we weg. Maanden die verder weg liggen zitten er nog niet in.</li>
+        <li>De cijfers gaan over de parken op deze site, niet over alle vakantieparken.</li>
+      </ul>
+      <p class="mt-4 max-w-3xl rounded-2xl bg-sun-wash p-4 leading-relaxed"><strong>Deze cijfers overnemen?</strong> Dat mag, met een link naar <a href="${FIGURES_PATH}" class="${link}">parkjeweg.nl/cijfers</a> als bron. De pagina wordt na elke prijsronde bijgewerkt.</p>
+      <p class="mt-3"><a href="/zo-werkt-het" class="${link}">Meer over hoe de site werkt</a></p>
+    </section>`;
+  return {
+    path: FIGURES_PATH,
+    title: 'Wanneer is een vakantiepark het goedkoopst? De cijfers',
+    description: monthsDiffer
+      ? `Een weekend op een vakantiepark is het goedkoopst in ${cheapMonth.name}: ${formatEuros(cheapMonth.cents)} voor ${partyLabel(PAGE_PARTY)}, tegen ${formatEuros(dearMonth.cents)} in ${dearMonth.name}. Cijfers per maand, regio en aanbieder.`
+      : 'Wat een weekend op een vakantiepark kost, per maand, regio en aanbieder, uit dagelijks verzamelde prijzen.',
+    image: null,
+    body: body.text,
+  };
+}
+
 /** The coming weekends with room, the biggest deals first: for whoever wants to go away now. */
 function lastMinutePage(weekends, { pathOf, occasionsOf, parks, regions = [], brands = [] }) {
   const soon = weekends.slice(0, LAST_MINUTE_WEEKENDS);
@@ -1846,6 +1999,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
     ),
     ...seasons.map(({ season, year, matching, long }) => seasonPage(season, { year, matching, long, lastKnown, pathOf, occasionsOf: details.occasionsOf, others: occasionPages })),
     lastMinutePage(weekends, { pathOf, occasionsOf: details.occasionsOf, parks: everyPark, regions, brands }),
+    figuresPage(weekends, { regions, brands, occasionsOf: details.occasionsOf, updated, computedAt }),
     ...everyPark.map((park) =>
       parkPage(park, {
         pathOf,
@@ -2112,7 +2266,7 @@ export function pageDocument({ title, description, image, body }, { url, stylesh
         boek je via zo'n link, dan krijgen wij een vergoeding van de aanbieder. Jij betaalt niets extra, en het bepaalt
         niet welke parken je hier ziet.
       </p>
-      <nav aria-label="Over de site" class="mx-auto flex max-w-5xl flex-wrap gap-x-4 gap-y-2 px-4 pb-8 text-sm sm:px-6"><a href="/weekenden" class="${navLink}">Alle weekenden</a><a href="/parken" class="${navLink}">Alle parken</a><a href="/last-minute" class="${navLink}">Last minute</a><a href="${HOW_PATH}" class="${navLink}">Zo werkt het</a><a href="/privacy" class="${navLink}">Privacy</a></nav>
+      <nav aria-label="Over de site" class="mx-auto flex max-w-5xl flex-wrap gap-x-4 gap-y-2 px-4 pb-8 text-sm sm:px-6"><a href="/weekenden" class="${navLink}">Alle weekenden</a><a href="/parken" class="${navLink}">Alle parken</a><a href="/cijfers" class="${navLink}">Cijfers</a><a href="/last-minute" class="${navLink}">Last minute</a><a href="${HOW_PATH}" class="${navLink}">Zo werkt het</a><a href="/privacy" class="${navLink}">Privacy</a></nav>
     </footer>
     <script>${new Html(pageScript)}</script>
   </body>

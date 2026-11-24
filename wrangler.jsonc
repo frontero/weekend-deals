@@ -12,7 +12,7 @@
     // with "single-page-application" every mistyped address showed the search page as if it existed.
     "not_found_handling": "none",
     // The API, and the park, weekend, region and theme pages with their sitemap (server/pages.mjs).
-    "run_worker_first": ["/api/*", "/park/*", "/parken", "/weekend/*", "/weekenden", "/regio/*", "/thema/*", "/land/*", "/aanbieder/*", "/feestdag/*", "/vakantie/*", "/last-minute", "/privacy", "/zo-werkt-het", "/sitemap.xml", "/robots.txt"]
+    "run_worker_first": ["/api/*", "/park/*", "/parken", "/weekend/*", "/weekenden", "/regio/*", "/thema/*", "/land/*", "/aanbieder/*", "/feestdag/*", "/vakantie/*", "/last-minute", "/cijfers", "/privacy", "/zo-werkt-het", "/sitemap.xml", "/robots.txt"]
   },
   // Per visitor, the calls that cost something (live prices, Google reviews, address lookups, alerts): see worker/index.mjs.
   // The visit counts (server/events.mjs) come in batches every few seconds, with a limit of their own.
