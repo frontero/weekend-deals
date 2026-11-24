@@ -97,6 +97,8 @@ test('one page per park with something to tell, per weekend, per country, region
     '/feestdag/pinksteren',
     '/land/nederland',
     '/last-minute',
+    '/merk/landal',
+    '/merk/landal/limburg',
     '/park/hoogduin-b',
     '/park/mheerbos',
     '/park/vakantiepark-gulpen',
@@ -272,6 +274,31 @@ test('the last-minute page shows the coming weekends, the biggest deals first', 
   const first = page.body.slice(page.body.indexOf('Eerstvolgende'), page.body.indexOf('Het weekend daarna'));
   assert.ok(first.indexOf('Gulpen') < first.indexOf('Hoogduin'), 'the 25% deal before the cheaper park without one');
   assert.match(page.body, /from=lastminute/);
+});
+
+test('a brand has a list of its parks, and one per region where that is a list of its own', () => {
+  const brand = pageAt('/merk/landal');
+  assert.equal(brand.title, 'Landal vakantieparken: alle parken met weekendprijzen');
+  assert.match(brand.body, /Vakantieparken van <span[^>]*>Landal<\/span>/);
+  assert.match(brand.body, /href="\/merk\/landal\/limburg"/);
+  assert.doesNotMatch(brand.body, /Uitjes/);
+  const place = pageAt('/merk/landal/limburg');
+  assert.equal(place.title, 'Landal Limburg: alle parken met weekendprijzen');
+  assert.match(place.body, /Landal in <span[^>]*>Limburg<\/span>/);
+  assert.match(place.body, /href="\/regio\/limburg"[^>]*>.*Alle parken in Limburg/);
+  assert.match(place.body, /from=merkpagina/);
+  assert.doesNotMatch(place.body, /Hoogduin/);
+  assert.match(place.description, /vakantieparken van Landal in Limburg/);
+  assert.match(pageAt('/regio/limburg').body, /href="\/merk\/landal\/limburg"/);
+  assert.match(pageAt('/parken').body, /Per merk[^]*href="\/merk\/landal"/);
+  assert.equal(pageAt('/merk/landal/nederland'), undefined, 'the same parks as the Limburg list');
+  assert.ok(isPagePath('/merk/roompot/zeeland') && isPagePath('/merk/roompot') && !isPagePath('/merk/roompot/zeeland/x'));
+});
+
+test('the last-minute page says how many parks have room and gives tips', () => {
+  const page = pageAt('/last-minute');
+  assert.match(page.body, /Voor vr 6 nov – ma 9 nov hebben nog 2 parken plek, waarvan 1 onder zijn normale weekendprijs\. De grootste korting is 25% bij [^.]*Gulpen/);
+  assert.match(page.body, /Zo boek je een last minute vakantiepark/);
 });
 
 test('a holiday page lists the stay the parks rent out for it, cheapest first, and the park and weekend pages point to it', () => {
