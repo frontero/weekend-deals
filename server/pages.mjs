@@ -216,6 +216,7 @@ const themePath = (theme) => `/thema/${theme.slug}`;
  *   ordinary Friday to Monday had far fewer (Christmas and New Year 18-11-2026, Easter and Whitsun 19-11-2026)
  * @property stayName that stay in words
  */
+const EASTER_SLUG = 'pasen';
 const HOLIDAYS = [
   {
     slug: 'kerst',
@@ -241,16 +242,16 @@ const HOLIDAYS = [
     theme: 'vuurwerkvrij',
   },
   {
-    slug: 'pasen',
+    slug: EASTER_SLUG,
     path: '/feestdag/pasen',
     emoji: '🐣',
     name: 'Pasen',
     word: 'Pasen',
-    heading: 'Vakantiepark met Pasen',
-    title: (year) => `Vakantiepark met Pasen ${year}`,
+    heading: 'Vakantiehuis met Pasen',
+    title: (year) => `Vakantiehuis met Pasen ${year}`,
     stay: (year) => ({ arrival: shiftDays(easter(year), -2), departure: shiftDays(easter(year), 2) }),
     stayName: 'van Goede Vrijdag tot de dinsdag na Pasen',
-    intro: 'Een lang paasweekend op een vakantiepark: eieren zoeken met de kinderen, of er met z\'n tweeën even uit.',
+    intro: 'Vergelijk vakantiehuizen op een vakantiepark, van Goede Vrijdag tot de dinsdag na Pasen.',
   },
   {
     slug: 'pinksteren',
@@ -828,14 +829,14 @@ const banner = (emoji, title, intro, tint = 'bg-accent-wash') =>
  * The banner on top of a holiday's or season's page, in its own colours and drawing (server/occasion-art.mjs).
  * @param status what the page found, under the intro
  */
-function occasionBanner(occasion, { year, status }) {
+function occasionBanner(occasion, { year, status, summary = html`<p class="mt-3 max-w-3xl font-semibold opacity-90">${status}</p>` }) {
   const art = OCCASION_ART[occasion.slug];
   return html`<div class="relative overflow-hidden rounded-[2rem] px-6 pt-6 sm:px-8 sm:pt-8" style="background: ${art.background}; color: ${art.ink}">
     <svg aria-hidden="true" class="pointer-events-none absolute inset-0 h-full w-full"><defs><pattern id="occasion-pattern" width="120" height="120" patternUnits="userSpaceOnUse">${new Html(art.pattern)}</pattern></defs><rect width="100%" height="100%" fill="url(#occasion-pattern)" opacity="${art.patternOpacity}" /></svg>
     <div class="relative">
       <h1 class="text-3xl font-black tracking-tight sm:text-5xl">${occasion.heading} <span class="inline-block -rotate-1 rounded-2xl px-2" style="background: ${art.sticker.background}; color: ${art.sticker.ink}">${year}</span></h1>
       <p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${occasion.intro}</p>
-      <p class="mt-3 max-w-3xl font-semibold opacity-90">${status}</p>
+      ${summary}
     </div>
     <svg aria-hidden="true" class="relative -mx-6 mt-6 block h-16 w-[calc(100%+3rem)] sm:-mx-8 sm:h-24 sm:w-[calc(100%+4rem)]" viewBox="0 0 1200 120" preserveAspectRatio="xMidYMax slice">${new Html(art.band)}</svg>
   </div>`;
@@ -1667,6 +1668,32 @@ function lastMinutePage(weekends, { pathOf, occasionsOf, parks, regions = [], br
   };
 }
 
+function easterSummary(period, offers, available, from) {
+  const dates = html`<p class="mt-3 text-sm font-bold">${weekendRange(period)} · ${nights(period)} nachten</p>`;
+  if (available === 0) {
+    const status = offers === null
+      ? 'De prijzen voor dit verblijf verschijnen zodra we ze hebben opgehaald.'
+      : `Bij de parken die we volgen is er geen plek voor ${partyLabel(PAGE_PARTY)}.`;
+    return html`${dates}<p class="mt-2 font-semibold">${status}</p>`;
+  }
+
+  return html`${dates}
+    <p class="mt-2 font-semibold">
+      <span class="block text-2xl font-black tabular-nums">Vanaf ${from} totaal</span>
+      <span class="text-sm">Voor ${partyLabel(PAGE_PARTY)}, inclusief verplichte toeslagen</span>
+    </p>
+    <p class="mt-1 text-sm">${count(available, 'vakantiepark', 'vakantieparken')} met plek</p>
+    <a href="#cheapest" class="mt-4 inline-flex rounded-full bg-surface px-4 py-2.5 text-sm font-extrabold text-ink shadow-sm transition hover:bg-hover">Bekijk de goedkoopste huisjes</a>`;
+}
+
+function easterDescription(title, period, available, from) {
+  const dates = weekendRange(period);
+  if (available === 0) {
+    return `${title}? Bekijk de verblijfsdata en beschikbaarheid voor het paasweekend van ${dates}.`;
+  }
+  return `${title}? Vergelijk ${count(available, 'vakantiepark', 'vakantieparken')} met plek van ${dates}, vanaf ${from} totaal voor ${partyLabel(PAGE_PARTY)}.`;
+}
+
 /**
  * A holiday's page: the stay the parks rent out for its coming date, every park with room cheapest first. Before that
  * stay's prices are in, or when no park has room, it says so and keeps its address.
@@ -1679,6 +1706,8 @@ function holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes,
   const asParks = sorted.map(({ park, weekend }) => ({ ...park, weekends: [weekend] }));
   const from = sorted.length > 0 && formatEuros(sorted[0].weekend.priceCents);
   const name = `${holiday.name} ${year}`;
+  const title = holiday.title(year);
+  const isEaster = holiday.slug === EASTER_SLUG;
   const when = `${formatWeekend(period)}, ${nights(period)} nachten`;
   const theme = holiday.theme && THEMES.find((candidate) => candidate.slug === holiday.theme);
   const quiet = theme ? sorted.filter(({ park }) => fitsTheme(theme, park)) : [];
@@ -1689,6 +1718,7 @@ function holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes,
   else if (offers) status = `${capitalised(holiday.stayName)} (${when}) vonden we bij de parken die we volgen geen plek meer voor ${partyLabel(PAGE_PARTY)}.`;
   else status = `De prijzen ${holiday.stayName} (${when}) komen hier zodra we ze ophalen${lastKnown ? `; nu lopen ze tot en met ${formatWeekend(lastKnown)}` : ''}.`;
   const sentences = [status, !usual && `Zo verhuren de meeste parken het met ${inText(holiday)}, in plaats van een weekend van vrijdag tot maandag.`].filter(Boolean);
+  const summary = isEaster ? easterSummary(period, offers, sorted.length, from) : undefined;
   const more = [
     ...holidays.filter((other) => other !== holiday).map((other) => [other.path, other.emoji, other.heading]),
     theme && themes.includes(theme) && [themePath(theme), themeIcon(theme), theme.name],
@@ -1698,7 +1728,7 @@ function holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes,
 
   const body = html`
     ${breadcrumb(name, ['/weekenden', 'Alle weekenden'])}
-    <div class="mt-3">${occasionBanner(holiday, { year, status: sentences.join(' ') })}</div>
+    <div class="mt-3">${occasionBanner(holiday, { year, status: sentences.join(' '), summary })}</div>
     ${sorted.length > 0 && html`<section aria-labelledby="cheapest" class="mt-10">${sectionTitle('cheapest', holiday.emoji, 'Het goedkoopst')}${cards(sorted)}</section>`}
     ${
       quiet.length > 0 &&
@@ -1723,10 +1753,12 @@ function holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes,
     ${bestBar(asParks, { source: 'feestdagbalk' })}`;
   return {
     path: holiday.path,
-    title: fitting(`${holiday.title(year)}: parken met plek en prijzen`, `${holiday.title(year)}: parken en prijzen`),
-    description: sorted.length
-      ? `${name} op een vakantiepark: ${count(sorted.length, 'park', 'parken')} met plek ${holiday.stayName}, voor ${partyLabel(PAGE_PARTY)} vanaf ${from}.`
-      : `${name} op een vakantiepark: welke parken nog plek hebben ${holiday.stayName}, en wat het kost.`,
+    title: isEaster ? `${title} | Prijzen en beschikbaarheid` : fitting(`${title}: parken met plek en prijzen`, `${title}: parken en prijzen`),
+    description: isEaster
+      ? easterDescription(title, period, sorted.length, from)
+      : sorted.length
+        ? `${name} op een vakantiepark: ${count(sorted.length, 'park', 'parken')} met plek ${holiday.stayName}, voor ${partyLabel(PAGE_PARTY)} vanaf ${from}.`
+        : `${name} op een vakantiepark: welke parken nog plek hebben ${holiday.stayName}, en wat het kost.`,
     image: bestOf(asParks)?.imageUrl ?? null,
     body: body.text,
   };
@@ -1814,7 +1846,9 @@ function parksIndex(parks, { pathOf, regions, themes, countries: countryPages, b
   };
 }
 
-function weekendsIndex(weekends, { parks, pathOf, holidays }) {
+function weekendsIndex(weekends, { parks, pathOf, holidays, easterHoliday }) {
+  const easterLink = holidayChip({ ...easterHoliday.holiday, heading: easterHoliday.holiday.title(easterHoliday.year) });
+  const otherHolidays = holidays.filter((holiday) => holiday.slug !== EASTER_SLUG);
   const row = ({ weekend, offers }) => {
     const cheapest = cheapestOf(offers.map((offer) => offer.weekend));
     const deals = offers.filter((offer) => (offer.weekend.discount ?? 0) >= DEAL_SHARE).length;
@@ -1825,7 +1859,7 @@ function weekendsIndex(weekends, { parks, pathOf, holidays }) {
     </li>`;
   };
   const body = html`
-    ${banner('📅', 'Alle weekenden', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">Elk komend weekend (vrijdag tot maandag) met het aantal vakantieparken dat nog plek heeft voor ${partyLabel(PAGE_PARTY)} en de laagste prijs.</p><p class="mt-4 flex flex-wrap gap-2"><a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a>${holidays.map(holidayChip)}</p>`)}
+    ${banner('📅', 'Alle weekenden', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">Elk komend weekend (vrijdag tot maandag) met het aantal vakantieparken dat nog plek heeft voor ${partyLabel(PAGE_PARTY)} en de laagste prijs.</p><nav aria-label="Vakantie- en feestdagen" class="mt-4 flex flex-wrap gap-2">${easterLink}<a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a>${otherHolidays.map(holidayChip)}</nav>`)}
     ${popularSection(parks, { pathOf })}
     <ul class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${weekends.map(row)}</ul>
     ${bestBar(parks, { source: 'overzichtbalk' })}`;
@@ -2014,10 +2048,11 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
     ...seasons.filter(({ matching, long }) => matching.length || long?.offers.length).map(({ season }) => season),
   ];
   const lastKnown = weekends.at(-1)?.weekend;
+  const easterHoliday = holidays.find(({ holiday }) => holiday.slug === EASTER_SLUG);
 
   return [
     parksIndex(everyPark, { pathOf, regions, themes, countries, brands, holidays: upcoming }),
-    weekendsIndex(weekends, { parks: everyPark, pathOf, holidays: upcoming }),
+    weekendsIndex(weekends, { parks: everyPark, pathOf, holidays: upcoming, easterHoliday }),
     ...holidays.map(({ holiday, year, period, offers }) =>
       holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes: themePages, holidays: occasionPages }),
     ),

@@ -384,7 +384,7 @@ test('a holiday page lists the stay the parks rent out for it, cheapest first, a
 
 test('a holiday page keeps its address: before its prices are in, when no park has room, and after it', () => {
   assert.match(pageAt('/feestdag/kerst').body, /De prijzen van kerstavond tot de maandag erna \(do 24 dec – ma 28 dec, 4 nachten\) komen hier zodra we ze ophalen; nu lopen ze tot en met vr 4 dec – ma 7 dec\./);
-  assert.doesNotMatch(pageAt('/weekenden').body, /feestdag/, 'the lists point to it once it has prices');
+  assert.doesNotMatch(pageAt('/weekenden').body, /href="\/feestdag\/kerst"/, 'Christmas appears once it has prices');
 
   const pathAt = (built, path) => built.find((page) => page.path === path);
   const holidayStays = [{ slug: 'kerst', arrival: '2026-12-24', departure: '2026-12-28', offers: [] }];
@@ -456,10 +456,27 @@ test('the rounds collect the stay of each coming holiday: from its eve to the Mo
     { slug: 'oud-en-nieuw', arrival: '2027-12-31', departure: '2028-01-03' },
   ]);
   const easterPage = pageAt('/feestdag/pasen');
-  assert.equal(easterPage.title, 'Vakantiepark met Pasen 2027: parken met plek en prijzen');
-  assert.match(easterPage.body, /De prijzen van Goede Vrijdag tot de dinsdag na Pasen \(vr 26 mrt – di 30 mrt, 4 nachten\) komen hier zodra we ze ophalen[^<]*Zo verhuren de meeste parken het met Pasen/);
+  assert.equal(easterPage.title, 'Vakantiehuis met Pasen 2027 | Prijzen en beschikbaarheid');
+  assert.match(easterPage.body, /26[^<]*30 maart 2027 · 4 nachten/);
+  assert.match(easterPage.body, /De prijzen voor dit verblijf verschijnen zodra we ze hebben opgehaald/);
+  assert.doesNotMatch(easterPage.body, /href="#cheapest"/);
+  assert.match(pageAt('/weekenden').body, /href="\/feestdag\/pasen"[^>]*><span[^>]*>🐣<\/span> Vakantiehuis met Pasen 2027<\/a>/);
   assert.equal(pageAt('/feestdag/hemelvaart').title, 'Vakantiepark met Hemelvaart 2027: parken met plek en prijzen');
   assert.equal(pageAt('/vakantie/herfstvakantie').title, 'Vakantiepark herfstvakantie 2026: parken met plek en prijzen');
+});
+
+test('the Easter banner shows the dates, total price and available parks, and Alle weekenden links to it once', () => {
+  const offers = [{ code: 'GPN', priceCents: 23900, bookingUrl: 'https://www.landal.nl/boeken?pasen' }];
+  const holidayStays = [{ slug: 'pasen', arrival: '2027-03-26', departure: '2027-03-30', offers }];
+  const built = buildPages({ parks: [gulpen], allParks, computedAt: '2026-11-25T06:00:00.000Z', details: { ...details, holidayStays } });
+  const easter = built.find((page) => page.path === '/feestdag/pasen');
+  assert.match(easter.body, /<h1[^>]*>Vakantiehuis met Pasen <span[^>]*>2027<\/span><\/h1>/);
+  assert.match(easter.body, /26[^<]*30 maart 2027 · 4 nachten[^]*Vanaf €\s239 totaal[^]*Voor 2 personen, inclusief verplichte toeslagen[^]*1 vakantiepark met plek/);
+  assert.match(easter.body, /href="#cheapest"[^>]*>Bekijk de goedkoopste huisjes[^]*id="cheapest"/);
+  assert.match(easter.description, /Vakantiehuis met Pasen 2027\?[^]*vanaf €\s239 totaal voor 2 personen/);
+  assert.equal(built.find((page) => page.path === '/weekenden').body.match(/href="\/feestdag\/pasen"/g).length, 1);
+  const after = buildPages({ parks: [gulpen], allParks, computedAt: '2027-03-31T06:00:00.000Z', details });
+  assert.match(after.find((page) => page.path === '/weekenden').body, /Vakantiehuis met Pasen 2028/);
 });
 
 test('areas people search for get a page: Texel by its villages, the Veluwe by where it lies', () => {
