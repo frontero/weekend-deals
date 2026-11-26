@@ -3,7 +3,9 @@ import { computed, defineAsyncComponent, ref, watch } from 'vue';
 import { marketByWeekend } from '../shared/analysis.mjs';
 import { toFacilityId } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
+import { easterStay } from '../shared/occasions.mjs';
 import { partyOf } from '../shared/party.mjs';
+import { localToday } from '../shared/weekends.mjs';
 import ActiveFilters from './components/ActiveFilters.vue';
 import FeedbackPrompt from './components/FeedbackPrompt.vue';
 import AlertsDialog from './components/AlertsDialog.vue';
@@ -96,8 +98,18 @@ const minDiscount = computed(() => Math.max(filters.minDiscountPercent, 1) / 100
 const discountLabel = computed(() =>
   filters.minDiscountPercent ? `${filters.minDiscountPercent}%+ onder normaal` : 'Alle prijzen',
 );
-// The pages next to this one (server/pages.mjs): the coming holidays first, as the last overview named them.
-const occasionLinks = computed(() => overview.value?.occasionLinks ?? []);
+const today = localToday();
+const currentYear = Number(today.slice(0, 4));
+const easterYear = easterStay(currentYear).arrival < today ? currentYear + 1 : currentYear;
+const featuredOccasions = [
+  { path: '/feestdag/pasen', emoji: '🐣', label: `Vakantiehuis met Pasen ${easterYear}`, mobileLabel: `Pasen ${easterYear}` },
+  { path: '/vakantie/voorjaarsvakantie', emoji: '🌷', label: 'Voorjaarsvakantie' },
+  { path: '/feestdag/pinksteren', emoji: '🌼', label: 'Pinksteren' },
+];
+const featuredOccasionPaths = new Set(featuredOccasions.map((item) => item.path));
+const occasionLinks = computed(() =>
+  (overview.value?.occasionLinks ?? []).filter((item) => featuredOccasionPaths.has(item.path) === false),
+);
 const pageLinks = computed(() => [
   { path: '/last-minute', emoji: '⏰', label: 'Last minute' },
   ...occasionLinks.value,
@@ -315,6 +327,19 @@ const isScanning = computed(() => overview.value?.scan.running ?? false);
           <a href="/zo-werkt-het" class="inline-flex min-h-6 items-center font-bold text-accent hover:underline">Zo werkt het</a>
           <a href="/last-minute" class="ml-3 inline-flex min-h-6 items-center font-bold text-accent hover:underline sm:hidden">Last minute</a>
         </p>
+        <nav aria-label="Vakanties uitgelicht" class="mt-2 flex flex-wrap gap-1.5 text-xs sm:gap-2 sm:text-sm">
+          <a
+            v-for="item in featuredOccasions"
+            :key="item.path"
+            :href="item.path"
+            :aria-label="item.label"
+            class="inline-flex min-h-6 items-center gap-1.5 rounded-full bg-surface px-2 py-1 font-extrabold text-accent ring-1 ring-accent/30 transition hover:ring-accent sm:px-3 sm:py-1.5"
+          >
+            <span aria-hidden="true" class="hidden sm:inline">{{ item.emoji }}</span>
+            <span class="hidden sm:inline">{{ item.label }}</span>
+            <span class="sm:hidden">{{ item.mobileLabel ?? item.label }}</span>
+          </a>
+        </nav>
         <nav aria-label="Meer manieren om te zoeken" class="mt-3 hidden flex-wrap gap-2 pb-1 text-sm sm:flex">
           <a
             v-for="item in pageLinks"

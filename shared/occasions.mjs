@@ -20,6 +20,11 @@ export function easter(year) {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
 
+export function easterStay(year) {
+  const sunday = easter(year);
+  return { arrival: shiftDays(sunday, -2), departure: shiftDays(sunday, 2) };
+}
+
 /** The nth Sunday of a month (1-based month), e.g. Mother's Day: the second Sunday of May. */
 function nthSunday(year, month, n) {
   const first = new Date(Date.UTC(year, month - 1, 1)).getUTCDay();

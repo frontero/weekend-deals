@@ -345,11 +345,13 @@ test('a holiday page lists the stay the parks rent out for it, cheapest first, a
     { slug: 'oud-en-nieuw', arrival: '2026-12-31', departure: '2027-01-04', fetchedAt: '2026-11-18T05:57:00.000Z', offers: [offer('GPN', 64000, 'https://www.landal.nl/boeken?oud')] },
     { slug: 'hemelvaart', arrival: '2027-05-05', departure: '2027-05-10', offers: [offer('GPN', 88000, 'https://www.landal.nl/boeken?hemelvaart')] },
   ];
-  const built = buildPages({ parks: [festive, hoogduin], allParks, computedAt: '2026-11-18T06:00:00.000Z', details: { ...details, holidayStays } });
+  const occasionsOf = ({ arrival }) => arrival === '2026-12-25' ? [{ label: 'Kerstvakantie', text: 'Het is kerstvakantie in heel Nederland.' }] : [];
+  const built = buildPages({ parks: [festive, hoogduin], allParks, computedAt: '2026-11-18T06:00:00.000Z', details: { ...details, holidayStays, occasionsOf } });
   const at = (path) => built.find((page) => page.path === path);
 
   const christmas = at('/feestdag/kerst');
-  assert.equal(christmas.title, 'Vakantiepark met kerst 2026: parken met plek en prijzen');
+  assert.equal(christmas.title, 'Vakantiepark met kerst 2026 | Vanaf kerstavond');
+  assert.match(christmas.description, /24[^]*28 december 2026[^]*€\s510 totaal/);
   assert.match(christmas.body, /style="background: linear-gradient\(160deg, #0d3b2c[^"]*; color: #ffffff"/, 'its own colours');
   assert.match(christmas.body, /<svg aria-hidden="true"[^>]*viewBox="0 0 1200 120"/, 'and its own drawing');
   assert.match(
@@ -362,6 +364,12 @@ test('a holiday page lists the stay the parks rent out for it, cheapest first, a
   assert.match(christmas.body, /molecaten\.nl%2Fboek/, "the provider's own link for the stay");
   assert.doesNotMatch(christmas.body, /<s /, 'no normal price to strike through');
   assert.match(christmas.body, /href="\/feestdag\/oud-en-nieuw"/);
+  assert.match(christmas.body, /href="\/vakantie\/kerstvakantie">Vergelijk weekenden in de kerstvakantie<[^]*id="cheapest"/);
+
+  const christmasBreak = at('/vakantie/kerstvakantie');
+  assert.equal(christmasBreak.title, 'Vakantiepark kerstvakantie 2026 | Weekenden en totaalprijzen');
+  assert.match(christmasBreak.body, /href="\/feestdag\/kerst">Bekijk het kerstverblijf vanaf kerstavond</);
+  assert.match(christmasBreak.body, /Kies je weekend in de kerstvakantie[^]*href="#weekend-0">25[^]*28 december 2026[^]*€\s610[^]*id="weekend-0"/);
 
   const newYear = at('/feestdag/oud-en-nieuw');
   assert.equal(newYear.title, 'Oud en nieuw 2026 op een vakantiepark: parken en prijzen');
@@ -392,7 +400,7 @@ test('a holiday page keeps its address: before its prices are in, when no park h
   assert.match(pathAt(full, '/feestdag/kerst').body, /Van kerstavond tot de maandag erna \(do 24 dec – ma 28 dec, 4 nachten\) vonden we bij de parken die we volgen geen plek meer/);
 
   const after = buildPages({ parks: [gulpen], allParks, computedAt: '2026-12-26T06:00:00.000Z', details });
-  assert.equal(pathAt(after, '/feestdag/kerst').title, 'Vakantiepark met kerst 2027: parken met plek en prijzen');
+  assert.equal(pathAt(after, '/feestdag/kerst').title, 'Vakantiepark met kerst 2027 | Vanaf kerstavond');
   assert.match(pathAt(after, '/feestdag/kerst').body, /vr 24 dec – ma 27 dec, 3 nachten/);
   assert.doesNotMatch(pathAt(after, '/feestdag/kerst').body, /Zo verhuren/, 'a stay from Friday to Monday is the usual weekend');
   assert.equal(pathAt(after, '/feestdag/oud-en-nieuw').title, 'Oud en nieuw 2026 op een vakantiepark: parken en prijzen');
@@ -424,6 +432,8 @@ test('the spring holiday and carnival pages show their weekends, region by regio
   const spring = at('/vakantie/voorjaarsvakantie');
   assert.equal(spring.title, 'Vakantiepark voorjaarsvakantie 2027: parken en prijzen');
   assert.match(spring.body, /2 vakantieparken hebben plek in 2 weekenden van vrijdag tot maandag voor 2 personen, vanaf €\s330\./);
+  assert.match(spring.body, /Voorjaarsvakantie per schoolregio[^]*href="#weekend-0">12[^]*15 februari 2027[^]*regio Zuid[^]*2 parken met plek · vanaf <strong>€\s330/);
+  assert.match(spring.body, /href="#weekend-1">19[^]*22 februari 2027[^]*regio Noord en Midden[^]*1 park met plek · vanaf <strong>€\s470/);
   assert.match(spring.body, /vr 12 feb – ma 15 feb[^]*>Voorjaarsvakantie Zuid</, 'each weekend says which region is free');
   assert.match(spring.body, /vr 19 feb – ma 22 feb/);
   assert.doesNotMatch(spring.body, /vr 26 feb/);
@@ -477,6 +487,22 @@ test('the Easter banner shows the dates, total price and available parks, and Al
   assert.equal(built.find((page) => page.path === '/weekenden').body.match(/href="\/feestdag\/pasen"/g).length, 1);
   const after = buildPages({ parks: [gulpen], allParks, computedAt: '2027-03-31T06:00:00.000Z', details });
   assert.match(after.find((page) => page.path === '/weekenden').body, /Vakantiehuis met Pasen 2028/);
+});
+
+test('Pinksteren shows the full stay and compares available parks per country before the offers', () => {
+  const offers = [
+    { code: 'GPN', priceCents: 41000, bookingUrl: 'https://www.landal.nl/boeken?pinksteren' },
+    { code: 'SDT', priceCents: 28000, bookingUrl: 'https://www.landal.nl/boeken?pinksteren' },
+    { code: 'molecaten:6006', priceCents: 32000, bookingUrl: 'https://www.molecaten.nl/boek?pinksteren' },
+  ];
+  const holidayStays = [{ slug: 'pinksteren', arrival: '2027-05-14', departure: '2027-05-18', offers }];
+  const built = buildPages({ parks: [gulpen, hoogduin], allParks, computedAt: '2026-11-25T06:00:00.000Z', details: { ...details, holidayStays } });
+  const pinksteren = built.find((page) => page.path === '/feestdag/pinksteren');
+  assert.match(pinksteren.body, /14[^<]*18 mei 2027 · 4 nachten[^]*Vanaf €\s280 totaal[^]*3 vakantieparken met plek/);
+  const comparison = pinksteren.body.slice(pinksteren.body.indexOf('id="pinksteren-per-land"'), pinksteren.body.indexOf('id="cheapest"'));
+  assert.match(comparison, /Denemarken[^]*1 park met plek · vanaf <strong>€\s280[^]*href="\/park\/vakantiepark-sohojlandet"/);
+  assert.match(comparison, /Nederland[^]*2 parken met plek · vanaf <strong>€\s320[^]*href="\/park\/hoogduin-b"/);
+  assert.doesNotMatch(pageAt('/feestdag/pinksteren').body, /id="pinksteren-per-land"/);
 });
 
 test('areas people search for get a page: Texel by its villages, the Veluwe by where it lies', () => {
