@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createVerify, generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { accessToken, searchAnalytics, serviceAccount } from './search-console.mjs';
+import { trackedIndexRows } from './index-tracking.mjs';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const account = { client_email: 'robot@project.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }) };
@@ -47,6 +48,7 @@ test("a round's reading stores the search figures, the sitemap state and what Go
   const page = (path) => ({ path, title: path, description: '', image: null, body: '' });
   await db.replacePages([page('/parken'), page('/weekenden'), page('/feestdag/kerst')], '2026-11-19T06:00:00.000Z');
   await db.savePageIndex({ path: '/parken', verdict: 'PASS', coverage: 'Ingediend en geïndexeerd', lastCrawl: null, checkedAt: '2026-11-18T06:00:00.000Z' });
+  assert.deepEqual(await db.pagesToInspect(2, ['/parken', '/cijfers']), ['/parken', '/feestdag/kerst']);
 
   const inspected = [];
   const fetcher = async (url, init) => {
@@ -78,7 +80,19 @@ test("a round's reading stores the search figures, the sitemap state and what Go
   assert.deepEqual(summary.pages.map((row) => [row.path, row.impressions]), [['/feestdag/kerst', 30], ['/', 10]]);
   assert.equal(summary.queries[0].query, 'vakantiepark kerst');
   assert.equal((await db.searchSitemaps()).sitemaps[0].warnings, 1);
+  await db.savePageIndex({ path: '/feestdag/kerst', verdict: 'PASS', coverage: 'Ingediend en geïndexeerd', lastCrawl: null, checkedAt: '2026-11-19T11:00:00.000Z' });
   assert.deepEqual((await db.pageIndex()).map((row) => [row.path, row.verdict]), [['/feestdag/kerst', 'NEUTRAL'], ['/parken', 'PASS'], ['/weekenden', 'NEUTRAL']]);
+  await db.saveIndexRequests([{ path: '/feestdag/kerst', requestedOn: '2026-11-26' }, { path: '/cijfers', requestedOn: '2026-11-25' }]);
+  await db.saveIndexRequests([{ path: '/feestdag/kerst', requestedOn: '2026-11-25' }]);
+  const tracked = trackedIndexRows(await db.pageIndex(), await db.indexRequests());
+  assert.equal(tracked.length, 6);
+  const christmas = tracked.find((row) => row.path === '/feestdag/kerst');
+  assert.equal(christmas.requestedOn, '2026-11-26');
+  assert.equal(christmas.verdict, 'NEUTRAL');
+  assert.equal(christmas.checkedAt, '2026-11-19T12:00:00.000Z');
+  assert.deepEqual(tracked.find((row) => row.path === '/cijfers'), {
+    path: '/cijfers', label: 'Cijfers', requestedOn: '2026-11-25', verdict: null, coverage: null, lastCrawl: null, checkedAt: null,
+  });
   db.close();
   rmSync(directory, { recursive: true, force: true });
 });

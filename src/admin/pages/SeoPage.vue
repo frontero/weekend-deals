@@ -13,6 +13,7 @@ const search = ref({ queries: [], pages: [] });
 const searchTotals = ref(null);
 const searchPeriod = ref(28);
 const index = ref([]);
+const trackedIndex = ref([]);
 const sitemaps = ref(null);
 const pageCount = ref(0);
 // Google's PageSpeed of a page of each kind, read once a day (server/pagespeed.mjs).
@@ -26,7 +27,7 @@ onMounted(async () => {
   try {
     const response = await fetch('/api/admin/seo');
     if (!response.ok) throw new Error(`SEO failed with ${response.status}`);
-    ({ audit: audit.value, kinds: kinds.value, search: search.value, searchTotals: searchTotals.value, index: index.value, sitemaps: sitemaps.value, pageCount: pageCount.value, speed: speed.value, bing: bing.value } = await response.json());
+    ({ audit: audit.value, kinds: kinds.value, search: search.value, searchTotals: searchTotals.value, index: index.value, trackedIndex: trackedIndex.value = [], sitemaps: sitemaps.value, pageCount: pageCount.value, speed: speed.value, bing: bing.value } = await response.json());
     state.value = 'ready';
   } catch {
     state.value = 'failed';
@@ -42,6 +43,28 @@ const tiles = computed(() => [
 ]);
 const place = (position) => position.toLocaleString('nl-NL', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const indexed = computed(() => index.value.filter((row) => row.verdict === 'PASS').length);
+const requestDate = new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium', timeZone: 'Europe/Amsterdam' });
+const inspectionTime = new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Amsterdam' });
+const trackedRows = computed(() => trackedIndex.value.map((row) => ({
+  ...row,
+  requestLabel: row.requestedOn === null ? 'Geen aanvraag vastgelegd' : requestDate.format(new Date(row.requestedOn)),
+  crawlLabel: row.lastCrawl === null ? 'Geen crawldatum' : inspectionTime.format(new Date(row.lastCrawl)),
+  checkedLabel: row.checkedAt === null ? '' : inspectionTime.format(new Date(row.checkedAt)),
+  status: indexStatus(row.verdict, row.checkedAt),
+})));
+
+function indexStatus(verdict, checkedAt) {
+  if (checkedAt === null) {
+    return 'Nog niet gecontroleerd';
+  }
+  if (verdict === 'PASS') {
+    return 'Geïndexeerd';
+  }
+  if (verdict === 'NEUTRAL' || verdict === 'FAIL') {
+    return 'Niet geïndexeerd';
+  }
+  return 'Onbekend';
+}
 const progress = computed(() => searchProgress(searchTotals.value?.days ?? [], searchPeriod.value));
 const percent = new Intl.NumberFormat('nl-NL', { style: 'percent', maximumFractionDigits: 2 });
 const signed = new Intl.NumberFormat('nl-NL', { signDisplay: 'exceptZero', maximumFractionDigits: 2 });
@@ -137,6 +160,42 @@ const byKind = computed(() =>
           :hint="`${count(pageCount - index.length)} pagina's nog niet nagevraagd`"
           label="Opgenomen door Google"
         />
+      </div>
+    </section>
+    <section v-if="trackedRows.length > 0" class="min-w-0 rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="seo-tracked-index">
+      <h2 id="seo-tracked-index" class="border-b border-line px-4 py-3 font-semibold sm:px-5">Indexering van gevolgde pagina’s</h2>
+      <p class="px-4 py-3 text-sm text-ink-secondary sm:px-5">
+        Aanvraagdatums zijn handmatig vastgelegd. De crawldatum en indexstatus worden bij elke prijsronde opgehaald uit Search Console.
+      </p>
+      <div class="overflow-x-auto" tabindex="0" role="group" aria-label="Indexeringstabel">
+        <table class="w-full text-left text-sm">
+          <thead class="text-ink-secondary">
+            <tr class="border-b border-line">
+              <th scope="col" class="px-3 py-2.5 font-medium sm:px-5">Pagina</th>
+              <th scope="col" class="px-3 py-2.5 font-medium sm:px-5">Laatste aanvraag</th>
+              <th scope="col" class="px-3 py-2.5 font-medium sm:px-5">Laatste crawl</th>
+              <th scope="col" class="px-3 py-2.5 font-medium sm:px-5">Indexstatus</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in trackedRows" :key="row.path" class="border-b border-line align-top last:border-0">
+              <th scope="row" class="px-3 py-3 font-semibold sm:px-5"><a :href="row.path" class="text-accent underline">{{ row.label }}</a></th>
+              <td class="px-3 py-3 tabular-nums sm:px-5">
+                <time v-if="row.requestedOn !== null" :datetime="row.requestedOn">{{ row.requestLabel }}</time>
+                <span v-else class="text-ink-secondary">{{ row.requestLabel }}</span>
+              </td>
+              <td class="px-3 py-3 tabular-nums sm:px-5">
+                <time v-if="row.lastCrawl !== null" :datetime="row.lastCrawl">{{ row.crawlLabel }}</time>
+                <span v-else class="text-ink-secondary">{{ row.crawlLabel }}</span>
+              </td>
+              <td class="px-3 py-3 sm:px-5">
+                <p class="font-semibold">{{ row.status }}</p>
+                <p v-if="row.coverage" class="text-xs text-ink-secondary">{{ row.coverage }}</p>
+                <p v-if="row.checkedAt !== null" class="mt-1 text-xs text-ink-secondary">Gecontroleerd op <time :datetime="row.checkedAt">{{ row.checkedLabel }}</time></p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
     <p v-if="sitemaps" class="text-sm text-ink-secondary">

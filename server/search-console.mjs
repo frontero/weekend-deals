@@ -3,6 +3,7 @@
 // (scripts/setup-search-console.sh). Node only: the rounds run it, not the Worker.
 import { createSign } from 'node:crypto';
 import { shiftDays } from '../shared/weekends.mjs';
+import { TRACKED_INDEX_PAGES } from './index-tracking.mjs';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
@@ -126,8 +127,15 @@ export async function updateSearchConsole(db, account, { fetcher = fetch, now = 
   } catch (error) {
     log(`sitemap state failed: ${error.message}`);
   }
-  // A few at a time: one answer takes Google seconds, and one by one a round would take minutes longer.
-  const paths = await db.pagesToInspect(inspections);
+  const paths = await db.pagesToInspect(inspections, TRACKED_INDEX_PAGES.map(({ path }) => path));
+  read.inspected = await updatePageIndex(db, token, paths, { fetcher, now, log });
+  return read;
+}
+
+/** Inspect and store these URLs. A failing batch still saves its successful answers before stopping. */
+export async function updatePageIndex(db, token, paths, { fetcher = fetch, now = Date.now(), log = () => {} } = {}) {
+  const checkedAt = new Date(now).toISOString();
+  let inspected = 0;
   for (let start = 0; start < paths.length; start += TOGETHER) {
     const answers = await Promise.allSettled(
       paths.slice(start, start + TOGETHER).map(async (path) => ({ path, ...(await inspectUrl(token, `${SITE_URL}${path}`, { fetcher })) })),
@@ -135,8 +143,8 @@ export async function updateSearchConsole(db, account, { fetcher = fetch, now = 
     const failed = answers.find((answer) => answer.status === 'rejected');
     for (const answer of answers) {
       if (answer.status !== 'fulfilled') continue;
-      await db.savePageIndex({ ...answer.value, checkedAt: new Date(now).toISOString() });
-      read.inspected += 1;
+      await db.savePageIndex({ ...answer.value, checkedAt });
+      inspected += 1;
     }
     if (failed) {
       log(`inspection failed: ${failed.reason.message}`);
@@ -144,5 +152,5 @@ export async function updateSearchConsole(db, account, { fetcher = fetch, now = 
       break;
     }
   }
-  return read;
+  return inspected;
 }

@@ -1,6 +1,8 @@
 import { FEATURE_PARTIES, groupKey, STANDARD_PARTIES } from '../shared/party.mjs';
 import { clampSettings, DEFAULT_SETTINGS } from './settings.mjs';
 
+const INDEX_REQUEST_PREFIX = 'googleIndexRequest:';
+
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS parks (
     code TEXT PRIMARY KEY,
@@ -738,11 +740,13 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       });
     },
 
-    /** The stored pages Google was asked about longest ago, never-asked ones first. */
-    async pagesToInspect(limit) {
+    /** Priority pages first, then the pages Google was asked about longest ago. */
+    async pagesToInspect(limit, priorityPaths = []) {
       const rows = await all(
         `SELECT pages.path FROM pages LEFT JOIN page_index ON page_index.path = pages.path
-         ORDER BY page_index.checked_at IS NOT NULL, page_index.checked_at, pages.path LIMIT ?`,
+         ORDER BY pages.path IN (SELECT value FROM json_each(?)) DESC,
+                  page_index.checked_at IS NOT NULL, page_index.checked_at, pages.path LIMIT ?`,
+        JSON.stringify(priorityPaths),
         limit,
       );
       return rows.map((row) => row.path);
@@ -750,9 +754,27 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
 
     async savePageIndex({ path, verdict, coverage, lastCrawl, checkedAt }) {
       await client.execute({
-        sql: `INSERT OR REPLACE INTO page_index (path, verdict, coverage, last_crawl, checked_at) VALUES (?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO page_index (path, verdict, coverage, last_crawl, checked_at) VALUES (?, ?, ?, ?, ?)
+              ON CONFLICT(path) DO UPDATE SET verdict = excluded.verdict, coverage = excluded.coverage,
+                last_crawl = excluded.last_crawl, checked_at = excluded.checked_at
+              WHERE page_index.checked_at <= excluded.checked_at`,
         args: [path, verdict, coverage, lastCrawl, checkedAt],
       });
+    },
+
+    /** Most recent confirmed manual indexing request per path, stored as a calendar date. */
+    async indexRequests() {
+      const rows = await all('SELECT substr(key, ?) AS path, value FROM settings WHERE key GLOB ?', INDEX_REQUEST_PREFIX.length + 1, `${INDEX_REQUEST_PREFIX}*`);
+      return Object.fromEntries(rows.map(({ path, value }) => [path, value]));
+    },
+
+    async saveIndexRequests(requests) {
+      await client.batch(requests.map(({ path, requestedOn }) => ({
+        sql: `INSERT INTO settings (key, value) VALUES (?, ?)
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value
+              WHERE settings.value < excluded.value`,
+        args: [`${INDEX_REQUEST_PREFIX}${path}`, requestedOn],
+      })), 'write');
     },
 
     /** Whether Google has each page that exists now, as last asked. */
