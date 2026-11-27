@@ -1594,6 +1594,7 @@ function weekendSection({ weekend, offers }, { id, emoji, title, source, pathOf,
 }
 
 const FIGURES_PATH = '/cijfers';
+const figuresLink = html`<a href="${FIGURES_PATH}" class="${link}">Wanneer zijn vakantieparken het goedkoopst?</a>`;
 // A group with fewer prices says too little to name a middle.
 const MIN_FIGURE_PRICES = 20;
 const SHOWN_REGIONS = 6;
@@ -2079,7 +2080,11 @@ function weekendsIndex(weekends, { parks, pathOf, holidays, easterHoliday }) {
     </li>`;
   };
   const body = html`
-    ${banner('📅', 'Alle weekenden', html`<p class="mt-3 max-w-2xl font-semibold text-ink-secondary">Elk komend weekend (vrijdag tot maandag) met het aantal vakantieparken dat nog plek heeft voor ${partyLabel(PAGE_PARTY)} en de laagste prijs.</p><nav aria-label="Vakantie- en feestdagen" class="mt-4 flex flex-wrap gap-2">${easterLink}<a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a>${otherHolidays.map(holidayChip)}</nav>`)}
+    ${banner('📅', 'Alle weekenden', html`
+      <p class="mt-3 max-w-2xl font-semibold text-ink-secondary">Elk komend weekend (vrijdag tot maandag) met het aantal vakantieparken dat nog plek heeft voor ${partyLabel(PAGE_PARTY)} en de laagste prijs.</p>
+      <p class="mt-2 max-w-2xl text-ink-secondary">${figuresLink} Vergelijk de weekendprijzen per maand en regio.</p>
+      <nav aria-label="Vakantie- en feestdagen" class="mt-4 flex flex-wrap gap-2">${easterLink}<a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a>${otherHolidays.map(holidayChip)}</nav>
+    `)}
     ${popularSection(parks, { pathOf })}
     <ul class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${weekends.map(row)}</ul>
     ${bestBar(parks, { source: 'overzichtbalk' })}`;
@@ -2391,6 +2396,7 @@ const howPage = () => ({
         <li>De pagina's die je via Google vindt, rekenen met ${partyLabel(PAGE_PARTY)}. Op de <a href="/" class="${link}">zoekpagina</a> stel je je eigen gezelschap in.</li>
         <li>Prijzen kunnen veranderen nadat wij ze zagen. De prijs bij de aanbieder geldt.</li>
       </ul>
+      <p class="mt-3">${figuresLink} Bekijk hoe de door ons gemeten weekendprijzen verschillen per maand, regio en aanbieder.</p>
       <h2 id="normale-prijs" class="${heading} scroll-mt-20 text-ink">Wat de gebruikelijke prijs bij een park is</h2>
       <p class="mt-2">De normale prijs van een park is de middelste weekendprijs die we er zelf voor zagen, over het afgelopen half jaar en de komende weekenden. Het is dus geen adviesprijs van de aanbieder. Van een park waarvan we nog te weinig weekenden kennen, tonen we geen normale prijs en geen korting.</p>
       <h2 class="${heading} text-ink">Wanneer iets een buitenkansje is</h2>

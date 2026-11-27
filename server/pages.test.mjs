@@ -337,7 +337,9 @@ test('serves a stored page in the site frame, a 404 page, the sitemap and robots
   assert.match(await (await serve('/robots.txt')).text(), /Disallow: \/api\//);
   const how = await serve('/zo-werkt-het');
   assert.equal(how.status, 200);
-  assert.match(await how.text(), /middelste weekendprijs[^]*minstens 20% onder de normale prijs[^]*affiliate-links/);
+  const howText = await how.text();
+  assert.match(howText, /middelste weekendprijs[^]*minstens 20% onder de normale prijs[^]*affiliate-links/);
+  assert.match(howText, /<p[^>]*><a href="\/cijfers"[^>]*>Wanneer zijn vakantieparken het goedkoopst\?<\/a> Bekijk/);
   assert.match(await (await serve('/sitemap.xml')).text(), /<loc>https:\/\/weekendjeweg.test\/zo-werkt-het<\/loc>/);
 });
 
@@ -559,7 +561,9 @@ test('the Easter banner shows the dates, total price and available parks, and Al
   assert.match(easter.body, /26[^<]*30 maart 2027 · 4 nachten[^]*Vanaf €\s239 totaal[^]*Voor 2 personen, inclusief verplichte toeslagen[^]*1 vakantiepark met plek/);
   assert.match(easter.body, /href="#cheapest"[^>]*>Bekijk de goedkoopste huisjes[^]*id="cheapest"/);
   assert.match(easter.description, /Vakantiehuis met Pasen 2027\?[^]*vanaf €\s239 totaal voor 2 personen/);
-  assert.equal(built.find((page) => page.path === '/weekenden').body.match(/href="\/feestdag\/pasen"/g).length, 1);
+  const weekendsBody = built.find((page) => page.path === '/weekenden').body;
+  assert.equal(weekendsBody.match(/href="\/feestdag\/pasen"/g).length, 1);
+  assert.match(weekendsBody, /<p[^>]*><a href="\/cijfers"[^>]*>Wanneer zijn vakantieparken het goedkoopst\?<\/a> Vergelijk/);
   const after = buildPages({ parks: [gulpen], allParks, computedAt: '2027-03-31T06:00:00.000Z', details });
   assert.match(after.find((page) => page.path === '/weekenden').body, /Vakantiehuis met Pasen 2028/);
 });
