@@ -7,7 +7,7 @@
 // No Node imports: the Worker serves these.
 import { reasonText, verdictLabel } from '../src/lib/advice.js';
 import { brandName } from '../src/lib/brands.js';
-import { countryName, formatDay, formatEuros, formatWeekend, nights } from '../src/lib/format.js';
+import { countryName, formatDay, formatEuros, formatWeekend, nights, wholeEuros } from '../src/lib/format.js';
 import { bookingBrandNote, providerHomeLinks, providerName, trackedBookingUrl } from '../src/lib/providers.js';
 import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
@@ -23,6 +23,7 @@ import { localToday, shiftDays } from '../shared/weekends.mjs';
 export const PAGE_PARTY = STANDARD_PARTIES[0];
 const NEARBY_PARKS = 6;
 const TOP_DEALS = 3;
+const NEXT_PARK_WEEKENDS = 3;
 // A weekend page lists this many parks, cheapest first; with all of them (200+) it weighs a quarter megabyte.
 const LISTED_OFFERS = 50;
 // A weekend is a deal from this share under the park's normal price, as in the app's default filter.
@@ -1058,12 +1059,50 @@ function parkIntro(park, { accommodations, weekendCount }) {
   return sentences;
 }
 
+function weekendPriceDifference(priceCents, baselineCents) {
+  if ((baselineCents ?? 0) <= 0) {
+    return null;
+  }
+  const normalPrice = wholeEuros(baselineCents);
+  const difference = wholeEuros(priceCents) - normalPrice;
+  if (difference === 0) {
+    return 'Gelijk aan de gebruikelijke prijs';
+  }
+  const amount = formatEuros(Math.abs(difference) * 100);
+  const percent = Math.round(Math.abs(difference) / normalPrice * 100);
+  const direction = difference < 0 ? 'goedkoper' : 'duurder';
+  return `${amount} ${direction} dan gebruikelijk${percent > 0 ? ` (${percent}%)` : ''}`;
+}
+
+function nextParkWeekendCard(park, weekend) {
+  const difference = weekendPriceDifference(weekend.priceCents, park.baselineCents);
+  return html`<li class="flex flex-col gap-1 rounded-2xl bg-surface p-4 ring-1 ring-line">
+    <h3 class="font-extrabold">${formatWeekend(weekend)}</h3>
+    <p class="text-2xl font-black tabular-nums">${formatEuros(weekend.priceCents)}</p>
+    ${difference !== null && html`<p class="text-sm font-semibold text-ink-secondary">${difference}</p>`}
+    ${checkedLine(weekend)}
+    <div class="mt-auto pt-2">${bookButton(park, weekend, 'parkpagina')}</div>
+  </li>`;
+}
+
+function nextParkWeekendsSection(park, weekends) {
+  const baseline = (park.baselineCents ?? 0) > 0
+    ? `De gebruikelijke weekendprijs is ${formatEuros(park.baselineCents)}, gebaseerd op de weekendprijzen die we bij dit park hebben gemeten.`
+    : 'Er zijn nog te weinig prijsmetingen om de gebruikelijke weekendprijs te bepalen.';
+  return html`<section aria-labelledby="next-park-weekends" class="mt-6">
+    ${sectionTitle('next-park-weekends', '📅', 'Eerstvolgende vrije weekenden')}
+    <p class="mt-2 max-w-3xl text-sm text-ink-secondary">Totaalprijzen voor ${partyLabel(PAGE_PARTY)} in het goedkoopste beschikbare huisje, vrijdag tot maandag, inclusief toeslagen. ${baseline}</p>
+    <ol class="mt-4 grid gap-3 sm:grid-cols-3">${weekends.map((weekend) => nextParkWeekendCard(park, weekend))}</ol>
+    <p class="mt-3 text-sm"><a href="#weekends" class="${link}">Bekijk alle weekendprijzen</a></p>
+  </section>`;
+}
+
 /** @param themes the themes that have a page, by facility */
 /**
  * @param regionPages the regions the park belongs to that have a page, the most specific first
  * @param themes the themes with a page that list this park; `themeOf` those of a single facility, by that facility
  */
-function parkPage(park, { pathOf, nearby, updated, accommodations, places, weekendCount, regionPages, themes: themePages, themeOf, occasionsOf, holidayOffers = [], brandPages = [] }) {
+function parkPage(park, { pathOf, nearby, today, updated, accommodations, places, weekendCount, regionPages, themes: themePages, themeOf, occasionsOf, holidayOffers = [], brandPages = [] }) {
   const name = fullName(park);
   // People search a park by its town too ("roompot breskens"): the title names it when the park's name does not.
   // As a word of its own: "Weerterbergen" does not name Weert.
@@ -1072,6 +1111,10 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
   const place = placeOf(park);
   const region = regionOf(park);
   const cheapest = cheapestOf(park.weekends);
+  const nextWeekends = park.code === 'HSN'
+    ? park.weekends.filter(({ arrival }) => arrival >= today).sort((first, second) => first.arrival.localeCompare(second.arrival)).slice(0, NEXT_PARK_WEEKENDS)
+    : [];
+  const showsNextWeekends = nextWeekends.length > 0;
   const groups = facilityGroups().map((group) => ({ ...group, options: group.options.filter((option) => park.facilities.includes(option.id)) }));
   const todo = groups.filter((group) => group.options.length && group.name !== SETTING_GROUP && group.name !== GENERAL_GROUP);
   const general = groups.find((group) => group.name === GENERAL_GROUP)?.options ?? [];
@@ -1123,6 +1166,7 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
     ${park.imageUrl && html`<div class="relative mt-3">${heroPhoto(park.imageUrl, name)}${photoSticker(cheapest)}</div>`}
     <h1 class="mt-5 text-4xl font-black tracking-tight sm:text-5xl">${name}</h1>
     <p class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-semibold text-ink-secondary">${place && html`<span><span aria-hidden="true">📍</span> ${place}</span>`}<span>bij ${providerName(park.provider)}</span>${rating(park)}${park.popular > 0 && html`<span class="rounded-full bg-cta-wash px-3 py-1 text-sm font-extrabold text-ink" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair deze week</span>`}</p>
+    ${showsNextWeekends && nextParkWeekendsSection(park, nextWeekends)}
     ${
       cheapest
         ? html`<section aria-labelledby="cheapest" class="mt-6 flex flex-col gap-4 rounded-[2rem] bg-accent p-6 text-on-accent sm:flex-row sm:items-center">
@@ -1208,10 +1252,14 @@ function parkPage(park, { pathOf, nearby, updated, accommodations, places, weeke
 
   return {
     path: pathOf(park),
-    title: fitting(...(located ? [`${located}: weekendprijzen en aanbiedingen`, `${located}: weekendprijzen`, `${located}: prijzen`] : []), `${name}: weekendprijzen en aanbiedingen`, `${name}: prijzen en aanbiedingen`, `${name}: weekendprijzen`, name),
-    description: cheapest
-      ? `Weekendje weg naar ${name}${place ? ` in ${place}` : ''}? Vanaf ${formatEuros(cheapest.priceCents)} voor ${partyLabel(PAGE_PARTY)} (${formatWeekend(cheapest)}). Zie de prijs van elk weekend, wat er te doen is en of je nu moet boeken.`
-      : `${name}${place ? ` in ${place}` : ''}: wat er te doen is op het park en in de omgeving, de huisjes en de weekendprijzen voor ${partyLabel(PAGE_PARTY)}.`,
+    title: showsNextWeekends
+      ? `${name}: vrije weekenden en prijzen`
+      : fitting(...(located ? [`${located}: weekendprijzen en aanbiedingen`, `${located}: weekendprijzen`, `${located}: prijzen`] : []), `${name}: weekendprijzen en aanbiedingen`, `${name}: prijzen en aanbiedingen`, `${name}: weekendprijzen`, name),
+    description: showsNextWeekends
+      ? `Bekijk de eerstvolgende vrije weekenden bij ${name} en vergelijk de totaalprijzen voor ${partyLabel(PAGE_PARTY)}.`
+      : cheapest
+        ? `Weekendje weg naar ${name}${place ? ` in ${place}` : ''}? Vanaf ${formatEuros(cheapest.priceCents)} voor ${partyLabel(PAGE_PARTY)} (${formatWeekend(cheapest)}). Zie de prijs van elk weekend, wat er te doen is en of je nu moet boeken.`
+        : `${name}${place ? ` in ${place}` : ''}: wat er te doen is op het park en in de omgeving, de huisjes en de weekendprijzen voor ${partyLabel(PAGE_PARTY)}.`,
     image: park.imageUrl ?? null,
     body: body.text,
   };
@@ -2060,6 +2108,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
     paths.set(park.code, `/park/${slug}`);
   }
   const pathOf = (park) => paths.get(park.code);
+  const localDate = localToday(new Date(computedAt));
   const updated = updatedAt.format(new Date(computedAt));
 
   const located = everyPark.filter((park) => park.lat != null && park.lng != null);
@@ -2189,6 +2238,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
       parkPage(park, {
         pathOf,
         nearby: nearbyOf(park),
+        today: localDate,
         updated,
         accommodations: accommodationsOf(park),
         places: details.surroundings.get(park.code) ?? [],
@@ -2222,7 +2272,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
         emoji: '🌍',
         pathOf,
         surroundings: details.surroundings,
-        comparison: country === 'DE' ? germanyComparison(list, { pathOf, today: localToday(new Date(computedAt)) }) : null,
+        comparison: country === 'DE' ? germanyComparison(list, { pathOf, today: localDate }) : null,
         links: [
           ...regions
             .filter(([, parksOf]) => parksOf.every((park) => park.country === country))

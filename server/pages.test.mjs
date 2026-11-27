@@ -87,6 +87,38 @@ const details = {
 const pages = buildPages({ parks: [gulpen, hoogduin], allParks, computedAt: '2026-10-29T06:39:10.572Z', details });
 const pageAt = (path) => pages.find((page) => page.path === path);
 
+test('Hof van Saksen shows the first three free weekends in date order with their price differences', () => {
+  const park = { ...gulpen, code: 'HSN', name: 'Hof van Saksen', city: 'Nooitgedacht', baselineCents: 77130, weekends: [
+    weekend('2026-12-18', '2026-12-21', 30000, 0.61),
+    weekend('2026-12-04', '2026-12-07', 188030, -1.438),
+    weekend('2026-11-13', '2026-11-16', 20000, 0.74),
+    weekend('2026-11-20', '2026-11-23', 74030, 0.04, { observedAt: '2026-11-19T06:00:00Z' }),
+    weekend('2026-12-11', '2026-12-14', 77130, 0),
+  ] };
+  const built = buildPages({ parks: [park, gulpen], allParks: new Map([[park.code, park], [gulpen.code, gulpen]]), computedAt: '2026-11-19T08:00:00Z' });
+  const hof = built.find((page) => page.path === '/park/hof-van-saksen');
+  const section = hof.body.match(/<section aria-labelledby="next-park-weekends"[\s\S]*?<\/section>/)[0];
+  assert.match(hof.title, /vrije weekenden en prijzen/);
+  assert.match(section, /gebruikelijke weekendprijs is € 772/);
+  assert.match(section, /vr 20 nov – ma 23 nov[\s\S]*€ 741[\s\S]*€ 31 goedkoper dan gebruikelijk \(4%\)[\s\S]*Prijs gecontroleerd op 19 november om 07:00[\s\S]*arrival=2026-11-20/);
+  assert.match(section, /vr 4 dec – ma 7 dec[\s\S]*€ 1\.881[\s\S]*€ 1\.109 duurder dan gebruikelijk \(144%\)/);
+  assert.match(section, /vr 11 dec – ma 14 dec[\s\S]*Gelijk aan de gebruikelijke prijs/);
+  assert.deepEqual([...section.matchAll(/<h3[^>]*>([^<]+)/g)].map(([, range]) => range), ['vr 20 nov – ma 23 nov', 'vr 4 dec – ma 7 dec', 'vr 11 dec – ma 14 dec']);
+  assert.match(section, /href="#weekends"/);
+  assert.doesNotMatch(built.find((page) => page.path === '/park/vakantiepark-gulpen').body, /next-park-weekends/);
+});
+
+test('Hof van Saksen keeps availability useful without a known comparison price or available dates', () => {
+  const park = { ...gulpen, code: 'HSN', name: 'Hof van Saksen', baselineCents: null, weekends: [weekend('2026-11-20', '2026-11-23', 74030, null)] };
+  const render = (park) => buildPages({ parks: [park], allParks: new Map([[park.code, park]]), computedAt: '2026-11-19T08:00:00Z' }).find(({ path }) => path === '/park/hof-van-saksen').body;
+  const withPrice = render(park);
+  assert.match(withPrice, /Eerstvolgende vrije weekenden/);
+  assert.match(withPrice, /te weinig prijsmetingen om de gebruikelijke weekendprijs te bepalen/);
+  const noAvailability = render({ ...park, weekends: [] });
+  assert.doesNotMatch(noAvailability, /next-park-weekends/);
+  assert.match(noAvailability, /geen vrij weekend/);
+});
+
 test('Germany compares parks by region and distance with prices for the same Friday-to-Monday stay', () => {
   const germanPark = (code, name, region, lat, lng, weekends) => ({
     code, name, region, lat, lng, weekends, country: 'DE', provider: 'landal', brand: 'landal', facilities: ['bos'],
