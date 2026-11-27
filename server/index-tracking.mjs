@@ -10,7 +10,7 @@ export const TRACKED_INDEX_PAGES = [
   { path: '/feestdag/kerst', label: 'Kerst', publishedAt: SEASONAL_PUBLISHED_AT },
   { path: '/vakantie/kerstvakantie', label: 'Kerstvakantie', publishedAt: SEASONAL_PUBLISHED_AT },
   { path: '/cijfers', label: 'Cijfers' },
-  { path: '/land/duitsland', label: 'Duitsland', publishedAt: '2026-11-27T11:19:30.685Z' },
+  { path: '/land/duitsland', label: 'Duitsland', publishedAt: '2026-11-27T18:48:35.643Z' },
   { path: '/park/hof-van-saksen', label: 'Hof van Saksen', publishedAt: '2026-11-27T12:27:15.531Z' },
   { path: '/park/vakantiepark-hoog-vaals', label: 'Hoog Vaals', publishedAt: PARK_INTROS_PUBLISHED_AT },
   { path: '/park/vakantiepark-de-lommerbergen', label: 'De Lommerbergen', publishedAt: PARK_INTROS_PUBLISHED_AT },

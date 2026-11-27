@@ -187,7 +187,38 @@ test('Germany compares parks by region and distance with prices for the same Fri
   assert.match(comparison, /Eifel<\/th>[\s\S]*?Eifeler Tor<\/a>[\s\S]*?34 km<\/td>[\s\S]*?€ 285<\/td>[\s\S]*?Kronenburger See<\/a>[\s\S]*?55 km<\/td>[\s\S]*?Geen prijs<\/td>/);
   assert.match(comparison, /Overig Duitsland<\/th>[\s\S]*?Park zonder locatie<\/a>[\s\S]*?Onbekend<\/td>[\s\S]*?Geen prijs<\/td>/);
   assert.doesNotMatch(comparison, /€ (?:99|111|123)/);
+  assert.doesNotMatch(comparison, /duitse-parkmerken/);
   assert.doesNotMatch(built.find((page) => page.path === '/aanbieder/landal/duitsland').body, /vergelijk-duitsland/);
+});
+
+test('Germany compares the closest priced park of each brand for the first shared weekend within 125 km', () => {
+  const germanPark = (code, name, brand, lat, lng, weekends) => ({
+    code, name, brand, lat, lng, weekends, country: 'DE', provider: 'landal', facilities: ['bos'],
+  });
+  const today = weekend('2026-11-06', '2026-11-09', 19000, 0);
+  const early = weekend('2026-11-13', '2026-11-16', 19500, 0);
+  const twoNights = weekend('2026-11-13', '2026-11-15', 9900, 0);
+  const shared = (price) => weekend('2026-11-20', '2026-11-23', price, 0);
+  const parks = [
+    germanPark('BBM', 'Bad Bentheim', 'landal', 52.301, 7.137, [today, early, shared(28900)]),
+    germanPark('WFT', 'Wirfttal', 'landal', 50.34, 6.54, [shared(22000)]),
+    germanPark('DTR', 'Eifeler Tor', 'dormio', 50.6324, 6.445, [today, twoNights, shared(31900)]),
+    germanPark('CCH', 'Cochem', 'roompot', 50.119, 7.167, [shared(24600)]),
+    germanPark('HWL', 'Hochwald', 'summio', 49.648, 6.811, [early, shared(18000)]),
+    germanPark('NOGEO', 'Zonder locatie', 'topparken', null, null, [early, shared(19000)]),
+  ];
+  const germany = buildPages({
+    parks,
+    allParks: new Map(parks.map((park) => [park.code, park])),
+    computedAt: '2026-11-06T06:00:00Z',
+  }).find(({ path }) => path === '/land/duitsland');
+  const cards = germany.body.match(/<ul aria-labelledby="duitse-parkmerken"[\s\S]*?<\/ul>/)[0];
+  assert.match(germany.body, /20–23 november 2026 · vrijdag tot maandag/);
+  assert.match(germany.body, /Totaalprijzen voor 2 personen, inclusief toeslagen, vr 20 nov – ma 23 nov/);
+  assert.match(cards, /Landal<\/h4>[\s\S]*?Bad Bentheim<\/a>[\s\S]*?7 km tot de grens[\s\S]*?€ 289[\s\S]*?Goedkoper binnen 125 km[\s\S]*?Wirfttal<\/a>[\s\S]*?€ 220/);
+  assert.match(cards, /Dormio<\/h4>[\s\S]*?Eifeler Tor<\/a>[\s\S]*?€ 319[\s\S]*?Dit park van Dormio boek je via Landal/);
+  assert.match(cards, /Roompot<\/h4>[\s\S]*?Cochem<\/a>[\s\S]*?109 km tot de grens[\s\S]*?€ 246/);
+  assert.doesNotMatch(cards, /Hochwald|Zonder locatie|€ (?:99|190|195)/);
 });
 
 test('one page per park with something to tell, per weekend, per country, region and theme with three parks, and the lists', () => {

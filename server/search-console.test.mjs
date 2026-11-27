@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createVerify, generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
 import { accessToken, searchAnalytics, serviceAccount } from './search-console.mjs';
-import { trackedIndexRows } from './index-tracking.mjs';
+import { TRACKED_INDEX_PAGES, trackedIndexRows } from './index-tracking.mjs';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const account = { client_email: 'robot@project.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }) };
@@ -91,12 +91,14 @@ test("a round's reading stores the search figures, the sitemap state and what Go
     { path: '/land/duitsland', requestedOn: '2026-11-27' },
   ]);
   await db.saveIndexRequests([{ path: '/feestdag/kerst', requestedOn: '2026-11-25' }]);
+  const germanyPublishedAt = TRACKED_INDEX_PAGES.find(({ path }) => path === '/land/duitsland').publishedAt;
+  const laterVisit = new Date(Date.parse(germanyPublishedAt) + 3_600_000).toISOString();
   await db.saveGooglebotCrawls([
-    { path: '/land/duitsland', visitedAt: '2026-11-27T12:16:51.000Z', status: 502 },
+    { path: '/land/duitsland', visitedAt: laterVisit, status: 502 },
   ]);
   await db.saveGooglebotCrawls([
     { path: '/land/duitsland', visitedAt: '2026-11-26T11:00:00.000Z', status: 200 },
-    { path: '/land/duitsland', visitedAt: '2026-11-27T12:16:51.000Z', status: 200 },
+    { path: '/land/duitsland', visitedAt: laterVisit, status: 200 },
   ]);
   const tracked = trackedIndexRows(await db.pageIndex(), await db.indexRequests(), await db.googlebotCrawls());
   assert.equal(tracked.length, 13);
@@ -118,8 +120,8 @@ test("a round's reading stores the search figures, the sitemap state and what Go
   assert.deepEqual(tracked.find((row) => row.path === '/land/duitsland'), {
     path: '/land/duitsland', label: 'Duitsland', requestedOn: '2026-11-27', verdict: 'NEUTRAL',
     coverage: 'Gecrawld - momenteel niet geïndexeerd', lastCrawl: '2026-11-19T00:06:24Z', checkedAt: '2026-11-19T12:00:00.000Z',
-    googlebot: { visitedAt: '2026-11-27T12:16:51.000Z', status: 502 },
-    updatedAt: '2026-11-27T11:19:30.685Z', cloudflareAfterUpdate: true, searchAfterUpdate: false, searchComparedToCloudflare: -1,
+    googlebot: { visitedAt: laterVisit, status: 502 },
+    updatedAt: germanyPublishedAt, cloudflareAfterUpdate: true, searchAfterUpdate: false, searchComparedToCloudflare: -1,
   });
   assert.deepEqual(tracked.find((row) => row.path === '/park/hof-van-saksen'), {
     path: '/park/hof-van-saksen', label: 'Hof van Saksen', requestedOn: null, verdict: null, coverage: null, lastCrawl: null, checkedAt: null,

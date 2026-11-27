@@ -12,7 +12,7 @@ import { bookingBrandNote, providerHomeLinks, providerName, trackedBookingUrl } 
 import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
-import { distanceToDutchBorder, germanComparisonWeekend, germanRegion } from './germany.mjs';
+import { distanceToDutchBorder, germanBorderComparison, germanComparisonWeekend, germanRegion, GERMAN_BORDER_COMPARISON_KM } from './germany.mjs';
 import { OCCASION_ART } from './occasion-art.mjs';
 import { DESCRIPTION_MAX, documentTitle, TITLE_MAX } from './seo.mjs';
 import { groupKey, HOT_TUB_PARTY, parseGroupKey, partyLabel, PET_PARTY, STANDARD_PARTIES } from '../shared/party.mjs';
@@ -1463,14 +1463,16 @@ function borderDistanceLabel(distance) {
 }
 
 function germanParkRow({ park, distance }, { pathOf, weekend }) {
-  const offer = weekend === null ? null : park.weekends.find(({ arrival, departure }) => arrival === weekend.arrival && departure === weekend.departure);
+  const offer = weekend === null ? undefined : park.weekends.find(({ arrival, departure, priceCents }) =>
+    arrival === weekend.arrival && departure === weekend.departure && Number.isFinite(priceCents) && priceCents > 0,
+  );
   return html`<tr class="border-b border-line last:border-b-0">
     <th scope="row" class="px-2 py-3 text-left sm:px-4">
       <a href="${pathOf(park)}" class="${link}">${fullName(park)}</a>
       ${park.city && html`<span class="block text-xs font-normal text-ink-secondary">${park.city}</span>`}
     </th>
     <td class="px-2 py-3 text-right tabular-nums sm:px-4">${borderDistanceLabel(distance)}</td>
-    ${weekend !== null && html`<td class="px-2 py-3 text-right font-semibold tabular-nums sm:px-4">${offer ? formatEuros(offer.priceCents) : 'Geen prijs'}</td>`}
+    ${weekend !== null && html`<td class="px-2 py-3 text-right font-semibold tabular-nums sm:px-4">${offer === undefined ? 'Geen prijs' : formatEuros(offer.priceCents)}</td>`}
   </tr>`;
 }
 
@@ -1493,15 +1495,42 @@ function nearestGermanParks(rows, pathOf) {
     </li>`)}</ul>`;
 }
 
+function germanBrandCard({ brand, nearest, cheaper }, pathOf) {
+  const { park, distance, weekend } = nearest;
+  return html`<li class="min-w-0 space-y-2 rounded-2xl bg-surface p-4 ring-1 ring-line">
+    <h4 class="font-extrabold">${brandName(brand)}</h4>
+    <div>
+      <p><a href="${pathOf(park)}" class="${link}">${park.name}</a></p>
+      <p class="text-sm text-ink-secondary">${germanRegion(park)} · ${borderDistanceLabel(distance)} tot de grens</p>
+      <p class="mt-1 text-xl font-black tabular-nums">${formatEuros(weekend.priceCents)}</p>
+      ${checkedLine(weekend)}
+      ${bookingExplanation(park)}
+    </div>
+    ${cheaper !== null && html`<p class="border-t border-line pt-2 text-sm">
+      <span class="block text-ink-secondary">Goedkoper binnen ${GERMAN_BORDER_COMPARISON_KM} km</span>
+      <a href="${pathOf(cheaper.park)}" class="${link}">${cheaper.park.name}</a><br>
+      ${borderDistanceLabel(cheaper.distance)} tot de grens · <strong class="tabular-nums">${formatEuros(cheaper.weekend.priceCents)}</strong>
+    </p>`}
+  </li>`;
+}
+
+function germanBrandsNearBorder({ weekend, brands }, pathOf) {
+  return html`<h3 id="duitse-parkmerken" class="mt-5 text-lg font-extrabold">Vergelijk parkmerken dicht bij de Nederlandse grens</h3>
+    <p class="mt-1 text-sm font-bold">${weekendRange(weekend)} · vrijdag tot maandag</p>
+    <p class="mt-1 max-w-3xl text-sm text-ink-secondary">Per parkmerk zie je het dichtstbijzijnde park met een prijs binnen ${GERMAN_BORDER_COMPARISON_KM} km van de grens. We vergelijken het goedkoopste beschikbare huisje per park voor ${partyLabel(PAGE_PARTY)}, inclusief toeslagen.</p>
+    <ul aria-labelledby="duitse-parkmerken" class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">${brands.map((entry) => germanBrandCard(entry, pathOf))}</ul>`;
+}
+
 function germanyComparison(parks, { pathOf, today }) {
-  const weekend = germanComparisonWeekend(parks, today);
   const rows = parks.map((park) => ({ park, distance: distanceToDutchBorder(park) }));
   rows.sort((first, second) => (first.distance ?? Infinity) - (second.distance ?? Infinity) || first.park.name.localeCompare(second.park.name, 'nl'));
+  const border = germanBorderComparison(rows, today);
+  const weekend = border?.weekend ?? germanComparisonWeekend(parks, today);
   const regions = Map.groupBy(rows, ({ park }) => germanRegion(park));
   const body = html`<section aria-labelledby="vergelijk-duitsland" class="mt-10">
     ${sectionTitle('vergelijk-duitsland', '📍', 'Vergelijk Duitse vakantieparken per streek')}
     <p class="mt-2 max-w-3xl text-sm text-ink-secondary">De afstand is hemelsbreed gemeten tot het dichtstbijzijnde punt van de Nederlandse landgrens. Per streek staan de dichtstbijzijnde parken eerst.</p>
-    ${nearestGermanParks(rows, pathOf)}
+    ${border === null ? nearestGermanParks(rows, pathOf) : germanBrandsNearBorder(border, pathOf)}
     <table class="mt-5 w-full border-separate border-spacing-0 overflow-hidden rounded-2xl bg-surface text-sm ring-1 ring-line">
       <caption class="caption-top px-1 pb-3 text-left text-sm text-ink-secondary">${weekend === null ? 'Parken en afstanden per streek.' : `Totaalprijzen voor ${partyLabel(PAGE_PARTY)}, inclusief toeslagen, ${formatWeekend(weekend)}. ‘Geen prijs’ betekent dat we voor dit weekend geen prijs hebben gevonden.`}</caption>
       <thead class="bg-surface"><tr>
