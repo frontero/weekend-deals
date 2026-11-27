@@ -146,12 +146,16 @@ async function pageDetails(db) {
   return { facilitiesOf, accommodations, surroundings, ratings, occasionsOf, parksOf, popular, holidayStays };
 }
 
+export async function buildPublicPages(db, { parks, computedAt }) {
+  return buildPages({ parks, allParks: await db.parks(), computedAt, details: await pageDetails(db) });
+}
+
 export async function refreshOverview(db, { googleEnabled, party }) {
   const computedAt = new Date().toISOString();
   const { key, meta, parks } = await buildOverview(db, { googleEnabled, party });
   await db.saveOverview(key, { computedAt, meta: JSON.stringify(meta), parks: gzipSync(JSON.stringify(parks)) });
   if (key === groupKey(PAGE_PARTY)) {
-    const pages = buildPages({ parks, allParks: await db.parks(), computedAt, details: await pageDetails(db) });
+    const pages = await buildPublicPages(db, { parks, computedAt });
     await db.replacePages(pages, computedAt);
     await db.saveSeoAudit(auditPages(pages, computedAt));
   }

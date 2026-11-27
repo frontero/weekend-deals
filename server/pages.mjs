@@ -1105,6 +1105,16 @@ function parkIntro(park, { accommodations, weekendCount }) {
   return sentences.length > 0 && html`<p class="mt-8 max-w-3xl text-lg leading-relaxed">${sentences.join(' ')}</p>`;
 }
 
+// Roompot names Landal as the operator. The swimming facilities, bungalow and map are from Landal's park guide.
+function weerterbergenChoice() {
+  return html`<section aria-labelledby="weerterbergen-gezin" class="mt-5 max-w-3xl space-y-2">
+    <p class="leading-relaxed">Op Roompot vind je dit park in Weert als <strong>Roompot Weerterbergen</strong>. Roompot en Landal horen bij dezelfde organisatie en je boekt Weerterbergen bij Landal.</p>
+    <h2 id="weerterbergen-gezin" class="text-lg font-extrabold">Weerterbergen met kinderen</h2>
+    <p class="leading-relaxed">Het binnenbad heeft een golfslagbad, een glijbaan en een apart peuterbad. Voor een gezin van vier is Waterbungalow 4 een optie met twee slaapkamers en een terras aan het water.</p>
+    <p class="text-sm"><a href="https://www.landal.nl/-/media/files/wrg/wrg_plat.pdf" class="${link}">Bekijk de officiële parkplattegrond (pdf)</a> voor de ligging van het zwembad en de huisjes.</p>
+  </section>`;
+}
+
 function weekendPriceDifference(priceCents, baselineCents) {
   if ((baselineCents ?? 0) <= 0) {
     return null;
@@ -1212,6 +1222,7 @@ function parkPage(park, { pathOf, nearby, today, updated, accommodations, places
     ${park.imageUrl && html`<div class="relative mt-3">${heroPhoto(park.imageUrl, name)}${photoSticker(cheapest)}</div>`}
     <h1 class="mt-5 text-4xl font-black tracking-tight sm:text-5xl">${name}</h1>
     <p class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-semibold text-ink-secondary">${place && html`<span><span aria-hidden="true">📍</span> ${place}</span>`}<span>bij ${providerName(park.provider)}</span>${rating(park)}${park.popular > 0 && html`<span class="rounded-full bg-cta-wash px-3 py-1 text-sm font-extrabold text-ink" title="${POPULAR_NOTE}"><span aria-hidden="true">🔥</span> Populair deze week</span>`}</p>
+    ${park.code === 'WRN' && weerterbergenChoice()}
     ${showsNextWeekends && nextParkWeekendsSection(park, nextWeekends)}
     ${
       cheapest
@@ -1506,6 +1517,55 @@ function germanyComparison(parks, { pathOf, today }) {
     title: 'Vakantieparken Duitsland: prijzen per streek en grensafstand',
     description: `Vergelijk ${count(parks.length, 'vakantiepark', 'vakantieparken')} in Duitsland per streek. Bekijk de afstand tot de Nederlandse grens en prijzen voor hetzelfde weekend.`,
   };
+}
+
+// https://www.landal.nl/bestemmingen/nederland/overijssel and the three parks' own guides.
+const OVERIJSSEL_PARKS = [
+  { code: 'OTK', area: 'Twente', reason: 'Wandel of fiets door het Dinkeldal bij Beuningen.' },
+  { code: 'OZL', area: 'Weerribben-Wieden', reason: 'Verken het waterrijke natuurgebied vanuit Ossenzijl.' },
+  { code: 'TVD', area: 'Sallandse Heuvelrug', reason: 'Loop vanuit Holten naar het bos en de heide rond de Holterberg.' },
+];
+
+function overijsselWeekend(choices, today) {
+  const available = new Map();
+  for (const { park } of choices) {
+    for (const weekend of park.weekends) {
+      if (weekend.arrival <= today || day(weekend.arrival).getUTCDay() !== 5 || weekend.departure !== shiftDays(weekend.arrival, 3)) {
+        continue;
+      }
+      const entry = available.get(weekend.arrival) ?? { weekend, prices: new Map() };
+      entry.prices.set(park.code, weekend.priceCents);
+      available.set(weekend.arrival, entry);
+    }
+  }
+  const sorted = [...available.values()].sort((a, b) => a.weekend.arrival.localeCompare(b.weekend.arrival));
+  return sorted.find(({ prices }) => prices.size === choices.length) ?? sorted[0] ?? null;
+}
+
+function overijsselParkCard({ park, area, reason }, pathOf, selected) {
+  const price = selected?.prices.get(park.code);
+  return html`<li class="min-w-0 space-y-1 rounded-2xl bg-surface p-4 ring-1 ring-line">
+    <h3 class="font-extrabold">${area}</h3>
+    <p><a href="${pathOf(park)}" class="${link}">${fullName(park)}</a></p>
+    <p class="text-sm text-ink-secondary">${reason}</p>
+    ${selected !== null && html`<p class="pt-1 font-extrabold tabular-nums">${price === undefined ? 'Geen prijs gevonden' : formatEuros(price)}</p>`}
+  </li>`;
+}
+
+function overijsselComparison(parks, { pathOf, today }) {
+  const byCode = new Map(parks.map((park) => [park.code, park]));
+  const choices = OVERIJSSEL_PARKS.filter(({ code }) => byCode.has(code)).map((choice) => ({ ...choice, park: byCode.get(choice.code) }));
+  if (choices.length < 2) {
+    return null;
+  }
+  const selected = overijsselWeekend(choices, today);
+  return { body: html`<section aria-labelledby="vergelijk-overijssel" class="mt-8">
+    ${sectionTitle('vergelijk-overijssel', '🗺️', 'Vergelijk vakantieparken per streek')}
+    <p class="mt-2 text-sm text-ink-secondary">${selected === null
+      ? 'Voor deze selectie hebben we nog geen weekendprijs gevonden.'
+      : `${formatWeekend(selected.weekend)}. Totaalprijs van het goedkoopste beschikbare huisje voor ${partyLabel(PAGE_PARTY)}, inclusief verplichte toeslagen.`}</p>
+    <ul class="mt-4 grid gap-4 md:grid-cols-3">${choices.map((choice) => overijsselParkCard(choice, pathOf, selected))}</ul>
+  </section>` };
 }
 
 /**
@@ -2314,7 +2374,15 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
       }),
     ),
     ...regions.map(([region, list]) =>
-      placePage(region, list, { path: regionPath(region), place: inPlace(region), emoji: '🗺️', pathOf, surroundings: details.surroundings, links: brandLinks(regionPath(region)) }),
+      placePage(region, list, {
+        path: regionPath(region),
+        place: inPlace(region),
+        emoji: '🗺️',
+        pathOf,
+        surroundings: details.surroundings,
+        links: brandLinks(regionPath(region)),
+        comparison: region === 'Overijssel' ? overijsselComparison(list, { pathOf, today: localDate }) : null,
+      }),
     ),
     ...countries.map(([country, list]) =>
       placePage(countryName(country), list, {

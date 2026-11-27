@@ -107,6 +107,34 @@ test('selected park introductions describe their own facilities while preserving
   assert.match(unchanged, /Vakantiepark Gulpen ligt in het heuvelland bij Gulpen/);
 });
 
+test('Weerterbergen explains the two names and gives families a choice near the top', () => {
+  const park = { ...gulpen, code: 'WRN', name: 'Weerterbergen', city: 'Weert' };
+  const pages = buildPages({ parks: [park, gulpen], allParks: new Map([[park.code, park], [gulpen.code, gulpen]]), computedAt: '2026-10-29T06:39:10.572Z' });
+  const body = pages.find(({ path }) => path === '/park/weerterbergen').body;
+  assert.match(body, /Roompot Weerterbergen<\/strong>.*je boekt Weerterbergen bij Landal/);
+  assert.match(body, /golfslagbad.*peuterbad.*Waterbungalow 4.*twee slaapkamers/);
+  assert.match(body, /wrg_plat\.pdf[^>]*>Bekijk de officiële parkplattegrond \(pdf\)<\/a>/);
+  assert.ok(body.indexOf('id="weerterbergen-gezin"') < body.indexOf('id="cheapest"'));
+  assert.doesNotMatch(pages.find(({ path }) => path === '/park/vakantiepark-gulpen').body, /weerterbergen-gezin/);
+});
+
+test('Overijssel compares the three selected parks for the first weekend with matching prices', () => {
+  const parks = [
+    { code: 'OTK', name: 'Vakantiepark Olde Kottink' },
+    { code: 'OZL', name: 'Waterstaete Ossenzijl' },
+    { code: 'TVD', name: 'Vakantiepark Twenhaarsveld' },
+  ].map((park, index) => ({ ...gulpen, ...park, region: 'Overijssel (NL)', weekends: [
+    weekend('2026-11-06', index === 0 ? '2026-11-09' : '2026-11-08', 9900, 0),
+    weekend('2026-11-13', '2026-11-16', (310 + index * 10) * 100, 0),
+  ] }));
+  const allParks = new Map(parks.map((park) => [park.code, park]));
+  const page = buildPages({ parks, allParks, computedAt: '2026-11-05T08:00:00Z' }).find(({ path }) => path === '/regio/overijssel');
+  const comparison = page.body.match(/<section aria-labelledby="vergelijk-overijssel"[\s\S]*?<\/section>/)[0];
+  assert.match(comparison, /vr 13 nov – ma 16 nov.*2 personen, inclusief verplichte toeslagen/);
+  assert.match(comparison, /Twente[\s\S]*Olde Kottink[\s\S]*€ 310[\s\S]*Weerribben-Wieden[\s\S]*Waterstaete Ossenzijl[\s\S]*€ 320[\s\S]*Sallandse Heuvelrug[\s\S]*Twenhaarsveld[\s\S]*€ 330/);
+  assert.ok(page.body.indexOf('id="vergelijk-overijssel"') < page.body.indexOf('data-sort-controls'));
+});
+
 test('Hof van Saksen shows the first three free weekends in date order with their price differences', () => {
   const park = { ...gulpen, code: 'HSN', name: 'Hof van Saksen', city: 'Nooitgedacht', baselineCents: 77130, weekends: [
     weekend('2026-12-18', '2026-12-21', 30000, 0.61),
