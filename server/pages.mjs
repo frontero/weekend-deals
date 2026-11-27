@@ -9,6 +9,7 @@ import { reasonText, verdictLabel } from '../src/lib/advice.js';
 import { brandName } from '../src/lib/brands.js';
 import { countryName, formatDay, formatEuros, formatWeekend, nights, wholeEuros } from '../src/lib/format.js';
 import { bookingBrandNote, providerHomeLinks, providerName, trackedBookingUrl } from '../src/lib/providers.js';
+import { median } from '../shared/analysis.mjs';
 import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
@@ -2156,31 +2157,71 @@ function parksIndex(parks, { pathOf, regions, themes, countries: countryPages, b
   };
 }
 
-function weekendsIndex(weekends, { parks, pathOf, holidays, easterHoliday }) {
+function weekendCalendarSummary({ weekend, offers }) {
+  const prices = offers.map((offer) => offer.weekend.priceCents);
+  return {
+    weekend,
+    fromCents: Math.min(...prices),
+    medianCents: median(prices),
+    available: offers.length,
+    deals: offers.filter((offer) => (offer.weekend.discount ?? 0) >= DEAL_SHARE).length,
+  };
+}
+
+function weekendCalendarCard({ weekend, fromCents, medianCents, available, deals }, labels = []) {
+  return html`<li class="min-w-0 rounded-3xl bg-surface p-4 ring-1 ring-line">
+    ${labels.length > 0 && html`<p class="mb-2 flex flex-wrap gap-1.5">${labels.map((label) =>
+      html`<span class="rounded-full bg-accent-wash px-2.5 py-1 text-xs font-extrabold text-accent">${label}</span>`)}</p>`}
+    <a href="${weekendPath(weekend.arrival)}" class="${link} text-lg">${formatWeekend(weekend)}</a>
+    <p class="mt-1 text-sm text-ink-secondary">${count(available, 'park', 'parken')} met plek
+      ${deals > 0 && html`<span class="inline-block rounded-full bg-sun px-2.5 py-0.5 text-xs font-black text-on-sun">${count(deals, 'buitenkansje', 'buitenkansjes')}</span>`}
+    </p>
+    <dl class="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+      <div><dt class="text-sm text-ink-secondary">Vanaf</dt><dd class="text-xl font-black tabular-nums">${formatEuros(fromCents)}</dd></div>
+      <div><dt class="text-sm text-ink-secondary">Middelste prijs</dt><dd class="text-xl font-black tabular-nums">${formatEuros(medianCents)}</dd></div>
+    </dl>
+  </li>`;
+}
+
+function weekendCalendarHighlights(rows) {
+  const [first] = rows;
+  const cheapest = rows.reduce((best, row) => row.fromCents < best.fromCents ? row : best, first);
+  const mostAvailable = rows.reduce((best, row) => row.available > best.available ? row : best, first);
+  const highlights = Map.groupBy([
+    { label: 'Eerstvolgende weekend', row: first },
+    { label: 'Goedkoopste weekend', row: cheapest },
+    { label: 'Meeste parken met plek', row: mostAvailable },
+  ], ({ row }) => row);
+  return html`<section aria-labelledby="weekend-keuzes" class="mt-8">
+    ${sectionTitle('weekend-keuzes', '📅', 'Kies je weekend')}
+    <p class="mt-2 text-sm text-ink-secondary">Het goedkoopste weekend heeft de laagste vanafprijs. Bij gelijke prijzen of beschikbaarheid tonen we de vroegste datum.</p>
+    <ul class="mt-4 grid gap-4 sm:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]">${[...highlights].map(([row, entries]) =>
+      weekendCalendarCard(row, entries.map(({ label }) => label)))}</ul>
+  </section>`;
+}
+
+function weekendsIndex(weekends, { parks, pathOf, holidays, easterHoliday, today }) {
   const easterLink = holidayChip({ ...easterHoliday.holiday, heading: easterHoliday.holiday.title(easterHoliday.year) });
   const otherHolidays = holidays.filter((holiday) => holiday.slug !== EASTER_SLUG);
-  const row = ({ weekend, offers }) => {
-    const cheapest = cheapestOf(offers.map((offer) => offer.weekend));
-    const deals = offers.filter((offer) => (offer.weekend.discount ?? 0) >= DEAL_SHARE).length;
-    return html`<li class="flex flex-col gap-1 rounded-3xl bg-surface p-4 ring-1 ring-line transition hover:-translate-y-0.5 hover:shadow-lg">
-      <a href="${weekendPath(weekend.arrival)}" class="text-lg font-extrabold hover:underline">${formatWeekend(weekend)}</a>
-      <p class="text-sm text-ink-secondary">${count(offers.length, 'park', 'parken')} met plek</p>
-      <p class="mt-1 flex flex-wrap items-center gap-2"><span class="text-2xl font-black tabular-nums">vanaf ${formatEuros(cheapest.priceCents)}</span>${deals > 0 && html`<span class="rounded-full bg-sun px-2.5 py-0.5 text-xs font-black text-on-sun">${deals} ${deals === 1 ? 'buitenkansje' : 'buitenkansjes'}</span>`}</p>
-    </li>`;
-  };
+  const rows = weekends.filter(({ weekend }) => weekend.arrival >= today).map(weekendCalendarSummary);
   const body = html`
     ${banner('📅', 'Alle weekenden', html`
-      <p class="mt-3 max-w-2xl font-semibold text-ink-secondary">Elk komend weekend (vrijdag tot maandag) met het aantal vakantieparken dat nog plek heeft voor ${partyLabel(PAGE_PARTY)} en de laagste prijs.</p>
+      <p class="mt-3 max-w-2xl font-semibold text-ink-secondary">Vergelijk totaalprijzen voor ${partyLabel(PAGE_PARTY)} van vrijdag tot maandag, inclusief verplichte toeslagen.</p>
       <p class="mt-2 max-w-2xl text-ink-secondary">${figuresLink} Vergelijk de weekendprijzen per maand en regio.</p>
       <nav aria-label="Vakantie- en feestdagen" class="mt-4 flex flex-wrap gap-2">${easterLink}<a href="/last-minute" class="${chip}"><span aria-hidden="true">⏰</span> Last minute: de komende weekenden</a>${otherHolidays.map(holidayChip)}</nav>
     `)}
+    ${rows.length > 0 ? weekendCalendarHighlights(rows) : html`<p class="mt-8 text-ink-secondary">Voor de komende weekenden hebben we nog geen prijzen gevonden.</p>`}
     ${popularSection(parks, { pathOf })}
-    <ul class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${weekends.map(row)}</ul>
+    ${rows.length > 0 && html`<section aria-labelledby="weekend-prijzen" class="mt-8">
+      ${sectionTitle('weekend-prijzen', '💶', 'Prijzen per weekend')}
+      <p class="mt-2 max-w-2xl text-sm text-ink-secondary">Per park telt het goedkoopste beschikbare huisje. De middelste prijs is de mediaan van die prijzen.</p>
+      <ul class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">${rows.map((row) => weekendCalendarCard(row))}</ul>
+    </section>`}
     ${bestBar(parks, { source: 'overzichtbalk' })}`;
   return {
     path: '/weekenden',
     title: 'Weekendje weg: alle komende weekenden met prijzen',
-    description: 'Elk komend weekend bij Landal, Topparken en Molecaten: hoeveel vakantieparken nog plek hebben, de laagste prijs en de buitenkansjes.',
+    description: 'Vergelijk per weekend de vanafprijs, de middelste prijs en het aantal vakantieparken met plek. Totaalprijzen voor 2 personen, van vrijdag tot maandag.',
     image: null,
     body: body.text,
   };
@@ -2367,7 +2408,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
 
   return [
     parksIndex(everyPark, { pathOf, regions, themes, countries, brands, holidays: upcoming }),
-    weekendsIndex(weekends, { parks: everyPark, pathOf, holidays: upcoming, easterHoliday }),
+    weekendsIndex(weekends, { parks: everyPark, pathOf, holidays: upcoming, easterHoliday, today: localDate }),
     ...holidays.map(({ holiday, year, period, offers }) =>
       holidayPage(holiday, { year, period, offers, lastKnown, pathOf, themes: themePages, holidays: occasionPages }),
     ),

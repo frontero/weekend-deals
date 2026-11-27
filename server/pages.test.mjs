@@ -627,6 +627,53 @@ test('the Easter banner shows the dates, total price and available parks, and Al
   assert.match(after.find((page) => page.path === '/weekenden').body, /Vakantiehuis met Pasen 2028/);
 });
 
+test('Alle weekenden uses comparable prices to highlight the first, cheapest and most available dates', () => {
+  const parks = [
+    { ...gulpen, weekends: [
+      weekend('2026-11-06', '2026-11-09', 4000, null),
+      weekend('2026-11-13', '2026-11-16', 11000, null),
+      weekend('2026-11-20', '2026-11-23', 10000, null),
+      weekend('2026-11-27', '2026-11-30', 20000, null),
+      weekend('2026-12-04', '2026-12-07', 10000, null),
+    ] },
+    { ...hoogduin, weekends: [
+      weekend('2026-11-13', '2026-11-16', 33000, null),
+      weekend('2026-11-20', '2026-11-23', 48000, null),
+      weekend('2026-11-27', '2026-11-30', 26000, null),
+    ] },
+    { ...soldOut, brand: 'landal', weekends: [weekend('2026-11-27', '2026-11-30', 62000, null)] },
+  ];
+  const built = buildPages({
+    parks,
+    allParks: new Map(parks.map((park) => [park.code, park])),
+    computedAt: '2026-11-12T08:00:00Z',
+  });
+  const { body } = built.find(({ path }) => path === '/weekenden');
+  const choices = body.match(/<section aria-labelledby="weekend-keuzes"[\s\S]*?<\/section>/)[0];
+  const list = body.match(/<section aria-labelledby="weekend-prijzen"[\s\S]*?<\/section>/)[0];
+  assert.match(choices, /Eerstvolgende weekend<\/span>[\s\S]*?href="\/weekend\/2026-11-13"/);
+  assert.match(choices, /Goedkoopste weekend<\/span>[\s\S]*?href="\/weekend\/2026-11-20"/);
+  assert.match(choices, /Meeste parken met plek<\/span>[\s\S]*?href="\/weekend\/2026-11-27"[\s\S]*?3 parken met plek/);
+  assert.doesNotMatch(choices, /\/weekend\/2026-12-04/);
+  assert.doesNotMatch(list, /\/weekend\/2026-11-06/);
+  assert.match(list, /2026-11-13"[\s\S]*?Vanaf<\/dt><dd[^>]*>€ 110[\s\S]*?Middelste prijs<\/dt><dd[^>]*>€ 220/);
+  assert.match(list, /2026-11-20"[\s\S]*?Middelste prijs<\/dt><dd[^>]*>€ 290/);
+  assert.match(list, /2026-11-27"[\s\S]*?Middelste prijs<\/dt><dd[^>]*>€ 260/);
+  assert.equal([...list.matchAll(/Middelste prijs<\/dt>/g)].length, 4);
+});
+
+test('Alle weekenden shows shared highlights once and keeps a useful empty state', () => {
+  const render = (weekends) => buildPages({
+    parks: [{ ...gulpen, weekends }], allParks: new Map([[gulpen.code, gulpen]]), computedAt: '2026-11-06T08:00:00Z',
+  }).find(({ path }) => path === '/weekenden').body;
+  const body = render([weekend('2026-11-06', '2026-11-09', 12300, null)]);
+  const choices = body.match(/<section aria-labelledby="weekend-keuzes"[\s\S]*?<\/section>/)[0];
+  assert.match(choices, /Eerstvolgende weekend[\s\S]*?Goedkoopste weekend[\s\S]*?Meeste parken met plek/);
+  assert.equal([...choices.matchAll(/href="\/weekend\/2026-11-06"/g)].length, 1);
+  assert.match(choices, /1 park met plek/);
+  assert.match(render([]), /Voor de komende weekenden hebben we nog geen prijzen gevonden/);
+});
+
 test('Pinksteren shows the full stay and compares available parks per country before the offers', () => {
   const offers = [
     { code: 'GPN', priceCents: 41000, bookingUrl: 'https://www.landal.nl/boeken?pinksteren' },

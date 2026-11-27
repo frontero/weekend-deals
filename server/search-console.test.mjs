@@ -102,7 +102,8 @@ test("a round's reading stores the search figures, the sitemap state and what Go
     { path: '/land/duitsland', visitedAt: laterVisit, status: 200 },
   ]);
   const tracked = trackedIndexRows(await db.pageIndex(), await db.indexRequests(), await db.googlebotCrawls());
-  assert.equal(tracked.length, 13);
+  assert.equal(tracked.length, 14);
+  assert.equal(tracked.find(({ path }) => path === '/weekenden').label, 'Alle weekenden');
   assert.deepEqual(tracked.slice(-5).map(({ path, label }) => [path, label]), [
     ['/park/vakantiepark-hoog-vaals', 'Hoog Vaals'],
     ['/park/vakantiepark-de-lommerbergen', 'De Lommerbergen'],

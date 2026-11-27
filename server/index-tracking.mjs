@@ -9,6 +9,7 @@ export const TRACKED_INDEX_PAGES = [
   { path: '/feestdag/pinksteren', label: 'Pinksteren', publishedAt: SEASONAL_PUBLISHED_AT },
   { path: '/feestdag/kerst', label: 'Kerst', publishedAt: SEASONAL_PUBLISHED_AT },
   { path: '/vakantie/kerstvakantie', label: 'Kerstvakantie', publishedAt: SEASONAL_PUBLISHED_AT },
+  { path: '/weekenden', label: 'Alle weekenden', publishedAt: '2026-11-27T19:16:08.314Z' },
   { path: '/cijfers', label: 'Cijfers' },
   { path: '/land/duitsland', label: 'Duitsland', publishedAt: '2026-11-27T18:48:35.643Z' },
   { path: '/park/hof-van-saksen', label: 'Hof van Saksen', publishedAt: '2026-11-27T12:27:15.531Z' },
@@ -21,7 +22,6 @@ export const TRACKED_INDEX_PAGES = [
 
 export const INDEX_ALERT_PAGES = [
   ...TRACKED_INDEX_PAGES,
-  { path: '/weekenden', label: 'Alle weekenden' },
   { path: '/parken', label: 'Alle parken' },
   { path: '/last-minute', label: 'Last minute' },
   { path: '/regio/ardennen', label: 'Ardennen' },
