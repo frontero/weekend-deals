@@ -92,7 +92,7 @@ test("a round's reading stores the search figures, the sitemap state and what Go
   ]);
   await db.saveIndexRequests([{ path: '/feestdag/kerst', requestedOn: '2026-11-25' }]);
   const tracked = trackedIndexRows(await db.pageIndex(), await db.indexRequests());
-  assert.equal(tracked.length, 7);
+  assert.equal(tracked.length, 8);
   const christmas = tracked.find((row) => row.path === '/feestdag/kerst');
   assert.equal(christmas.requestedOn, '2026-11-26');
   assert.equal(christmas.verdict, 'NEUTRAL');
@@ -103,6 +103,9 @@ test("a round's reading stores the search figures, the sitemap state and what Go
   assert.deepEqual(tracked.find((row) => row.path === '/land/duitsland'), {
     path: '/land/duitsland', label: 'Duitsland', requestedOn: '2026-11-27', verdict: 'NEUTRAL',
     coverage: 'Gecrawld - momenteel niet geïndexeerd', lastCrawl: '2026-11-19T00:06:24Z', checkedAt: '2026-11-19T12:00:00.000Z',
+  });
+  assert.deepEqual(tracked.find((row) => row.path === '/park/hof-van-saksen'), {
+    path: '/park/hof-van-saksen', label: 'Hof van Saksen', requestedOn: null, verdict: null, coverage: null, lastCrawl: null, checkedAt: null,
   });
   db.close();
   rmSync(directory, { recursive: true, force: true });
