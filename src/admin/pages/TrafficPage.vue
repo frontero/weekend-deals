@@ -148,12 +148,13 @@ const perDay = computed(() => {
   const byDay = new Map((report.value?.days ?? []).map((row) => [row.day, row]));
   return Array.from({ length: days.value }, (_, index) => {
     const day = new Date(Date.now() - (days.value - 1 - index) * DAY_MS).toISOString().slice(0, 10);
-    return { visitors: 0, views: 0, clicks: 0, parkVisitors: 0, clickers: 0, ...byDay.get(day), day };
+    return { visitors: 0, suspectedBots: 0, views: 0, clicks: 0, parkVisitors: 0, clickers: 0, ...byDay.get(day), day };
   });
 });
 const total = (field) => perDay.value.reduce((sum, row) => sum + row[field], 0);
 const totals = computed(() => ({
   visitors: total('visitors'),
+  suspectedBots: total('suspectedBots'),
   views: total('views'),
   parkVisitors: total('parkVisitors'),
   clickers: total('clickers'),
@@ -170,6 +171,11 @@ const tiles = computed(() => [
   { label: "Pagina's bekeken", value: count(totals.value.views), trend: perDay.value.map((row) => row.views) },
   { label: 'Bekeek een park', value: count(totals.value.parkVisitors), hint: share(totals.value.parkVisitors) },
   { label: 'Klikte door naar een aanbieder', value: count(totals.value.clickers), hint: share(totals.value.clickers) },
+  {
+    label: 'Vermoedelijk botverkeer',
+    value: report.value?.botClassificationAvailable === false ? '–' : count(totals.value.suspectedBots),
+    trend: perDay.value.map((row) => row.suspectedBots),
+  },
 ]);
 
 const chart = (rows, label, valueOf, name, heading) => ({
@@ -221,26 +227,50 @@ const dayFailure = ref('');
 const daySection = ref(null);
 // time: who came first; steps: who did most.
 const dayOrder = ref('time');
+const dayType = ref('visitors');
+let dayRequest = 0;
+const dayCounts = computed(() => {
+  const visitors = opened.value?.visitors ?? [];
+  const bots = visitors.filter((visitor) => visitor.suspectedBot === true).length;
+  return { bots, visitors: visitors.length - bots };
+});
 const dayVisitors = computed(() => {
-  const visitors = [...(opened.value?.visitors ?? [])];
+  const showBots = dayType.value === 'bots';
+  const visitors = (opened.value?.visitors ?? []).filter((visitor) => (visitor.suspectedBot === true) === showBots);
   return dayOrder.value === 'time'
     ? visitors.sort((a, b) => a.steps[0].at.localeCompare(b.steps[0].at))
     : visitors.sort((a, b) => b.steps.length - a.steps.length);
 });
 async function openDay(day) {
+  const request = ++dayRequest;
   opened.value = { day, visitors: [], parkNames: {} };
+  dayType.value = 'visitors';
   dayState.value = 'loading';
   try {
     const response = await fetch(`/api/admin/traffic/day?day=${day}`);
     const body = await response.json().catch(() => ({}));
+    if (request !== dayRequest) {
+      return;
+    }
     if (!response.ok) throw new Error(body.error ?? `Day failed with ${response.status}`);
     opened.value = body;
+    if (dayCounts.value.visitors === 0 && dayCounts.value.bots > 0) {
+      dayType.value = 'bots';
+    }
     dayState.value = 'ready';
   } catch (error) {
+    if (request !== dayRequest) {
+      return;
+    }
     dayFailure.value = error.message;
     dayState.value = 'failed';
   }
   daySection.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeDay() {
+  dayRequest += 1;
+  opened.value = null;
 }
 /** One step in a visitor's day, in words. */
 function stepText(step, parkNames) {
@@ -278,11 +308,11 @@ const tables = computed(() => [
     id: 'days',
     group: 'days',
     title: 'Per dag: klik op een dag voor wat bezoekers deden',
-    columns: ['Dag', 'Bezoekers', "Pagina's", 'Doorgeklikt'],
+    columns: ['Dag', 'Bezoekers', 'Vermoedelijke bots', "Pagina's", 'Doorgeklikt'],
     rows: [...perDay.value]
       .reverse()
-      .filter((row) => row.visitors)
-      .map((row) => ({ cells: [formatShortDate(row.day), count(row.visitors), count(row.views), count(row.clicks)], day: row.day })),
+      .filter((row) => row.visitors > 0 || row.suspectedBots > 0)
+      .map((row) => ({ cells: [formatShortDate(row.day), count(row.visitors), report.value?.botClassificationAvailable === false ? '–' : count(row.suspectedBots), count(row.views), count(row.clicks)], day: row.day })),
   },
   {
     id: 'actions',
@@ -427,8 +457,8 @@ const tables = computed(() => [
   <div v-else class="flex flex-col gap-6">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
       <p class="max-w-3xl flex-1 text-ink-secondary">
-        Anoniem geteld, zonder cookies: een bezoeker is een code die één dag geldt. Zoekmachines en je eigen bezoeken
-        als beheerder tellen niet mee.
+        Bezoeken worden anoniem en per dag geteld. Korte, gelijktijdige scans over veel verschillende pagina’s staan apart als vermoedelijk botverkeer.
+        <span v-if="report.botClassificationAvailable === false">Voor deze periode is de uitsplitsing niet beschikbaar.</span>
       </p>
       <label class="flex items-center gap-2 text-sm">
         <span class="text-ink-secondary">Periode</span>
@@ -450,7 +480,7 @@ const tables = computed(() => [
       <a href="#click-value-title" class="inline-flex min-h-8 shrink-0 items-center rounded-full bg-surface px-3 font-medium ring-1 ring-line hover:ring-accent">Waarde in euro's</a>
     </nav>
 
-    <section aria-label="Kerncijfers" class="grid grid-cols-2 gap-3 xl:grid-cols-4">
+    <section aria-label="Kerncijfers" class="grid grid-cols-2 gap-3 xl:grid-cols-5">
       <StatTile v-for="tile in tiles" :key="tile.label" v-bind="tile" />
     </section>
 
@@ -562,7 +592,7 @@ const tables = computed(() => [
     <section v-if="opened" ref="daySection" class="scroll-mt-4 rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="day-title">
       <header class="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3 sm:px-5">
         <h2 id="day-title" class="flex-1 font-semibold">Wat bezoekers deden op {{ formatShortDate(opened.day) }}</h2>
-        <button type="button" class="rounded-full px-3 py-1 text-sm font-medium ring-1 ring-line hover:ring-field" @click="opened = null">Sluiten</button>
+        <button type="button" class="rounded-full px-3 py-1 text-sm font-medium ring-1 ring-line hover:ring-field" @click="closeDay">Sluiten</button>
       </header>
       <p v-if="dayState === 'loading'" class="px-4 py-3 text-sm text-ink-secondary sm:px-5" role="status">Laden…</p>
       <p v-else-if="dayState === 'failed'" class="px-4 py-3 text-sm text-warning-ink sm:px-5" role="status">
@@ -570,10 +600,17 @@ const tables = computed(() => [
       </p>
       <p v-else-if="!opened.visitors.length" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Niets geteld op deze dag.</p>
       <template v-else>
-        <div class="flex flex-col gap-3 px-3 pt-3 text-sm sm:flex-row sm:items-center sm:px-5">
+        <div class="flex flex-col gap-3 px-3 pt-3 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:px-5">
           <p class="flex-1 text-ink-secondary">
-            {{ count(opened.visitors.length) }} {{ opened.visitors.length === 1 ? 'bezoeker' : 'bezoekers' }}. Een bezoeker is een code die alleen deze dag geldt; tijden zijn die van jouw computer.
+            {{ count(dayCounts.visitors) }} {{ dayCounts.visitors === 1 ? 'bezoeker' : 'bezoekers' }}<template v-if="dayCounts.bots > 0"> · {{ count(dayCounts.bots) }} vermoedelijke bots</template>. Tijden zijn die van jouw computer.
           </p>
+          <label v-if="dayCounts.bots > 0" class="flex items-center gap-2">
+            <span class="text-ink-secondary">Type verkeer</span>
+            <select v-model="dayType" class="h-9 rounded-xl bg-surface px-3 font-medium ring-1 ring-field">
+              <option value="visitors">Bezoekers</option>
+              <option value="bots">Vermoedelijk botverkeer</option>
+            </select>
+          </label>
           <label class="flex items-center gap-2">
             <span class="text-ink-secondary">Sorteer op</span>
             <select v-model="dayOrder" class="h-9 rounded-xl bg-surface px-3 font-medium ring-1 ring-field">
@@ -582,7 +619,8 @@ const tables = computed(() => [
             </select>
           </label>
         </div>
-        <ol class="grid gap-3 p-3 sm:p-5 xl:grid-cols-2">
+        <p v-if="dayVisitors.length === 0" class="px-4 py-3 text-sm text-ink-secondary sm:px-5">Geen bezoekers in deze categorie.</p>
+        <ol v-else class="grid gap-3 p-3 sm:p-5 xl:grid-cols-2">
           <li v-for="(visitor, index) in dayVisitors" :key="visitor.visitor" class="rounded-xl bg-plane p-3 ring-1 ring-line">
             <p class="text-sm font-semibold">
               Bezoeker {{ index + 1 }}

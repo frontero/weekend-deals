@@ -7,7 +7,7 @@ import { connectFile } from './connect.mjs';
 import { openDatabase } from './db.mjs';
 import { browserOf, clientEventPoints, countsAsVisit, deviceOf, isPageView, pageKind, pageViewPoint, trafficSource } from './events.mjs';
 import { createApiHandler } from './handler.mjs';
-import { analyticsQuery, trafficReport } from './traffic.mjs';
+import { analyticsQuery, dayReport, trafficReport } from './traffic.mjs';
 
 const directory = mkdtempSync(join(tmpdir(), 'weekend-deals-events-'));
 after(() => rmSync(directory, { recursive: true, force: true }));
@@ -142,12 +142,12 @@ test('the admin traffic report says when it cannot read, and names the parks it 
   const queryEvents = async (sql) => {
     statements.push(sql);
     if (sql.includes('blob3 AS value')) return [{ name: 'park', key: 'cards', value: 'HOT', visitors: '4' }];
-    if (sql.includes('GROUP BY day')) return [{ day: '2026-11-18', visitors: '10', views: '25', clicks: '3', parkVisitors: '6', clickers: '2' }];
+    if (sql.includes('GROUP BY day ORDER BY day')) return [{ day: '2026-11-18', visitors: '10', views: '25', clicks: '3', parkVisitors: '6', clickers: '2' }];
     return [];
   };
   const report = await (await get(createApiHandler(db, { ...admin, queryEvents }))).json();
   assert.equal(report.configured, true);
-  assert.deepEqual(report.days, [{ day: '2026-11-18', visitors: 10, views: 25, clicks: 3, parkVisitors: 6, clickers: 2 }]);
+  assert.deepEqual(report.days, [{ day: '2026-11-18', visitors: 10, views: 25, clicks: 3, parkVisitors: 6, clickers: 2, suspectedBots: 0 }]);
   assert.deepEqual(report.parkNames, { HOT: 'Hof van Saksen' });
   assert.equal(statements.length, 15);
   assert.ok(statements.every((sql) => sql.includes(`FROM parkjeweg_events WHERE timestamp >= toDateTime('${report.since} 00:00:00')`)));
@@ -241,6 +241,54 @@ test('the report tells per source and per landing page who clicked through, and 
 test('the report starts at the first day of the period', async () => {
   const report = await trafficReport(async () => [], { days: 7, now: Date.parse('2026-11-18T12:00:00Z') });
   assert.equal(report.since, '2026-11-12');
+});
+
+test('scan bursts appear separately in the overview and day details while real visits and bookings stay in the report', async () => {
+  const day = '2026-11-26';
+  const page = (i, minute, path, source = 'intern', weight = 1) => ({
+    timestamp: `${day} 08:${minute}:01`, visitor: i.toString(16).padStart(8, '0'),
+    name: 'view', kind: 'park', path, source, country: ['NL', 'BE', 'DE', 'FR', 'GB'][i % 5], weight,
+  });
+  const scans = Array.from({ length: 30 }, (_, i) => page(i + 1, '59', `/park/scan-${i}`));
+  const arrivalsFromOneLink = Array.from({ length: 31 }, (_, i) => page(i + 40, '58', '/park/populair'));
+  const booking = page(80, '59', '/park/geboekt');
+  const sampled = page(81, '59', '/park/gesampled', 'intern', 3);
+  const google = page(82, '59', '/park/google', 'google');
+  const lone = page(83, '57', '/park/enkele-pagina');
+  const views = [...scans, ...arrivalsFromOneLink, booking, sampled, google, lone];
+  const click = { ...booking, timestamp: `${day} 09:02:00`, name: 'click', key: 'landal', number: 284 };
+  const steps = [...views, click];
+  const visitorDays = views.map((row) => ({ day, visitor: row.visitor, steps: row === booking ? 2 : row.weight, parks: 1,
+    clicks: row === booking ? 1 : 0, priced: row === booking ? 1 : 0, euros: row === booking ? 284 : 0,
+  }));
+
+  const query = async (sql) => {
+    if (sql.includes('blob2 AS kind, blob5 AS source')) return views;
+    if (sql.includes('AS priced')) return visitorDays;
+    if (sql.includes('GROUP BY day ORDER BY day')) {
+      assert.match(sql, /blob1 != 'view' OR blob5 != 'intern'/);
+      assert.match(sql, /timestamp >= toDateTime\('2026-11-26 08:59:00'\) AND timestamp < toDateTime\('2026-11-26 08:59:00'\) \+ INTERVAL '1' MINUTE/);
+      assert.ok(scans.every(({ visitor }) => sql.includes(`'${visitor}'`)));
+      assert.ok([...arrivalsFromOneLink, booking, sampled, google, lone].every(({ visitor }) => sql.includes(`'${visitor}'`) === false));
+      return [{ day, visitors: '35', views: '37', clicks: '1', parkVisitors: '35', clickers: '1' }];
+    }
+    if (sql.includes('double3 AS weeks')) {
+      assert.doesNotMatch(sql, /index1 IN/);
+      return [{ weeks: '2', clicks: '1' }];
+    }
+    return [];
+  };
+  const report = await trafficReport(query, { days: 7, now: Date.parse(`${day}T12:00:00Z`) });
+  assert.deepEqual(report.days, [{ day, visitors: 35, views: 37, clicks: 1, parkVisitors: 35, clickers: 1, suspectedBots: 30 }]);
+  assert.equal(report.bySource.reduce((sum, row) => sum + row.visitors, 0), 35);
+  assert.deepEqual(report.clickValue, [{ day, clicks: 1, euros: 284 }]);
+  assert.deepEqual(report.clickWeeks, [{ weeks: 2, clicks: 1 }]);
+
+  const visitors = await dayReport(async () => steps, day);
+  assert.equal(visitors.filter((row) => row.suspectedBot).length, 30);
+  const booked = visitors.find((row) => row.visitor === booking.visitor);
+  assert.equal(booked.suspectedBot, false);
+  assert.equal(booked.steps.at(-1).name, 'click');
 });
 
 test('asks Analytics Engine with the read token, and fails loudly on an error', async () => {
