@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { formatShortDate, formatTimestamp } from '../../lib/format.js';
+import SeoAlerts from '../components/SeoAlerts.vue';
 import SeoRecovery from '../components/SeoRecovery.vue';
 import StatTile from '../components/StatTile.vue';
-import { SEARCH_PERIODS, searchProgress } from '../seoProgress.js';
+import { SEARCH_PERIODS, searchProgress } from '../../../shared/search-progress.mjs';
 import { count } from '../useRounds.js';
 
 // What the check after each price round found on the public pages (server/seo.mjs).
@@ -12,6 +13,7 @@ const kinds = ref({});
 // From Google Search Console, read in each price round (server/search-console.mjs).
 const search = ref({ queries: [], pages: [] });
 const searchTotals = ref(null);
+const alerts = ref(null);
 const recovery = ref(null);
 const searchPeriod = ref(28);
 const index = ref([]);
@@ -29,7 +31,9 @@ onMounted(async () => {
   try {
     const response = await fetch('/api/admin/seo');
     if (!response.ok) throw new Error(`SEO failed with ${response.status}`);
-    ({ audit: audit.value, kinds: kinds.value, search: search.value, searchTotals: searchTotals.value, recovery: recovery.value = null, index: index.value, trackedIndex: trackedIndex.value = [], sitemaps: sitemaps.value, pageCount: pageCount.value, speed: speed.value, bing: bing.value } = await response.json());
+    ({ audit: audit.value, kinds: kinds.value, search: search.value, searchTotals: searchTotals.value, alerts: alerts.value = null,
+      recovery: recovery.value = null, index: index.value, trackedIndex: trackedIndex.value = [], sitemaps: sitemaps.value,
+      pageCount: pageCount.value, speed: speed.value, bing: bing.value } = await response.json());
     state.value = 'ready';
   } catch {
     state.value = 'failed';
@@ -157,6 +161,10 @@ const byKind = computed(() =>
     De controle kon niet worden geladen.
   </p>
   <div v-else class="flex flex-col gap-6">
+    <SeoAlerts
+      v-if="alerts !== null"
+      :report="alerts"
+    />
     <section aria-labelledby="seo-google" class="space-y-3">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <h2 id="seo-google" class="text-lg font-semibold">Google Search Console</h2>

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { after, test } from 'node:test';
+import { shiftDays } from '../shared/weekends.mjs';
 import { connectFile } from './connect.mjs';
 import { openDatabase } from './db.mjs';
 import { clientNetwork, createApiHandler } from './handler.mjs';
@@ -14,6 +15,60 @@ after(() => rmSync(directory, { recursive: true, force: true }));
 const open = (name) => openDatabase(connectFile(join(directory, name)).client);
 const call = (handle, method, path, body) =>
   handle(new Request(`http://localhost/api${path}`, { method, body: body && JSON.stringify(body) }));
+
+test('the SEO overview warns after confirmed index loss and a material drop across complete weeks', async () => {
+  const db = await open('seo-warnings.db');
+  const handle = createApiHandler(db, { isAdmin: () => true });
+  const report = async () => (await (await call(handle, 'GET', '/admin/seo')).json()).alerts;
+  const paths = ['/weekenden', '/regio/overijssel', '/regio/extra'];
+  const checkedAt = '2026-11-27T12:00:00.000Z';
+  const lastIndexedAt = '2026-11-24T12:00:00.000Z';
+  const indexLostAt = '2026-11-26T12:00:00.000Z';
+  await db.replacePages(paths.map((path) => ({ path, title: path, description: '', body: '', image: null })), checkedAt);
+  const inspect = (path, verdict, at) => db.savePageIndex({
+    path, verdict, coverage: verdict === 'NEUTRAL' ? 'Gecrawld - momenteel niet geïndexeerd' : '', lastCrawl: null, checkedAt: at,
+  });
+  await inspect(paths[0], 'PASS', lastIndexedAt);
+  await inspect(paths[0], 'UNKNOWN', '2026-11-25T12:00:00.000Z');
+  assert.deepEqual((await report()).indexLosses, []);
+  await inspect(paths[0], 'NEUTRAL', indexLostAt);
+  await inspect(paths[0], 'NEUTRAL', checkedAt);
+  await inspect(paths[0], 'PASS', lastIndexedAt);
+  await inspect(paths[1], 'NEUTRAL', checkedAt);
+  await inspect(paths[2], 'PASS', lastIndexedAt);
+  await inspect(paths[2], 'FAIL', checkedAt);
+  await db.saveGooglebotCrawls([{ path: paths[0], visitedAt: indexLostAt, status: 200 }]);
+  const days = Array.from({ length: 14 }, (_, index) => ({
+    day: shiftDays('2026-11-12', index), impressions: index < 7 ? 100 : 60, clicks: 0,
+  }));
+  await db.saveSearchTotals({ checkedAt, days: days.filter((_, index) => index !== 4) });
+  let alerts = await report();
+  assert.equal(alerts.impressions, null);
+  assert.equal(alerts.checkedAt, checkedAt);
+  assert.deepEqual(alerts.indexLosses, [{
+    path: '/weekenden', label: 'Alle weekenden', coverage: 'Gecrawld - momenteel niet geïndexeerd',
+    indexLostAt, lastIndexedAt, checkedAt, googlebot: { visitedAt: indexLostAt, status: 200 },
+  }]);
+
+  await db.saveSearchTotals({ checkedAt, days });
+  alerts = await report();
+  assert.equal(alerts.impressions.hasPageData, false);
+  assert.equal(alerts.impressions.drops[0].percent, 40);
+  await db.saveSeoImpressionWeeks({
+    end: days.at(-1).day, checkedAt,
+    previous: { '/weekenden': 40, '/regio/overijssel': 55, '/park/weerterbergen': 19 },
+    current: { '/weekenden': 30 },
+  });
+  alerts = await report();
+  assert.equal(alerts.impressions.hasPageData, true);
+  assert.deepEqual(alerts.impressions.drops.map(({ label, percent }) => [label, percent]), [
+    ['Hele website', 40], ['Regio- en landenpagina’s', 100], ['Overijssel', 100],
+  ]);
+
+  await inspect(paths[0], 'PASS', '2026-11-28T12:00:00.000Z');
+  assert.deepEqual((await report()).indexLosses, []);
+  db.close();
+});
 
 test('serves the precomputed park list as stored, and an empty one before the first round', async () => {
   const db = await open('overview.db');

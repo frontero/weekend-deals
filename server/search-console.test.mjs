@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { createVerify, generateKeyPairSync } from 'node:crypto';
 import { test } from 'node:test';
-import { accessToken, searchAnalytics, serviceAccount } from './search-console.mjs';
+import { shiftDays } from '../shared/weekends.mjs';
+import { accessToken, searchAnalytics, serviceAccount, updateSeoImpressionWeeks } from './search-console.mjs';
 import { TRACKED_INDEX_PAGES, trackedIndexRows } from './index-tracking.mjs';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -150,4 +151,29 @@ test('compares the reported crawl to the latest update and the observed visit in
   assert.equal(before.cloudflareAfterUpdate, false);
   assert.equal(before.searchAfterUpdate, true);
   assert.equal(before.searchComparedToCloudflare, null);
+});
+
+test('loads finalized page impressions for the same two complete weeks only once per final day', async () => {
+  const calls = [];
+  const db = {
+    weeks: null,
+    seoImpressionWeeks() { return this.weeks; },
+    saveSeoImpressionWeeks(weeks) { this.weeks = weeks; },
+  };
+  const fetcher = async (url, request) => {
+    const body = JSON.parse(request.body);
+    calls.push(body);
+    return Response.json({ rows: [{ keys: ['https://parkjeweg.nl/weekenden'], impressions: 24 }] });
+  };
+  const days = Array.from({ length: 14 }, (_, index) => ({ day: shiftDays('2026-11-12', index), impressions: 35, clicks: 0 }));
+  const checkedAt = '2026-11-27T12:00:00.000Z';
+  await updateSeoImpressionWeeks(db, 'token', { checkedAt, days: days.slice(1) }, { fetcher });
+  assert.deepEqual(calls, []);
+  await updateSeoImpressionWeeks(db, 'token', { checkedAt, days }, { fetcher });
+  assert.deepEqual(calls.map(({ startDate, endDate, dataState, dimensions }) => [startDate, endDate, dataState, dimensions]), [
+    ['2026-11-12', '2026-11-18', 'final', ['page']], ['2026-11-19', '2026-11-25', 'final', ['page']],
+  ]);
+  assert.deepEqual(db.weeks, { end: '2026-11-25', checkedAt, previous: { '/weekenden': 24 }, current: { '/weekenden': 24 } });
+  await updateSeoImpressionWeeks(db, 'token', { checkedAt, days }, { fetcher });
+  assert.equal(calls.length, 2);
 });

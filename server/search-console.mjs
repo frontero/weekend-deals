@@ -3,7 +3,8 @@
 // (scripts/setup-search-console.sh). Node only: the rounds run it, not the Worker.
 import { createSign } from 'node:crypto';
 import { shiftDays } from '../shared/weekends.mjs';
-import { TRACKED_INDEX_PAGES } from './index-tracking.mjs';
+import { INDEX_ALERT_PAGES } from './index-tracking.mjs';
+import { completeSearchWeeks } from './seo-alerts.mjs';
 import { RECOVERY_BASELINE, RECOVERY_DIP, recoveryGroup, searchCalendarDate } from './seo-recovery.mjs';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -94,6 +95,8 @@ export async function updateSearchTotals(db, token, { fetcher = fetch, now = Dat
     startDate: shiftDays(today, -TOTAL_LOOKBACK),
     endDate: shiftDays(today, -1),
     dimensions: ['date'],
+    dataState: 'final',
+    type: 'web',
   }, { fetcher });
   const days = rows.map(({ keys: [day], clicks, impressions }) => ({ day, clicks, impressions }));
   const totals = { checkedAt: new Date(now).toISOString(), days };
@@ -101,7 +104,7 @@ export async function updateSearchTotals(db, token, { fetcher = fetch, now = Dat
   return totals;
 }
 
-async function recoveryImpressions(token, range, fetcher) {
+async function pageImpressions(token, range, fetcher) {
   const rowLimit = 25000;
   const rows = await searchAnalytics(token, {
     startDate: range.start, endDate: range.end, dimensions: ['page'], rowLimit, dataState: 'final', type: 'web',
@@ -112,11 +115,33 @@ async function recoveryImpressions(token, range, fetcher) {
   const pages = new Map();
   for (const { keys: [url], impressions } of rows) {
     const { pathname } = new URL(url);
-    if (recoveryGroup(pathname) !== null) {
-      pages.set(pathname, (pages.get(pathname) ?? 0) + impressions);
-    }
+    pages.set(pathname, (pages.get(pathname) ?? 0) + impressions);
   }
-  return { ...range, pages: Object.fromEntries(pages) };
+  return pages;
+}
+
+async function recoveryImpressions(token, range, fetcher) {
+  const pages = await pageImpressions(token, range, fetcher);
+  return { ...range, pages: Object.fromEntries([...pages].filter(([path]) => recoveryGroup(path) !== null)) };
+}
+
+export async function updateSeoImpressionWeeks(db, token, totals, { fetcher = fetch } = {}) {
+  const weeks = completeSearchWeeks(totals);
+  if (weeks === null) {
+    return;
+  }
+  const { end, start, previousStart, previousEnd } = weeks;
+  const existing = await db.seoImpressionWeeks();
+  if (existing !== null && existing.end >= end) {
+    return;
+  }
+  const [previous, current] = await Promise.all([
+    pageImpressions(token, { start: previousStart, end: previousEnd }, fetcher),
+    pageImpressions(token, { start, end }, fetcher),
+  ]);
+  await db.saveSeoImpressionWeeks({
+    end, checkedAt: totals.checkedAt, previous: Object.fromEntries(previous), current: Object.fromEntries(current),
+  });
 }
 
 export async function updateSeoRecoverySearch(db, token, totals, { fetcher = fetch } = {}) {
@@ -150,9 +175,10 @@ export async function updateSearchConsole(db, account, { fetcher = fetch, now = 
     return null;
   });
   if (totals !== null) {
-    await updateSeoRecoverySearch(db, token, totals, { fetcher }).catch((error) => {
-      log(`search recovery failed: ${error.message}`);
-    });
+    await Promise.all([
+      updateSeoRecoverySearch(db, token, totals, { fetcher }).catch((error) => log(`search recovery failed: ${error.message}`)),
+      updateSeoImpressionWeeks(db, token, totals, { fetcher }).catch((error) => log(`search comparison failed: ${error.message}`)),
+    ]);
   }
   try {
     const rows = await searchAnalytics(token, { startDate: day(DAYS_BACK), endDate: day(0), dimensions: ['date', 'page', 'query'], rowLimit: 5000 }, { fetcher });
@@ -168,7 +194,7 @@ export async function updateSearchConsole(db, account, { fetcher = fetch, now = 
   } catch (error) {
     log(`sitemap state failed: ${error.message}`);
   }
-  const paths = await db.pagesToInspect(inspections, TRACKED_INDEX_PAGES.map(({ path }) => path));
+  const paths = await db.pagesToInspect(inspections, INDEX_ALERT_PAGES.map(({ path }) => path));
   read.inspected = await updatePageIndex(db, token, paths, { fetcher, now, log });
   return read;
 }

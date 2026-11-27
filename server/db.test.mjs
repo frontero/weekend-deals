@@ -20,6 +20,22 @@ async function oldDatabase(name, sql) {
   return openDatabase(client);
 }
 
+test('keeps the last indexed date from the old page index when a new check sees index loss', async () => {
+  const db = await oldDatabase('old-index.db', `
+    CREATE TABLE page_index (
+      path TEXT PRIMARY KEY, verdict TEXT NOT NULL, coverage TEXT NOT NULL, last_crawl TEXT, checked_at TEXT NOT NULL
+    );
+    INSERT INTO page_index VALUES ('/weekenden', 'PASS', '', NULL, '2026-11-24T00:00:00.000Z');
+  `);
+  const checkedAt = '2026-11-27T00:00:00.000Z';
+  await db.replacePages([{ path: '/weekenden', title: 'Weekenden', description: '', body: '', image: null }], checkedAt);
+  await db.savePageIndex({ path: '/weekenden', verdict: 'NEUTRAL', coverage: 'Uitgesloten', lastCrawl: null, checkedAt });
+  const [page] = await db.pageIndex();
+  assert.equal(page.lastIndexedAt, '2026-11-24T00:00:00.000Z');
+  assert.equal(page.indexLostAt, checkedAt);
+  db.close();
+});
+
 const filterGroups = {
   park: [{ name: 'Zwempret', anyOf: false, options: [{ id: '9299.16301', name: 'Overdekt zwembad' }] }],
   accommodation: [{ name: 'Accommodatie type', anyOf: true, options: [{ id: '9290.16337', name: 'Bungalow' }] }],

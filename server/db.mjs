@@ -189,7 +189,9 @@ const SCHEMA = `
     verdict TEXT NOT NULL,
     coverage TEXT NOT NULL,
     last_crawl TEXT,
-    checked_at TEXT NOT NULL
+    checked_at TEXT NOT NULL,
+    last_indexed_at TEXT,
+    index_lost_at TEXT
   );
   CREATE TABLE IF NOT EXISTS feedback (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -482,6 +484,26 @@ async function columnNames(client, table) {
   return rows.map((column) => column.name);
 }
 
+export async function upgradePageIndex(client) {
+  const fields = ['last_indexed_at', 'index_lost_at'];
+  const existing = await columnNames(client, 'page_index');
+  const missing = fields.filter((field) => existing.includes(field) === false);
+  if (missing.length === 0) {
+    return;
+  }
+  try {
+    await client.batch([
+      ...missing.map((field) => `ALTER TABLE page_index ADD COLUMN ${field} TEXT`),
+      "UPDATE page_index SET last_indexed_at = checked_at WHERE verdict = 'PASS' AND last_indexed_at IS NULL",
+    ], 'write');
+  } catch (error) {
+    const current = await columnNames(client, 'page_index');
+    if (fields.every((field) => current.includes(field)) === false) {
+      throw error;
+    }
+  }
+}
+
 /**
  * The first schema only knew park facilities, and its park_facilities referenced them, which blocks replacing the
  * definitions each round. The definitions are fetched again anyway; the costly park mapping is kept.
@@ -558,6 +580,7 @@ export async function migrate(client) {
   }
   await upgradeFacilities(client);
   await client.executeMultiple(SCHEMA);
+  await upgradePageIndex(client);
   await addLaterColumns(client);
   await seedParties(client);
   await fillPriceStats(client);
@@ -742,6 +765,20 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
       });
     },
 
+    async seoImpressionWeeks() {
+      return parseJson(await readSetting('seoImpressionWeeks'), null);
+    },
+
+    async saveSeoImpressionWeeks(weeks) {
+      await client.execute({
+        sql: `INSERT INTO settings (key, value) VALUES ('seoImpressionWeeks', ?)
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value
+              WHERE json_extract(settings.value, '$.end') <= ?
+                AND json_extract(settings.value, '$.checkedAt') <= ?`,
+        args: [JSON.stringify(weeks), weeks.end, weeks.checkedAt],
+      });
+    },
+
     async seoSearchRecovery() {
       return parseJson(await readSetting('seoSearchRecovery'), null);
     },
@@ -788,11 +825,20 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
 
     async savePageIndex({ path, verdict, coverage, lastCrawl, checkedAt }) {
       await client.execute({
-        sql: `INSERT INTO page_index (path, verdict, coverage, last_crawl, checked_at) VALUES (?, ?, ?, ?, ?)
+        sql: `INSERT INTO page_index (path, verdict, coverage, last_crawl, checked_at, last_indexed_at) VALUES (?, ?, ?, ?, ?, ?)
               ON CONFLICT(path) DO UPDATE SET verdict = excluded.verdict, coverage = excluded.coverage,
-                last_crawl = excluded.last_crawl, checked_at = excluded.checked_at
+                last_crawl = excluded.last_crawl, checked_at = excluded.checked_at,
+                last_indexed_at = COALESCE(excluded.last_indexed_at,
+                  CASE WHEN page_index.verdict = 'PASS' THEN page_index.checked_at END, page_index.last_indexed_at),
+                index_lost_at = CASE
+                  WHEN excluded.verdict = 'PASS' THEN NULL
+                  WHEN excluded.verdict IN ('FAIL', 'NEUTRAL') AND page_index.verdict = 'PASS' THEN excluded.checked_at
+                  WHEN excluded.verdict IN ('FAIL', 'NEUTRAL') AND
+                    page_index.last_indexed_at IS NOT NULL
+                    THEN COALESCE(page_index.index_lost_at, excluded.checked_at)
+                  ELSE page_index.index_lost_at END
               WHERE page_index.checked_at <= excluded.checked_at`,
-        args: [path, verdict, coverage, lastCrawl, checkedAt],
+        args: [path, verdict, coverage, lastCrawl, checkedAt, verdict === 'PASS' ? checkedAt : null],
       });
     },
 
@@ -833,7 +879,8 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
     /** Whether Google has each page that exists now, as last asked. */
     pageIndex() {
       return all(
-        `SELECT page_index.path, verdict, coverage, last_crawl AS lastCrawl, checked_at AS checkedAt
+        `SELECT page_index.path, verdict, coverage, last_crawl AS lastCrawl, checked_at AS checkedAt,
+                last_indexed_at AS lastIndexedAt, index_lost_at AS indexLostAt
          FROM page_index JOIN pages ON pages.path = page_index.path ORDER BY page_index.path`,
       );
     },

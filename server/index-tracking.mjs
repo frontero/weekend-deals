@@ -19,7 +19,17 @@ export const TRACKED_INDEX_PAGES = [
   { path: '/park/weerterbergen', label: 'Weerterbergen', publishedAt: OVERIJSSEL_AND_WEERTERBERGEN_PUBLISHED_AT },
 ];
 
-export const GOOGLEBOT_PATHS = TRACKED_INDEX_PAGES.map(({ path }) => path);
+export const INDEX_ALERT_PAGES = [
+  ...TRACKED_INDEX_PAGES,
+  { path: '/weekenden', label: 'Alle weekenden' },
+  { path: '/parken', label: 'Alle parken' },
+  { path: '/last-minute', label: 'Last minute' },
+  { path: '/regio/ardennen', label: 'Ardennen' },
+  { path: '/regio/zeeland', label: 'Zeeland' },
+  { path: '/park/beach-resort-kamperland', label: 'Beach Resort Kamperland' },
+];
+
+export const GOOGLEBOT_PATHS = INDEX_ALERT_PAGES.map(({ path }) => path);
 
 function crawlTiming(observedAt, updatedAt) {
   const observed = Date.parse(observedAt);

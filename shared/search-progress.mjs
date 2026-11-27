@@ -1,4 +1,4 @@
-import { shiftDays } from '../../shared/weekends.mjs';
+import { shiftDays } from './weekends.mjs';
 
 export const SEARCH_PERIODS = [7, 28];
 

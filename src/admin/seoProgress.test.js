@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { shiftDays } from '../../shared/weekends.mjs';
-import { searchProgress } from './seoProgress.js';
+import { searchProgress } from '../../shared/search-progress.mjs';
 
 const daysFrom = (start, days, impressions, clicks) => Array.from({ length: days }, (_, offset) => ({
   day: shiftDays(start, offset), impressions, clicks,
