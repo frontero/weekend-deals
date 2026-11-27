@@ -299,7 +299,7 @@ export function createApiHandler(
         db.seoAudit(), db.searchSummary(since), db.searchTotals(), db.pageIndex(), db.searchSitemaps(), db.pagePaths(), db.pageSpeed(),
         db.bing(), db.indexRequests(), db.googlebotCrawls(),
       ]);
-      return json({ audit, kinds: ISSUE_KINDS, search, searchTotals, index, trackedIndex: trackedIndexRows(index, indexRequests, googlebotCrawls), sitemaps, pageCount: pages.length, speed, bing });
+      return json({ audit, kinds: ISSUE_KINDS, search, searchTotals, index, trackedIndex: trackedIndexRows(index, indexRequests, googlebotCrawls, pages), sitemaps, pageCount: pages.length, speed, bing });
     }),
 
     // One park's prices per round and weekend for a party size.

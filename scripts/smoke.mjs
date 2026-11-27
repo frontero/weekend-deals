@@ -99,10 +99,11 @@ try {
       await period.selectOption('28');
       await page.getByText('Opgenomen door Google', { exact: true }).waitFor({ timeout: TIMEOUT_MS });
     });
-    await check('the SEO table has a separate Cloudflare crawl column', async () => {
+    await check('the SEO table shows the publication time and both crawl sources', async () => {
       const table = page.getByRole('group', { name: 'Indexeringstabel' });
       await table.getByRole('columnheader', { name: 'Googlebot (Cloudflare)' }).waitFor({ timeout: TIMEOUT_MS });
-      await table.getByRole('rowheader', { name: 'Het Vennenbos' }).waitFor({ timeout: TIMEOUT_MS });
+      await table.getByRole('columnheader', { name: 'Laatste crawl (Search Console)' }).waitFor({ timeout: TIMEOUT_MS });
+      await table.getByRole('rowheader', { name: /Het Vennenbos.*Update/ }).locator('time[datetime]').waitFor({ timeout: TIMEOUT_MS });
     });
     if (errors.length) failures.push(`${viewport.name}: errors in the page: ${[...new Set(errors)].join(' | ')}`);
     await page.close();

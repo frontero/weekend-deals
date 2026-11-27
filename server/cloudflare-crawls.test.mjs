@@ -21,7 +21,7 @@ test('uses the latest verified Googlebot edge response and skips inspection, spo
     sample({ datetime: '2026-11-27T13:01:00Z', edgeResponseStatus: 200 }),
     sample({ clientIP: '198.51.100.2', datetime: '2026-11-27T13:02:00Z' }),
     sample({ datetime: '2026-11-27T13:03:00Z', userAgent: 'Google-InspectionTool/1.0' }),
-    sample({ clientRequestPath: '/cijfers', datetime: '2026-11-27T13:04:00Z' }),
+    sample({ clientRequestPath: '/parken', datetime: '2026-11-27T13:04:00Z' }),
   ];
   const send = async (url, options) => {
     if (url.endsWith('/graphql')) {

@@ -111,16 +111,39 @@ test("a round's reading stores the search figures, the sitemap state and what Go
   assert.equal(christmas.checkedAt, '2026-11-19T12:00:00.000Z');
   assert.deepEqual(tracked.find((row) => row.path === '/cijfers'), {
     path: '/cijfers', label: 'Cijfers', requestedOn: '2026-11-25', verdict: null, coverage: null, lastCrawl: null, checkedAt: null,
+    updatedAt: null, googlebot: null, cloudflareAfterUpdate: null, searchAfterUpdate: null, searchComparedToCloudflare: null,
   });
   assert.deepEqual(tracked.find((row) => row.path === '/land/duitsland'), {
     path: '/land/duitsland', label: 'Duitsland', requestedOn: '2026-11-27', verdict: 'NEUTRAL',
     coverage: 'Gecrawld - momenteel niet geïndexeerd', lastCrawl: '2026-11-19T00:06:24Z', checkedAt: '2026-11-19T12:00:00.000Z',
     googlebot: { visitedAt: '2026-11-27T12:16:51.000Z', status: 502 },
+    updatedAt: '2026-11-27T11:19:30.685Z', cloudflareAfterUpdate: true, searchAfterUpdate: false, searchComparedToCloudflare: -1,
   });
   assert.deepEqual(tracked.find((row) => row.path === '/park/hof-van-saksen'), {
     path: '/park/hof-van-saksen', label: 'Hof van Saksen', requestedOn: null, verdict: null, coverage: null, lastCrawl: null, checkedAt: null,
-    googlebot: null,
+    updatedAt: '2026-11-27T12:27:15.531Z', googlebot: null,
+    cloudflareAfterUpdate: null, searchAfterUpdate: null, searchComparedToCloudflare: null,
   });
   db.close();
   rmSync(directory, { recursive: true, force: true });
+});
+
+test('compares the reported crawl to the latest update and the observed visit independently', () => {
+  const sample = (lastCrawl, visitedAt) => trackedIndexRows(
+    [{ path: '/cijfers', lastCrawl }], {},
+    { '/cijfers': { visitedAt, status: 200 } },
+    [{ path: '/cijfers', computedAt: '2026-11-27T12:30:00Z' }],
+  ).find(({ path }) => path === '/cijfers');
+  const older = sample('2026-11-27T13:00:00Z', '2026-11-27T13:01:00Z');
+  assert.equal(older.cloudflareAfterUpdate, true);
+  assert.equal(older.searchAfterUpdate, true);
+  assert.equal(older.searchComparedToCloudflare, -1);
+  const matching = sample('2026-11-27T13:01:00.123Z', '2026-11-27T13:01:00Z');
+  assert.equal(matching.searchComparedToCloudflare, 0);
+  assert.equal(sample('2026-11-27T13:01:01Z', '2026-11-27T13:01:00Z').searchComparedToCloudflare, 0);
+  assert.equal(sample('2026-11-27T13:01:02Z', '2026-11-27T13:01:00Z').searchComparedToCloudflare, 1);
+  const before = sample('2026-11-27T13:00:00Z', '2026-11-27T11:00:00Z');
+  assert.equal(before.cloudflareAfterUpdate, false);
+  assert.equal(before.searchAfterUpdate, true);
+  assert.equal(before.searchComparedToCloudflare, null);
 });

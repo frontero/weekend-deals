@@ -45,17 +45,29 @@ const place = (position) => position.toLocaleString('nl-NL', { minimumFractionDi
 const indexed = computed(() => index.value.filter((row) => row.verdict === 'PASS').length);
 const requestDate = new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium', timeZone: 'Europe/Amsterdam' });
 const inspectionTime = new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Amsterdam' });
-const googlebotTime = new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Europe/Amsterdam' });
+const crawlTime = new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Europe/Amsterdam' });
+const sourceComparison = {
+  '-1': 'Laatste Cloudflare-bezoek nog niet gemeld',
+  0: 'Crawltijden binnen 1 seconde',
+  1: 'Nieuwere crawltijd dan Cloudflare',
+};
 const trackedRows = computed(() => trackedIndex.value.map((row) => ({
   ...row,
+  updateLabel: typeof row.updatedAt === 'string' ? crawlTime.format(new Date(row.updatedAt)) : null,
   requestLabel: row.requestedOn === null ? 'Geen aanvraag vastgelegd' : requestDate.format(new Date(row.requestedOn)),
-  crawlLabel: row.lastCrawl === null ? 'Geen crawldatum' : inspectionTime.format(new Date(row.lastCrawl)),
+  crawlLabel: row.lastCrawl === null ? 'Geen crawldatum gemeld' : crawlTime.format(new Date(row.lastCrawl)),
   checkedLabel: row.checkedAt === null ? '' : inspectionTime.format(new Date(row.checkedAt)),
   status: indexStatus(row.verdict, row.checkedAt),
-  googlebotLabel: row.googlebot?.visitedAt === undefined ? null : googlebotTime.format(new Date(row.googlebot.visitedAt)),
+  googlebotLabel: row.googlebot?.visitedAt === undefined ? null : crawlTime.format(new Date(row.googlebot.visitedAt)),
   googlebotStatus: row.googlebot?.status === undefined ? null : `HTTP ${row.googlebot.status}`,
   googlebotStatusClass: row.googlebot?.status >= 400 ? 'text-serious' : '',
-  googlebotEmptyLabel: row.googlebot === null ? 'Geen bezoek vastgelegd' : '—',
+  hasCloudflareUpdateComparison: typeof row.cloudflareAfterUpdate === 'boolean',
+  cloudflareUpdateLabel: row.cloudflareAfterUpdate === true ? 'Bezoek na update gezien' : 'Geen bezoek na update gezien',
+  cloudflareUpdateClass: row.cloudflareAfterUpdate === true ? 'text-good-ink' : 'text-ink-secondary',
+  hasSearchUpdateComparison: typeof row.searchAfterUpdate === 'boolean',
+  searchUpdateLabel: row.searchAfterUpdate === true ? 'Crawl na update gemeld' : 'Nog geen crawl na update gemeld',
+  searchUpdateClass: row.searchAfterUpdate === true ? 'text-good-ink' : 'text-ink-secondary',
+  searchComparisonLabel: row.searchAfterUpdate === true ? sourceComparison[row.searchComparedToCloudflare] ?? null : null,
 })));
 
 function indexStatus(verdict, checkedAt) {
@@ -170,8 +182,8 @@ const byKind = computed(() =>
     <section v-if="trackedRows.length > 0" class="min-w-0 rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="seo-tracked-index">
       <h2 id="seo-tracked-index" class="border-b border-line px-4 py-3 font-semibold sm:px-5">Indexering van gevolgde pagina’s</h2>
       <p class="px-4 py-3 text-sm text-ink-secondary sm:px-5">
-        Aanvraagdatums zijn handmatig vastgelegd. De crawldatum en indexstatus komen uit Search Console.
-        Voor vijf pagina’s toont Cloudflare ook het laatst waargenomen Googlebot-bezoek in Nederlandse tijd en de HTTP-status.
+        De update is het vastgelegde publicatiemoment van de inhoud. Voor Cijfers geldt de laatste berekening.
+        De tabel vergelijkt die tijd met het laatste Googlebot-bezoek uit Cloudflare en de laatste crawl die Search Console meldt, in Nederlandse tijd.
       </p>
       <div class="overflow-x-auto" tabindex="0" role="group" aria-label="Indexeringstabel">
         <table class="w-full text-left text-sm">
@@ -186,14 +198,26 @@ const byKind = computed(() =>
           </thead>
           <tbody>
             <tr v-for="row in trackedRows" :key="row.path" class="border-b border-line align-top last:border-0">
-              <th scope="row" class="px-3 py-3 font-semibold sm:px-5"><a :href="row.path" class="text-accent underline">{{ row.label }}</a></th>
+              <th scope="row" class="px-3 py-3 font-semibold sm:px-5">
+                <a :href="row.path" class="text-accent underline">{{ row.label }}</a>
+                <p v-if="row.updateLabel !== null" class="mt-1 text-xs font-normal text-ink-secondary">
+                  Update <time :datetime="row.updatedAt" class="whitespace-nowrap">{{ row.updateLabel }}</time>
+                </p>
+                <p v-else class="mt-1 text-xs font-normal text-ink-secondary">Update onbekend</p>
+              </th>
               <td class="px-3 py-3 tabular-nums sm:px-5">
                 <time v-if="row.requestedOn !== null" :datetime="row.requestedOn">{{ row.requestLabel }}</time>
                 <span v-else class="text-ink-secondary">{{ row.requestLabel }}</span>
               </td>
               <td class="px-3 py-3 tabular-nums sm:px-5">
-                <time v-if="row.lastCrawl !== null" :datetime="row.lastCrawl">{{ row.crawlLabel }}</time>
+                <time v-if="row.lastCrawl !== null" :datetime="row.lastCrawl" class="whitespace-nowrap">{{ row.crawlLabel }}</time>
                 <span v-else class="text-ink-secondary">{{ row.crawlLabel }}</span>
+                <p
+                  v-if="row.hasSearchUpdateComparison"
+                  :class="row.searchUpdateClass"
+                  class="mt-1 text-xs font-medium"
+                >{{ row.searchUpdateLabel }}</p>
+                <p v-if="row.searchComparisonLabel !== null" class="mt-1 text-xs text-ink-secondary">{{ row.searchComparisonLabel }}</p>
               </td>
               <td class="px-3 py-3 sm:px-5">
                 <p class="font-semibold">{{ row.status }}</p>
@@ -210,8 +234,13 @@ const byKind = computed(() =>
                     :class="row.googlebotStatusClass"
                     class="font-semibold"
                   >{{ row.googlebotStatus }}</span>
+                  <p
+                    v-if="row.hasCloudflareUpdateComparison"
+                    :class="row.cloudflareUpdateClass"
+                    class="mt-1 text-xs font-medium"
+                  >{{ row.cloudflareUpdateLabel }}</p>
                 </template>
-                <span v-else class="text-ink-secondary">{{ row.googlebotEmptyLabel }}</span>
+                <span v-else class="text-ink-secondary">Geen bezoek vastgelegd</span>
               </td>
             </tr>
           </tbody>
