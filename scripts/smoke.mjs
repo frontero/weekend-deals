@@ -105,6 +105,9 @@ try {
       await table.getByRole('columnheader', { name: 'Laatste crawl (Search Console)' }).waitFor({ timeout: TIMEOUT_MS });
       await table.getByRole('rowheader', { name: /Het Vennenbos.*Update/ }).locator('time[datetime]').waitFor({ timeout: TIMEOUT_MS });
     });
+    await check('the SEO page shows the recovery overview for parks and regions', () =>
+      page.getByRole('heading', { name: 'Herstel van park- en regiopagina’s' }).waitFor({ timeout: TIMEOUT_MS }),
+    );
     if (errors.length) failures.push(`${viewport.name}: errors in the page: ${[...new Set(errors)].join(' | ')}`);
     await page.close();
   }

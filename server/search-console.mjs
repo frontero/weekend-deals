@@ -4,6 +4,7 @@
 import { createSign } from 'node:crypto';
 import { shiftDays } from '../shared/weekends.mjs';
 import { TRACKED_INDEX_PAGES } from './index-tracking.mjs';
+import { RECOVERY_BASELINE, RECOVERY_DIP, recoveryGroup, searchCalendarDate } from './seo-recovery.mjs';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
@@ -40,11 +41,11 @@ export async function accessToken(account, { fetcher = fetch, now = Date.now() }
  * Search figures per the dimensions asked for, e.g. ['query', 'page'].
  * @returns [{ keys, clicks, impressions, ctr, position }]
  */
-export async function searchAnalytics(token, { startDate, endDate, dimensions, rowLimit = 1000, site = SITE_PROPERTY }, { fetcher = fetch } = {}) {
+export async function searchAnalytics(token, { startDate, endDate, dimensions, rowLimit = 1000, site = SITE_PROPERTY, dataState, type }, { fetcher = fetch } = {}) {
   const response = await fetcher(`${API}/sites/${encodeURIComponent(site)}/searchAnalytics/query`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ startDate, endDate, dimensions, rowLimit }),
+    body: JSON.stringify({ startDate, endDate, dimensions, rowLimit, dataState, type }),
   });
   if (!response.ok) throw new Error(`Search Console answered ${response.status}: ${(await response.text()).slice(0, 200)}`);
   return (await response.json()).rows ?? [];
@@ -86,17 +87,53 @@ const INSPECTIONS = 60;
 const TOGETHER = 6;
 // Two adjacent 28-day periods plus a week for final data to arrive, using Google's Pacific calendar.
 const TOTAL_LOOKBACK = 63;
-const searchDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Los_Angeles', dateStyle: 'short' });
 
 export async function updateSearchTotals(db, token, { fetcher = fetch, now = Date.now() } = {}) {
-  const today = searchDate.format(now);
+  const today = searchCalendarDate.format(now);
   const rows = await searchAnalytics(token, {
     startDate: shiftDays(today, -TOTAL_LOOKBACK),
     endDate: shiftDays(today, -1),
     dimensions: ['date'],
   }, { fetcher });
   const days = rows.map(({ keys: [day], clicks, impressions }) => ({ day, clicks, impressions }));
-  await db.saveSearchTotals({ checkedAt: new Date(now).toISOString(), days });
+  const totals = { checkedAt: new Date(now).toISOString(), days };
+  await db.saveSearchTotals(totals);
+  return totals;
+}
+
+async function recoveryImpressions(token, range, fetcher) {
+  const rowLimit = 25000;
+  const rows = await searchAnalytics(token, {
+    startDate: range.start, endDate: range.end, dimensions: ['page'], rowLimit, dataState: 'final', type: 'web',
+  }, { fetcher });
+  if (rows.length >= rowLimit) {
+    throw new Error('Search Console page totals reached the row limit');
+  }
+  const pages = new Map();
+  for (const { keys: [url], impressions } of rows) {
+    const { pathname } = new URL(url);
+    if (recoveryGroup(pathname) !== null) {
+      pages.set(pathname, (pages.get(pathname) ?? 0) + impressions);
+    }
+  }
+  return { ...range, pages: Object.fromEntries(pages) };
+}
+
+export async function updateSeoRecoverySearch(db, token, totals, { fetcher = fetch } = {}) {
+  const end = totals.days.at(-1)?.day;
+  if (end === undefined || end < RECOVERY_DIP.end) {
+    return;
+  }
+  const current = await db.seoSearchRecovery();
+  if (current !== null && current.recent.end >= end) {
+    return;
+  }
+  const [baseline, dip, recent] = await Promise.all([
+    current?.baseline ?? recoveryImpressions(token, RECOVERY_BASELINE, fetcher),
+    current?.dip ?? recoveryImpressions(token, RECOVERY_DIP, fetcher),
+    end === RECOVERY_DIP.end ? null : recoveryImpressions(token, { start: shiftDays(end, -2), end }, fetcher),
+  ]);
+  await db.saveSeoSearchRecovery({ checkedAt: totals.checkedAt, baseline, dip, recent: recent ?? dip });
 }
 
 /**
@@ -108,10 +145,14 @@ export async function updateSearchConsole(db, account, { fetcher = fetch, now = 
   const token = await accessToken(account, { fetcher, now });
   const day = (back) => new Date(now - back * DAY_MS).toISOString().slice(0, 10);
   const read = { rows: 0, inspected: 0 };
-  try {
-    await updateSearchTotals(db, token, { fetcher, now });
-  } catch (error) {
+  const totals = await updateSearchTotals(db, token, { fetcher, now }).catch((error) => {
     log(`search totals failed: ${error.message}`);
+    return null;
+  });
+  if (totals !== null) {
+    await updateSeoRecoverySearch(db, token, totals, { fetcher }).catch((error) => {
+      log(`search recovery failed: ${error.message}`);
+    });
   }
   try {
     const rows = await searchAnalytics(token, { startDate: day(DAYS_BACK), endDate: day(0), dimensions: ['date', 'page', 'query'], rowLimit: 5000 }, { fetcher });

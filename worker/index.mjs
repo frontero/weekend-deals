@@ -3,7 +3,9 @@ import { openDatabase } from '../server/db.mjs';
 import { isPageView, pageViewPoint } from '../server/events.mjs';
 import { clientNetwork, createApiHandler, visitorOf } from '../server/handler.mjs';
 import { analyticsQuery } from '../server/traffic.mjs';
-import { fetchGooglebotCrawls } from '../server/cloudflare-crawls.mjs';
+import { fetchGooglebotCrawls, fetchSeoCrawlDay } from '../server/cloudflare-crawls.mjs';
+import { searchCalendarDate } from '../server/seo-recovery.mjs';
+import { shiftDays } from '../shared/weekends.mjs';
 import { parseAffiliateLinks } from '../server/affiliate.mjs';
 import { isAdminEmail, verifyAccess } from './access.mjs';
 import { startWorkflows } from './clock.mjs';
@@ -46,6 +48,29 @@ async function refreshGooglebotCrawls(env, now) {
     const db = await openDatabase(client, { runMigrations: false });
     await db.saveGooglebotCrawls(visits);
     console.log('Googlebot Analytics: verified latest visits for %d tracked pages', visits.length);
+  } finally {
+    client.close();
+  }
+}
+
+async function refreshSeoCrawlHistory(env, now) {
+  const token = env.CLOUDFLARE_CRAWL_READ_TOKEN;
+  const zone = env.CLOUDFLARE_ZONE_ID;
+  if (token === undefined || zone === undefined || new Date(now).getUTCMinutes() !== 0) {
+    return;
+  }
+  // Allow two hours after the Pacific calendar day ends for request data to arrive.
+  const lastClosedDay = shiftDays(searchCalendarDate.format(now - 2 * 60 * 60 * 1000), -1);
+  const days = Array.from({ length: 7 }, (_, offset) => shiftDays(lastClosedDay, -offset));
+  const client = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
+  try {
+    const db = await openDatabase(client, { runMigrations: false });
+    const stored = await db.seoCrawlDays(days);
+    const day = days.find((date) => stored[date] === undefined);
+    if (day !== undefined) {
+      await db.saveSeoCrawlDay(await fetchSeoCrawlDay({ token, zone, day }));
+      console.log('Googlebot Analytics: saved recovery totals for %s', day);
+    }
   } finally {
     client.close();
   }
@@ -121,6 +146,9 @@ export default {
     context.waitUntil(startWorkflows(env));
     context.waitUntil(refreshGooglebotCrawls(env, controller.scheduledTime).catch((error) => {
       console.error('Googlebot Analytics:', error.message);
+    }));
+    context.waitUntil(refreshSeoCrawlHistory(env, controller.scheduledTime).catch((error) => {
+      console.error('Googlebot recovery:', error.message);
     }));
   },
 };

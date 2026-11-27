@@ -3,6 +3,7 @@ import { clampSettings, DEFAULT_SETTINGS } from './settings.mjs';
 
 const INDEX_REQUEST_PREFIX = 'googleIndexRequest:';
 const GOOGLEBOT_CRAWL_PREFIX = 'cloudflareGooglebot:';
+const SEO_CRAWL_DAY_PREFIX = 'seoCrawlDay:';
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS parks (
@@ -738,6 +739,38 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
               ON CONFLICT(key) DO UPDATE SET value = excluded.value
               WHERE COALESCE(json_extract(settings.value, '$.checkedAt'), '') <= ?`,
         args: [JSON.stringify(totals), totals.checkedAt],
+      });
+    },
+
+    async seoSearchRecovery() {
+      return parseJson(await readSetting('seoSearchRecovery'), null);
+    },
+
+    async saveSeoSearchRecovery(state) {
+      await client.execute({
+        sql: `INSERT INTO settings (key, value) VALUES ('seoSearchRecovery', ?)
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value
+              WHERE json_extract(settings.value, '$.recent.end') <= ?
+                AND json_extract(settings.value, '$.checkedAt') <= ?`,
+        args: [JSON.stringify(state), state.recent.end, state.checkedAt],
+      });
+    },
+
+    async seoCrawlDays(days) {
+      const rows = await all(
+        'SELECT value FROM settings WHERE key IN (SELECT ? || value FROM json_each(?))',
+        SEO_CRAWL_DAY_PREFIX, JSON.stringify(days),
+      );
+      return Object.fromEntries(rows.map(({ value }) => {
+        const day = JSON.parse(value);
+        return [day.day, day];
+      }));
+    },
+
+    async saveSeoCrawlDay(day) {
+      await client.execute({
+        sql: 'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING',
+        args: [`${SEO_CRAWL_DAY_PREFIX}${day.day}`, JSON.stringify(day)],
       });
     },
 

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { formatShortDate, formatTimestamp } from '../../lib/format.js';
+import SeoRecovery from '../components/SeoRecovery.vue';
 import StatTile from '../components/StatTile.vue';
 import { SEARCH_PERIODS, searchProgress } from '../seoProgress.js';
 import { count } from '../useRounds.js';
@@ -11,6 +12,7 @@ const kinds = ref({});
 // From Google Search Console, read in each price round (server/search-console.mjs).
 const search = ref({ queries: [], pages: [] });
 const searchTotals = ref(null);
+const recovery = ref(null);
 const searchPeriod = ref(28);
 const index = ref([]);
 const trackedIndex = ref([]);
@@ -27,7 +29,7 @@ onMounted(async () => {
   try {
     const response = await fetch('/api/admin/seo');
     if (!response.ok) throw new Error(`SEO failed with ${response.status}`);
-    ({ audit: audit.value, kinds: kinds.value, search: search.value, searchTotals: searchTotals.value, index: index.value, trackedIndex: trackedIndex.value = [], sitemaps: sitemaps.value, pageCount: pageCount.value, speed: speed.value, bing: bing.value } = await response.json());
+    ({ audit: audit.value, kinds: kinds.value, search: search.value, searchTotals: searchTotals.value, recovery: recovery.value = null, index: index.value, trackedIndex: trackedIndex.value = [], sitemaps: sitemaps.value, pageCount: pageCount.value, speed: speed.value, bing: bing.value } = await response.json());
     state.value = 'ready';
   } catch {
     state.value = 'failed';
@@ -179,6 +181,9 @@ const byKind = computed(() =>
         />
       </div>
     </section>
+    <SeoRecovery
+      :report="recovery"
+    />
     <section v-if="trackedRows.length > 0" class="min-w-0 rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="seo-tracked-index">
       <h2 id="seo-tracked-index" class="border-b border-line px-4 py-3 font-semibold sm:px-5">Indexering van gevolgde pagina’s</h2>
       <p class="px-4 py-3 text-sm text-ink-secondary sm:px-5">

@@ -11,6 +11,7 @@ import { PROVIDERS } from './providers.mjs';
 import { scanStatus, statusBody } from './status.mjs';
 import { clientEventPoints, countsAsVisit, eventPoint } from './events.mjs';
 import { ISSUE_KINDS } from './seo.mjs';
+import { seoRecoveryReport } from './seo-recovery.mjs';
 import { trackedIndexRows } from './index-tracking.mjs';
 import { trafficReport, dayReport } from './traffic.mjs';
 import { withClickOrigin } from './tradetracker.mjs';
@@ -295,11 +296,11 @@ export function createApiHandler(
     // What the last check of the public pages found (server/seo.mjs).
     'GET /admin/seo': forAdmins(async () => {
       const since = new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const [audit, search, searchTotals, index, sitemaps, pages, speed, bing, indexRequests, googlebotCrawls] = await Promise.all([
+      const [audit, search, searchTotals, index, sitemaps, pages, speed, bing, indexRequests, googlebotCrawls, recovery] = await Promise.all([
         db.seoAudit(), db.searchSummary(since), db.searchTotals(), db.pageIndex(), db.searchSitemaps(), db.pagePaths(), db.pageSpeed(),
-        db.bing(), db.indexRequests(), db.googlebotCrawls(),
+        db.bing(), db.indexRequests(), db.googlebotCrawls(), seoRecoveryReport(db),
       ]);
-      return json({ audit, kinds: ISSUE_KINDS, search, searchTotals, index, trackedIndex: trackedIndexRows(index, indexRequests, googlebotCrawls, pages), sitemaps, pageCount: pages.length, speed, bing });
+      return json({ audit, kinds: ISSUE_KINDS, search, searchTotals, index, trackedIndex: trackedIndexRows(index, indexRequests, googlebotCrawls, pages), sitemaps, pageCount: pages.length, speed, bing, recovery });
     }),
 
     // One park's prices per round and weekend for a party size.
