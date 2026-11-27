@@ -99,11 +99,13 @@ test("a round's reading stores the search figures, the sitemap state and what Go
     { path: '/land/duitsland', visitedAt: '2026-11-27T12:16:51.000Z', status: 200 },
   ]);
   const tracked = trackedIndexRows(await db.pageIndex(), await db.indexRequests(), await db.googlebotCrawls());
-  assert.equal(tracked.length, 11);
-  assert.deepEqual(tracked.slice(-3).map(({ path, label }) => [path, label]), [
+  assert.equal(tracked.length, 13);
+  assert.deepEqual(tracked.slice(-5).map(({ path, label }) => [path, label]), [
     ['/park/vakantiepark-hoog-vaals', 'Hoog Vaals'],
     ['/park/vakantiepark-de-lommerbergen', 'De Lommerbergen'],
     ['/park/vakantiepark-het-vennenbos', 'Het Vennenbos'],
+    ['/regio/overijssel', 'Overijssel'],
+    ['/park/weerterbergen', 'Weerterbergen'],
   ]);
   const christmas = tracked.find((row) => row.path === '/feestdag/kerst');
   assert.equal(christmas.requestedOn, '2026-11-26');

@@ -1,6 +1,7 @@
 // Record the production publication time when one of these pages gets an editorial update.
 const SEASONAL_PUBLISHED_AT = '2026-11-26T15:32:57.000Z';
 const PARK_INTROS_PUBLISHED_AT = '2026-11-27T14:20:20.781Z';
+const OVERIJSSEL_AND_WEERTERBERGEN_PUBLISHED_AT = '2026-11-27T16:57:52.000Z';
 
 export const TRACKED_INDEX_PAGES = [
   { path: '/feestdag/pasen', label: 'Pasen', publishedAt: SEASONAL_PUBLISHED_AT },
@@ -14,6 +15,8 @@ export const TRACKED_INDEX_PAGES = [
   { path: '/park/vakantiepark-hoog-vaals', label: 'Hoog Vaals', publishedAt: PARK_INTROS_PUBLISHED_AT },
   { path: '/park/vakantiepark-de-lommerbergen', label: 'De Lommerbergen', publishedAt: PARK_INTROS_PUBLISHED_AT },
   { path: '/park/vakantiepark-het-vennenbos', label: 'Het Vennenbos', publishedAt: PARK_INTROS_PUBLISHED_AT },
+  { path: '/regio/overijssel', label: 'Overijssel', publishedAt: OVERIJSSEL_AND_WEERTERBERGEN_PUBLISHED_AT },
+  { path: '/park/weerterbergen', label: 'Weerterbergen', publishedAt: OVERIJSSEL_AND_WEERTERBERGEN_PUBLISHED_AT },
 ];
 
 export const GOOGLEBOT_PATHS = TRACKED_INDEX_PAGES.map(({ path }) => path);
