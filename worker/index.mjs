@@ -33,7 +33,7 @@ async function appStylesheet(env, request) {
 }
 
 async function refreshGooglebotCrawls(env, now) {
-  const token = env.CLOUDFLARE_CRAWL_READ_TOKEN ?? env.ANALYTICS_READ_TOKEN;
+  const token = env.CLOUDFLARE_CRAWL_READ_TOKEN;
   if (token === undefined || env.CLOUDFLARE_ZONE_ID === undefined) {
     return;
   }
@@ -45,6 +45,7 @@ async function refreshGooglebotCrawls(env, now) {
   try {
     const db = await openDatabase(client, { runMigrations: false });
     await db.saveGooglebotCrawls(visits);
+    console.log('Googlebot Analytics: verified latest visits for %d tracked pages', visits.length);
   } finally {
     client.close();
   }
