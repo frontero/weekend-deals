@@ -5,6 +5,7 @@ export const TRACKED_INDEX_PAGES = [
   { path: '/feestdag/kerst', label: 'Kerst' },
   { path: '/vakantie/kerstvakantie', label: 'Kerstvakantie' },
   { path: '/cijfers', label: 'Cijfers' },
+  { path: '/land/duitsland', label: 'Duitsland' },
 ];
 
 export function trackedIndexRows(index, requests) {

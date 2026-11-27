@@ -46,7 +46,7 @@ test("a round's reading stores the search figures, the sitemap state and what Go
   const directory = mkdtempSync(join(tmpdir(), 'weekend-deals-gsc-'));
   const db = await openDatabase(connectFile(join(directory, 'gsc.db')).client);
   const page = (path) => ({ path, title: path, description: '', image: null, body: '' });
-  await db.replacePages([page('/parken'), page('/weekenden'), page('/feestdag/kerst')], '2026-11-19T06:00:00.000Z');
+  await db.replacePages([page('/parken'), page('/weekenden'), page('/feestdag/kerst'), page('/land/duitsland')], '2026-11-19T06:00:00.000Z');
   await db.savePageIndex({ path: '/parken', verdict: 'PASS', coverage: 'Ingediend en geïndexeerd', lastCrawl: null, checkedAt: '2026-11-18T06:00:00.000Z' });
   assert.deepEqual(await db.pagesToInspect(2, ['/parken', '/cijfers']), ['/parken', '/feestdag/kerst']);
 
@@ -65,11 +65,14 @@ test("a round's reading stores the search figures, the sitemap state and what Go
     if (url.endsWith('/sitemaps')) return Response.json({ sitemap: [{ path: 'https://parkjeweg.nl/sitemap.xml', lastDownloaded: '2026-11-18T08:58:06Z', errors: '0', warnings: '1', isPending: false }] });
     const { inspectionUrl } = JSON.parse(init.body);
     inspected.push(inspectionUrl);
+    if (inspectionUrl === 'https://parkjeweg.nl/land/duitsland') {
+      return Response.json({ inspectionResult: { indexStatusResult: { verdict: 'NEUTRAL', coverageState: 'Gecrawld - momenteel niet geïndexeerd', lastCrawlTime: '2026-11-19T00:06:24Z' } } });
+    }
     return Response.json({ inspectionResult: { indexStatusResult: { verdict: 'NEUTRAL', coverageState: 'Gevonden, momenteel niet geïndexeerd' } } });
   };
-  const read = await updateSearchConsole(db, account, { fetcher, now: Date.parse('2026-11-19T12:00:00Z'), inspections: 2 });
-  assert.deepEqual(read, { rows: 2, inspected: 2 });
-  assert.deepEqual(inspected, ['https://parkjeweg.nl/feestdag/kerst', 'https://parkjeweg.nl/weekenden'], 'never-asked pages first');
+  const read = await updateSearchConsole(db, account, { fetcher, now: Date.parse('2026-11-19T12:00:00Z'), inspections: 3 });
+  assert.deepEqual(read, { rows: 2, inspected: 3 });
+  assert.deepEqual(inspected, ['https://parkjeweg.nl/feestdag/kerst', 'https://parkjeweg.nl/land/duitsland', 'https://parkjeweg.nl/weekenden'], 'tracked pages first, then the oldest inspections');
 
   const summary = await db.searchSummary('2026-11-01');
   assert.deepEqual(summary.days, [{ day: '2026-11-17', clicks: 3, impressions: 40, position: 7 }]);
@@ -81,17 +84,25 @@ test("a round's reading stores the search figures, the sitemap state and what Go
   assert.equal(summary.queries[0].query, 'vakantiepark kerst');
   assert.equal((await db.searchSitemaps()).sitemaps[0].warnings, 1);
   await db.savePageIndex({ path: '/feestdag/kerst', verdict: 'PASS', coverage: 'Ingediend en geïndexeerd', lastCrawl: null, checkedAt: '2026-11-19T11:00:00.000Z' });
-  assert.deepEqual((await db.pageIndex()).map((row) => [row.path, row.verdict]), [['/feestdag/kerst', 'NEUTRAL'], ['/parken', 'PASS'], ['/weekenden', 'NEUTRAL']]);
-  await db.saveIndexRequests([{ path: '/feestdag/kerst', requestedOn: '2026-11-26' }, { path: '/cijfers', requestedOn: '2026-11-25' }]);
+  assert.deepEqual((await db.pageIndex()).map((row) => [row.path, row.verdict]), [['/feestdag/kerst', 'NEUTRAL'], ['/land/duitsland', 'NEUTRAL'], ['/parken', 'PASS'], ['/weekenden', 'NEUTRAL']]);
+  await db.saveIndexRequests([
+    { path: '/feestdag/kerst', requestedOn: '2026-11-26' },
+    { path: '/cijfers', requestedOn: '2026-11-25' },
+    { path: '/land/duitsland', requestedOn: '2026-11-27' },
+  ]);
   await db.saveIndexRequests([{ path: '/feestdag/kerst', requestedOn: '2026-11-25' }]);
   const tracked = trackedIndexRows(await db.pageIndex(), await db.indexRequests());
-  assert.equal(tracked.length, 6);
+  assert.equal(tracked.length, 7);
   const christmas = tracked.find((row) => row.path === '/feestdag/kerst');
   assert.equal(christmas.requestedOn, '2026-11-26');
   assert.equal(christmas.verdict, 'NEUTRAL');
   assert.equal(christmas.checkedAt, '2026-11-19T12:00:00.000Z');
   assert.deepEqual(tracked.find((row) => row.path === '/cijfers'), {
     path: '/cijfers', label: 'Cijfers', requestedOn: '2026-11-25', verdict: null, coverage: null, lastCrawl: null, checkedAt: null,
+  });
+  assert.deepEqual(tracked.find((row) => row.path === '/land/duitsland'), {
+    path: '/land/duitsland', label: 'Duitsland', requestedOn: '2026-11-27', verdict: 'NEUTRAL',
+    coverage: 'Gecrawld - momenteel niet geïndexeerd', lastCrawl: '2026-11-19T00:06:24Z', checkedAt: '2026-11-19T12:00:00.000Z',
   });
   db.close();
   rmSync(directory, { recursive: true, force: true });
