@@ -87,6 +87,26 @@ const details = {
 const pages = buildPages({ parks: [gulpen, hoogduin], allParks, computedAt: '2026-10-29T06:39:10.572Z', details });
 const pageAt = (path) => pages.find((page) => page.path === path);
 
+test('selected park introductions describe their own facilities while preserving current prices', () => {
+  const examples = [
+    ['HVS', 'Vakantiepark Hoog Vaals', '/park/vakantiepark-hoog-vaals', /glijbaan van 50 meter.*12-persoonsbungalow.*Drielandenpunt/],
+    ['LGN', 'Vakantiepark De Lommerbergen', '/park/vakantiepark-de-lommerbergen', /babybungalow.*Kids Junglebad.*Kasteel De Keverberg/],
+    ['VBS', 'Vakantiepark Het Vennenbos', '/park/vakantiepark-het-vennenbos', /Wild Wave-glijbaan.*kinderbungalow.*Cartierheide/],
+  ];
+  const parks = [gulpen, ...examples.map(([code, name]) => ({ ...gulpen, code, name }))];
+  const built = buildPages({ parks, allParks: new Map(parks.map((park) => [park.code, park])), computedAt: '2026-10-29T06:39:10.572Z' });
+  for (const [, , path, expected] of examples) {
+    const page = built.find((candidate) => candidate.path === path);
+    const intro = page.body.match(/<p id="park-intro"[^>]*>([^<]+)<\/p>/)[1];
+    assert.match(intro, expected);
+    assert.doesNotMatch(intro, /Normaal kost een weekend/);
+    assert.match(page.body, /<p class="text-base leading-relaxed text-ink-secondary">Normaal kost een weekend hier voor 2 personen rond € 400/);
+  }
+  const unchanged = built.find((candidate) => candidate.path === '/park/vakantiepark-gulpen').body;
+  assert.doesNotMatch(unchanged, /id="park-intro"/);
+  assert.match(unchanged, /Vakantiepark Gulpen ligt in het heuvelland bij Gulpen/);
+});
+
 test('Hof van Saksen shows the first three free weekends in date order with their price differences', () => {
   const park = { ...gulpen, code: 'HSN', name: 'Hof van Saksen', city: 'Nooitgedacht', baselineCents: 77130, weekends: [
     weekend('2026-12-18', '2026-12-21', 30000, 0.61),

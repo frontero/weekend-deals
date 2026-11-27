@@ -1016,8 +1016,36 @@ function sleeps(accommodation) {
   return Number(fact?.[1] ?? named?.[1]) || null;
 }
 
-/** The park in a few sentences: where it lies, what to sleep in, and when a weekend there costs least. */
-function parkIntro(park, { accommodations, weekendCount }) {
+const PARK_INTROS = new Map([
+  // https://www.landal.nl/parken/hoog-vaals and /accommodaties/12lt
+  [
+    'HVS',
+    'Hoog Vaals past bij gezinnen die zwemmen willen afwisselen met een wandeling door het Zuid-Limburgse heuvelland. ' +
+      'Het binnenbad heeft een glijbaan van 50 meter en een apart peuterbad. ' +
+      'Ga je met meerdere generaties weg, dan is er een extra toegankelijke 12-persoonsbungalow met zes slaapkamers, waaronder een aangepaste slaapkamer, en een aangepaste badkamer. ' +
+      'Vanuit Vaals kun je naar het Drielandenpunt op de Vaalserberg of een dag naar Aken.',
+  ],
+  // https://www.landal.nl/parken/de-lommerbergen and /accommodaties/3cn
+  [
+    'LGN',
+    'Met een baby of peuter is De Lommerbergen in Reuver een praktische keuze. ' +
+      'De babybungalow is ingericht voor twee volwassenen en één baby en heeft een ledikant, een commode en een babybad. ' +
+      'In het subtropische zwemparadijs is het Kids Junglebad er voor de kleintjes. Wie een snellere glijbaan zoekt, vindt er de Hurri Cone en de Duo-Racer. ' +
+      'Buiten het park kun je langs de Maas wandelen of Kasteel De Keverberg in Kessel bezoeken.',
+  ],
+  // https://www.landal.nl/parken/het-vennenbos/dagrecreatie and /accommodaties/4ck
+  // https://www.visitbrabant.com/nl/locaties/1730731140/natuurgebied-cartierheide
+  [
+    'VBS',
+    'Als de kinderen vooral veel willen zwemmen, is Het Vennenbos in Hapert een goede keuze. ' +
+      'In het subtropische zwemparadijs kun je zwemmen in het golfslagbad, van de donkere Wild Wave-glijbaan gaan of je laten meevoeren op de wildwaterbaan. ' +
+      'De 4-persoons kinderbungalow is geschikt voor twee volwassenen en twee kinderen. Er is speelgoed en de kinderen hebben een eigen kamer met stapelbed. ' +
+      'Voor een wandeling buiten het park kun je naar de Cartierheide in de Brabantse Kempen.',
+  ],
+]);
+
+/** Where the park lies and the accommodation options from the park data. */
+function parkSettingIntro(park, accommodations) {
   const sentences = [];
   const settings = SETTINGS.filter(([id]) => park.facilities.includes(id)).map(([, phrase]) => phrase).slice(0, 2);
   const region = regionOf(park);
@@ -1038,25 +1066,43 @@ function parkIntro(park, { accommodations, weekendCount }) {
     const which = withSauna === accommodations.length ? 'Elk huisje heeft' : withSauna === 1 ? 'Eén daarvan heeft' : `${withSauna} daarvan hebben`;
     sentences.push(`${which} een eigen sauna.`);
   }
-
-  if (park.weekends.length) {
-    if (park.baselineCents) sentences.push(`Normaal kost een weekend hier voor ${partyLabel(PAGE_PARTY)} rond ${formatEuros(park.baselineCents)}.`);
-    const byMonth = [...Map.groupBy(park.weekends, (weekend) => weekend.arrival.slice(0, 7))].map(([month, weekends]) => ({
-      month: monthName.format(day(`${month}-01`)),
-      average: weekends.reduce((sum, weekend) => sum + weekend.priceCents, 0) / weekends.length,
-    }));
-    if (byMonth.length > 1) {
-      const sorted = byMonth.sort((a, b) => a.average - b.average);
-      const [cheapest, dearest] = [sorted[0], sorted.at(-1)];
-      if (cheapest.average <= dearest.average * (1 - MONTH_GAP)) {
-        sentences.push(
-          `In ${cheapest.month} ben je het voordeligst uit: gemiddeld ${formatEuros(cheapest.average)}, tegen ${formatEuros(dearest.average)} in ${dearest.month}.`,
-        );
-      }
-    }
-    sentences.push(`Van de komende ${weekendCount} weekenden ${park.weekends.length === 1 ? 'is er nog 1' : `zijn er nog ${park.weekends.length}`} vrij.`);
-  }
   return sentences;
+}
+
+function parkPriceIntro(park, weekendCount) {
+  if (park.weekends.length === 0) {
+    return [];
+  }
+  const sentences = [];
+  if ((park.baselineCents ?? 0) > 0) {
+    sentences.push(`Normaal kost een weekend hier voor ${partyLabel(PAGE_PARTY)} rond ${formatEuros(park.baselineCents)}.`);
+  }
+  const byMonth = [...Map.groupBy(park.weekends, (weekend) => weekend.arrival.slice(0, 7))].map(([month, weekends]) => ({
+    month: monthName.format(day(`${month}-01`)),
+    average: weekends.reduce((sum, weekend) => sum + weekend.priceCents, 0) / weekends.length,
+  }));
+  if (byMonth.length > 1) {
+    const sorted = byMonth.sort((a, b) => a.average - b.average);
+    const [cheapest, dearest] = [sorted[0], sorted.at(-1)];
+    if (cheapest.average <= dearest.average * (1 - MONTH_GAP)) {
+      sentences.push(`In ${cheapest.month} ben je het voordeligst uit: gemiddeld ${formatEuros(cheapest.average)}, tegen ${formatEuros(dearest.average)} in ${dearest.month}.`);
+    }
+  }
+  sentences.push(`Van de komende ${weekendCount} weekenden ${park.weekends.length === 1 ? 'is er nog 1' : `zijn er nog ${park.weekends.length}`} vrij.`);
+  return sentences;
+}
+
+function parkIntro(park, { accommodations, weekendCount }) {
+  const description = PARK_INTROS.get(park.code);
+  const prices = parkPriceIntro(park, weekendCount);
+  if (description !== undefined) {
+    return html`<div class="mt-8 max-w-3xl space-y-3">
+      <p id="park-intro" class="text-lg leading-relaxed">${description}</p>
+      ${prices.length > 0 && html`<p class="text-base leading-relaxed text-ink-secondary">${prices.join(' ')}</p>`}
+    </div>`;
+  }
+  const sentences = [...parkSettingIntro(park, accommodations), ...prices];
+  return sentences.length > 0 && html`<p class="mt-8 max-w-3xl text-lg leading-relaxed">${sentences.join(' ')}</p>`;
 }
 
 function weekendPriceDifference(priceCents, baselineCents) {
@@ -1181,7 +1227,7 @@ function parkPage(park, { pathOf, nearby, today, updated, accommodations, places
           </section>`
         : html`<div class="mt-6 flex flex-col gap-4 rounded-[2rem] bg-sun-wash p-6 sm:flex-row sm:items-center"><p class="flex-1 font-semibold">Voor ${partyLabel(PAGE_PARTY)} vonden we bij ${name} geen vrij weekend in de komende maanden. Kijk bij ${providerName(park.provider)} voor andere datums, bekijk de parken in de buurt, of <a href="/" class="${link}">zoek een ander weekend</a>.</p>${trackedParkUrl(park, 'parkpagina') && ctaLink(trackedParkUrl(park, 'parkpagina'), `Bekijk bij ${providerName(park.provider)}`, providerName(park.provider))}</div>`
     }
-    ${intro.length > 0 && html`<p class="mt-8 max-w-3xl text-lg leading-relaxed">${intro.join(' ')}</p>`}
+    ${intro}
     ${
       todo.length > 0 &&
       html`<section aria-labelledby="todo" class="mt-10">
