@@ -2,6 +2,7 @@ import { FEATURE_PARTIES, groupKey, STANDARD_PARTIES } from '../shared/party.mjs
 import { clampSettings, DEFAULT_SETTINGS } from './settings.mjs';
 
 const INDEX_REQUEST_PREFIX = 'googleIndexRequest:';
+const GOOGLEBOT_CRAWL_PREFIX = 'cloudflareGooglebot:';
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS parks (
@@ -774,6 +775,25 @@ export async function openDatabase(client, { runMigrations = true } = {}) {
               ON CONFLICT(key) DO UPDATE SET value = excluded.value
               WHERE settings.value < excluded.value`,
         args: [`${INDEX_REQUEST_PREFIX}${path}`, requestedOn],
+      })), 'write');
+    },
+
+    async googlebotCrawls() {
+      const rows = await all('SELECT substr(key, ?) AS path, value FROM settings WHERE key GLOB ?', GOOGLEBOT_CRAWL_PREFIX.length + 1, `${GOOGLEBOT_CRAWL_PREFIX}*`);
+      return Object.fromEntries(rows.map(({ path, value }) => [path, JSON.parse(value)]));
+    },
+
+    async saveGooglebotCrawls(crawls) {
+      if (crawls.length === 0) {
+        return;
+      }
+      await client.batch(crawls.map(({ path, visitedAt, status }) => ({
+        sql: `INSERT INTO settings (key, value) VALUES (?, ?)
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value
+              WHERE json_extract(excluded.value, '$.visitedAt') > json_extract(settings.value, '$.visitedAt')
+                 OR (json_extract(excluded.value, '$.visitedAt') = json_extract(settings.value, '$.visitedAt')
+                     AND json_extract(excluded.value, '$.status') > json_extract(settings.value, '$.status'))`,
+        args: [`${GOOGLEBOT_CRAWL_PREFIX}${path}`, JSON.stringify({ visitedAt, status })],
       })), 'write');
     },
 

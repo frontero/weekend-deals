@@ -91,7 +91,14 @@ test("a round's reading stores the search figures, the sitemap state and what Go
     { path: '/land/duitsland', requestedOn: '2026-11-27' },
   ]);
   await db.saveIndexRequests([{ path: '/feestdag/kerst', requestedOn: '2026-11-25' }]);
-  const tracked = trackedIndexRows(await db.pageIndex(), await db.indexRequests());
+  await db.saveGooglebotCrawls([
+    { path: '/land/duitsland', visitedAt: '2026-11-27T12:16:51.000Z', status: 502 },
+  ]);
+  await db.saveGooglebotCrawls([
+    { path: '/land/duitsland', visitedAt: '2026-11-26T11:00:00.000Z', status: 200 },
+    { path: '/land/duitsland', visitedAt: '2026-11-27T12:16:51.000Z', status: 200 },
+  ]);
+  const tracked = trackedIndexRows(await db.pageIndex(), await db.indexRequests(), await db.googlebotCrawls());
   assert.equal(tracked.length, 11);
   assert.deepEqual(tracked.slice(-3).map(({ path, label }) => [path, label]), [
     ['/park/vakantiepark-hoog-vaals', 'Hoog Vaals'],
@@ -108,9 +115,11 @@ test("a round's reading stores the search figures, the sitemap state and what Go
   assert.deepEqual(tracked.find((row) => row.path === '/land/duitsland'), {
     path: '/land/duitsland', label: 'Duitsland', requestedOn: '2026-11-27', verdict: 'NEUTRAL',
     coverage: 'Gecrawld - momenteel niet geïndexeerd', lastCrawl: '2026-11-19T00:06:24Z', checkedAt: '2026-11-19T12:00:00.000Z',
+    googlebot: { visitedAt: '2026-11-27T12:16:51.000Z', status: 502 },
   });
   assert.deepEqual(tracked.find((row) => row.path === '/park/hof-van-saksen'), {
     path: '/park/hof-van-saksen', label: 'Hof van Saksen', requestedOn: null, verdict: null, coverage: null, lastCrawl: null, checkedAt: null,
+    googlebot: null,
   });
   db.close();
   rmSync(directory, { recursive: true, force: true });

@@ -45,12 +45,17 @@ const place = (position) => position.toLocaleString('nl-NL', { minimumFractionDi
 const indexed = computed(() => index.value.filter((row) => row.verdict === 'PASS').length);
 const requestDate = new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium', timeZone: 'Europe/Amsterdam' });
 const inspectionTime = new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Amsterdam' });
+const googlebotTime = new Intl.DateTimeFormat('nl-NL', { dateStyle: 'medium', timeStyle: 'medium', timeZone: 'Europe/Amsterdam' });
 const trackedRows = computed(() => trackedIndex.value.map((row) => ({
   ...row,
   requestLabel: row.requestedOn === null ? 'Geen aanvraag vastgelegd' : requestDate.format(new Date(row.requestedOn)),
   crawlLabel: row.lastCrawl === null ? 'Geen crawldatum' : inspectionTime.format(new Date(row.lastCrawl)),
   checkedLabel: row.checkedAt === null ? '' : inspectionTime.format(new Date(row.checkedAt)),
   status: indexStatus(row.verdict, row.checkedAt),
+  googlebotLabel: row.googlebot?.visitedAt === undefined ? null : googlebotTime.format(new Date(row.googlebot.visitedAt)),
+  googlebotStatus: row.googlebot?.status === undefined ? null : `HTTP ${row.googlebot.status}`,
+  googlebotStatusClass: row.googlebot?.status >= 400 ? 'text-serious' : '',
+  googlebotEmptyLabel: row.googlebot === null ? 'Geen bezoek vastgelegd' : '—',
 })));
 
 function indexStatus(verdict, checkedAt) {
@@ -165,7 +170,8 @@ const byKind = computed(() =>
     <section v-if="trackedRows.length > 0" class="min-w-0 rounded-2xl bg-surface ring-1 ring-line" aria-labelledby="seo-tracked-index">
       <h2 id="seo-tracked-index" class="border-b border-line px-4 py-3 font-semibold sm:px-5">Indexering van gevolgde pagina’s</h2>
       <p class="px-4 py-3 text-sm text-ink-secondary sm:px-5">
-        Aanvraagdatums zijn handmatig vastgelegd. De crawldatum en indexstatus worden bij elke prijsronde opgehaald uit Search Console.
+        Aanvraagdatums zijn handmatig vastgelegd. De crawldatum en indexstatus komen uit Search Console.
+        Voor vijf pagina’s toont Cloudflare ook het laatst waargenomen Googlebot-bezoek in Nederlandse tijd en de HTTP-status.
       </p>
       <div class="overflow-x-auto" tabindex="0" role="group" aria-label="Indexeringstabel">
         <table class="w-full text-left text-sm">
@@ -173,8 +179,9 @@ const byKind = computed(() =>
             <tr class="border-b border-line">
               <th scope="col" class="px-3 py-2.5 font-medium sm:px-5">Pagina</th>
               <th scope="col" class="px-3 py-2.5 font-medium sm:px-5">Laatste aanvraag</th>
-              <th scope="col" class="px-3 py-2.5 font-medium sm:px-5">Laatste crawl</th>
+              <th scope="col" class="px-3 py-2.5 font-medium sm:px-5">Laatste crawl (Search Console)</th>
               <th scope="col" class="px-3 py-2.5 font-medium sm:px-5">Indexstatus</th>
+              <th scope="col" class="px-3 py-2.5 font-medium sm:px-5">Googlebot (Cloudflare)</th>
             </tr>
           </thead>
           <tbody>
@@ -192,6 +199,19 @@ const byKind = computed(() =>
                 <p class="font-semibold">{{ row.status }}</p>
                 <p v-if="row.coverage" class="text-xs text-ink-secondary">{{ row.coverage }}</p>
                 <p v-if="row.checkedAt !== null" class="mt-1 text-xs text-ink-secondary">Gecontroleerd op <time :datetime="row.checkedAt">{{ row.checkedLabel }}</time></p>
+              </td>
+              <td class="px-3 py-3 tabular-nums sm:px-5">
+                <template v-if="row.googlebotLabel !== null">
+                  <time
+                    :datetime="row.googlebot.visitedAt"
+                    class="block whitespace-nowrap"
+                  >{{ row.googlebotLabel }}</time>
+                  <span
+                    :class="row.googlebotStatusClass"
+                    class="font-semibold"
+                  >{{ row.googlebotStatus }}</span>
+                </template>
+                <span v-else class="text-ink-secondary">{{ row.googlebotEmptyLabel }}</span>
               </td>
             </tr>
           </tbody>

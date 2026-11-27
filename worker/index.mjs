@@ -3,6 +3,7 @@ import { openDatabase } from '../server/db.mjs';
 import { isPageView, pageViewPoint } from '../server/events.mjs';
 import { clientNetwork, createApiHandler, visitorOf } from '../server/handler.mjs';
 import { analyticsQuery } from '../server/traffic.mjs';
+import { fetchGooglebotCrawls } from '../server/cloudflare-crawls.mjs';
 import { parseAffiliateLinks } from '../server/affiliate.mjs';
 import { isAdminEmail, verifyAccess } from './access.mjs';
 import { startWorkflows } from './clock.mjs';
@@ -29,6 +30,24 @@ let stylesheet;
 async function appStylesheet(env, request) {
   stylesheet ??= (await (await env.ASSETS.fetch(new URL('/', request.url))).text()).match(/href="([^"]+\.css)"/)?.[1] ?? null;
   return stylesheet;
+}
+
+async function refreshGooglebotCrawls(env, now) {
+  const token = env.CLOUDFLARE_CRAWL_READ_TOKEN ?? env.ANALYTICS_READ_TOKEN;
+  if (token === undefined || env.CLOUDFLARE_ZONE_ID === undefined) {
+    return;
+  }
+  const visits = await fetchGooglebotCrawls({ token, zone: env.CLOUDFLARE_ZONE_ID, now });
+  if (visits.length === 0) {
+    return;
+  }
+  const client = createClient({ url: env.TURSO_DATABASE_URL, authToken: env.TURSO_AUTH_TOKEN });
+  try {
+    const db = await openDatabase(client, { runMigrations: false });
+    await db.saveGooglebotCrawls(visits);
+  } finally {
+    client.close();
+  }
 }
 
 /**
@@ -96,8 +115,11 @@ export default {
     }
   },
 
-  // Every ten minutes (the cron trigger in wrangler.jsonc): start the GitHub workflows that collect prices.
+  // Every ten minutes: start the GitHub workflows and refresh the latest Googlebot visits.
   async scheduled(controller, env, context) {
     context.waitUntil(startWorkflows(env));
+    context.waitUntil(refreshGooglebotCrawls(env, controller.scheduledTime).catch((error) => {
+      console.error('Googlebot Analytics:', error.message);
+    }));
   },
 };

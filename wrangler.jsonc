@@ -30,7 +30,11 @@
   // The clock that starts the price rounds and the price watch on GitHub (worker/clock.mjs). Its token is the secret
   // GITHUB_DISPATCH_TOKEN.
   "triggers": { "crons": ["*/10 * * * *"] },
-  "vars": { "GITHUB_REPOSITORY": "frontero/weekend-deals", "CLOUDFLARE_ACCOUNT_ID": "d389fd8feb9ce2879148841b958456ce" },
+  "vars": {
+    "GITHUB_REPOSITORY": "frontero/weekend-deals",
+    "CLOUDFLARE_ACCOUNT_ID": "d389fd8feb9ce2879148841b958456ce",
+    "CLOUDFLARE_ZONE_ID": "bd699523b0ba0563f6bab5ed84fd0f39"
+  },
   // Preview addresses per upload would be copies of the site that search engines could find.
   "preview_urls": false,
   "observability": { "enabled": true }
