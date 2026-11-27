@@ -92,7 +92,12 @@ test("a round's reading stores the search figures, the sitemap state and what Go
   ]);
   await db.saveIndexRequests([{ path: '/feestdag/kerst', requestedOn: '2026-11-25' }]);
   const tracked = trackedIndexRows(await db.pageIndex(), await db.indexRequests());
-  assert.equal(tracked.length, 8);
+  assert.equal(tracked.length, 11);
+  assert.deepEqual(tracked.slice(-3).map(({ path, label }) => [path, label]), [
+    ['/park/vakantiepark-hoog-vaals', 'Hoog Vaals'],
+    ['/park/vakantiepark-de-lommerbergen', 'De Lommerbergen'],
+    ['/park/vakantiepark-het-vennenbos', 'Het Vennenbos'],
+  ]);
   const christmas = tracked.find((row) => row.path === '/feestdag/kerst');
   assert.equal(christmas.requestedOn, '2026-11-26');
   assert.equal(christmas.verdict, 'NEUTRAL');

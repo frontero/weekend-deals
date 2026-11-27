@@ -7,6 +7,9 @@ export const TRACKED_INDEX_PAGES = [
   { path: '/cijfers', label: 'Cijfers' },
   { path: '/land/duitsland', label: 'Duitsland' },
   { path: '/park/hof-van-saksen', label: 'Hof van Saksen' },
+  { path: '/park/vakantiepark-hoog-vaals', label: 'Hoog Vaals' },
+  { path: '/park/vakantiepark-de-lommerbergen', label: 'De Lommerbergen' },
+  { path: '/park/vakantiepark-het-vennenbos', label: 'Het Vennenbos' },
 ];
 
 export function trackedIndexRows(index, requests) {
