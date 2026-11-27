@@ -87,6 +87,29 @@ const details = {
 const pages = buildPages({ parks: [gulpen, hoogduin], allParks, computedAt: '2026-10-29T06:39:10.572Z', details });
 const pageAt = (path) => pages.find((page) => page.path === path);
 
+test('Germany compares parks by region and distance with prices for the same Friday-to-Monday stay', () => {
+  const germanPark = (code, name, region, lat, lng, weekends) => ({
+    code, name, region, lat, lng, weekends, country: 'DE', provider: 'landal', brand: 'landal', facilities: ['bos'],
+  });
+  const parks = [
+    germanPark('KEE', 'Kronenburger See', 'Noordrijn-Westfalen (DE)', 50.36143, 6.46802, [weekend('2026-11-06', '2026-11-08', 11100, 0)]),
+    germanPark('BBM', 'Bad Bentheim', 'Nedersaksen (DE)', 52.3010149, 7.1376898, [weekend('2026-11-06', '2026-11-09', 21900, 0)]),
+    germanPark('DTR', 'Eifeler Tor', 'Eifel (DE)', 50.6324, 6.445, [weekend('2026-11-05', '2026-11-08', 9900, 0), weekend('2026-11-06', '2026-11-09', 28500, 0)]),
+    germanPark('NEW', 'Park zonder locatie', null, null, null, [weekend('2026-11-13', '2026-11-16', 12300, 0)]),
+  ];
+  const allParks = new Map([gulpen, ...parks].map((park) => [park.code, park]));
+  const built = buildPages({ parks: [gulpen, ...parks], allParks, computedAt: '2026-11-05T06:00:00Z' });
+  const germany = built.find((page) => page.path === '/land/duitsland');
+  const comparison = germany.body.match(/<section aria-labelledby="vergelijk-duitsland"[\s\S]*?<\/section>/)[0];
+  assert.match(germany.title, /Duitsland.*streek.*grensafstand/);
+  assert.match(comparison, /Totaalprijzen voor 2 personen, inclusief toeslagen, vr 6 nov – ma 9 nov/);
+  assert.match(comparison, /Grafschaft Bentheim<\/th>[\s\S]*?Bad Bentheim<\/a>[\s\S]*?7 km<\/td>[\s\S]*?€ 219<\/td>/);
+  assert.match(comparison, /Eifel<\/th>[\s\S]*?Eifeler Tor<\/a>[\s\S]*?34 km<\/td>[\s\S]*?€ 285<\/td>[\s\S]*?Kronenburger See<\/a>[\s\S]*?55 km<\/td>[\s\S]*?Geen prijs<\/td>/);
+  assert.match(comparison, /Overig Duitsland<\/th>[\s\S]*?Park zonder locatie<\/a>[\s\S]*?Onbekend<\/td>[\s\S]*?Geen prijs<\/td>/);
+  assert.doesNotMatch(comparison, /€ (?:99|111|123)/);
+  assert.doesNotMatch(built.find((page) => page.path === '/aanbieder/landal/duitsland').body, /vergelijk-duitsland/);
+});
+
 test('one page per park with something to tell, per weekend, per country, region and theme with three parks, and the lists', () => {
   assert.deepEqual(pages.map((page) => page.path).sort(), [
     '/aanbieder/landal',

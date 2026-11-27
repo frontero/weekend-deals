@@ -12,11 +12,12 @@ import { bookingBrandNote, providerHomeLinks, providerName, trackedBookingUrl } 
 import { parkBrand } from '../shared/brands.mjs';
 import { facilityGroups } from '../shared/facilities.mjs';
 import { distanceKm } from '../shared/geo.mjs';
+import { distanceToDutchBorder, germanComparisonWeekend, germanRegion } from './germany.mjs';
 import { OCCASION_ART } from './occasion-art.mjs';
 import { DESCRIPTION_MAX, documentTitle, TITLE_MAX } from './seo.mjs';
 import { groupKey, HOT_TUB_PARTY, parseGroupKey, partyLabel, PET_PARTY, STANDARD_PARTIES } from '../shared/party.mjs';
 import { easter, easterStay } from '../shared/occasions.mjs';
-import { shiftDays } from '../shared/weekends.mjs';
+import { localToday, shiftDays } from '../shared/weekends.mjs';
 
 // Two adults, the app's own default: the most searched-for weekend away.
 export const PAGE_PARTY = STANDARD_PARTIES[0];
@@ -545,7 +546,7 @@ const PLACE_INTROS = {
   Yorkshire: 'De heidevelden van de Moors, de groene Dales en historische stadjes als York en Whitby in het noorden van Engeland.',
   Nederland:
     'Van de Waddeneilanden tot Zuid-Limburg: in Nederland ben je nooit ver van een vakantiepark. Ideaal voor een weekend zonder lange reis.',
-  Duitsland: 'Net over de grens: van de Moezel en de Eifel tot het Beierse Woud. Veel Duitse parken liggen op een paar uur rijden.',
+  Duitsland: 'Van Bad Bentheim vlak over de grens tot het Beierse Woud. Vergelijk vakantieparken per streek, zie hoe ver ze van Nederland liggen en bekijk wat hetzelfde weekend kost.',
   België: 'Dichtbij en toch echt weg: de Belgische parken liggen vooral in de Ardennen, met bossen, rivieren en heuvels.',
   Oostenrijk: 'Bergen, meren en frisse lucht: in de winter om te skiën, in de zomer om te wandelen en te fietsen.',
   Denemarken: 'Lange stranden, duinen en hygge: Denemarken is rustig, ruim en kindvriendelijk.',
@@ -1346,12 +1347,79 @@ function listIntro(parks, party = PAGE_PARTY) {
   ].filter(Boolean);
 }
 
+function borderDistanceLabel(distance) {
+  if (distance === null) {
+    return 'Onbekend';
+  }
+  if (distance < 1) {
+    return 'Minder dan 1 km';
+  }
+  return `${Math.round(distance)} km`;
+}
+
+function germanParkRow({ park, distance }, { pathOf, weekend }) {
+  const offer = weekend === null ? null : park.weekends.find(({ arrival, departure }) => arrival === weekend.arrival && departure === weekend.departure);
+  return html`<tr class="border-b border-line last:border-b-0">
+    <th scope="row" class="px-2 py-3 text-left sm:px-4">
+      <a href="${pathOf(park)}" class="${link}">${fullName(park)}</a>
+      ${park.city && html`<span class="block text-xs font-normal text-ink-secondary">${park.city}</span>`}
+    </th>
+    <td class="px-2 py-3 text-right tabular-nums sm:px-4">${borderDistanceLabel(distance)}</td>
+    ${weekend !== null && html`<td class="px-2 py-3 text-right font-semibold tabular-nums sm:px-4">${offer ? formatEuros(offer.priceCents) : 'Geen prijs'}</td>`}
+  </tr>`;
+}
+
+function germanRegionRows([region, rows], options) {
+  return html`<tbody>
+    <tr class="bg-sun-wash"><th scope="rowgroup" colspan="${options.weekend === null ? 2 : 3}" class="px-2 py-2 text-left font-extrabold sm:px-4">${region}</th></tr>
+    ${rows.map((row) => germanParkRow(row, options))}
+  </tbody>`;
+}
+
+function nearestGermanParks(rows, pathOf) {
+  const nearest = rows.filter(({ distance }) => distance !== null).slice(0, 3);
+  if (nearest.length === 0) {
+    return null;
+  }
+  return html`<h3 class="mt-5 text-base font-extrabold">Dichtst bij de Nederlandse grens</h3>
+    <ul class="mt-2 grid gap-2 sm:grid-cols-3">${nearest.map(({ park, distance }) => html`<li class="rounded-2xl bg-surface p-3 ring-1 ring-line">
+      <a href="${pathOf(park)}" class="${link}">${fullName(park)}</a>
+      <span class="mt-1 block text-sm text-ink-secondary">${borderDistanceLabel(distance)} tot de grens</span>
+    </li>`)}</ul>`;
+}
+
+function germanyComparison(parks, { pathOf, today }) {
+  const weekend = germanComparisonWeekend(parks, today);
+  const rows = parks.map((park) => ({ park, distance: distanceToDutchBorder(park) }));
+  rows.sort((first, second) => (first.distance ?? Infinity) - (second.distance ?? Infinity) || first.park.name.localeCompare(second.park.name, 'nl'));
+  const regions = Map.groupBy(rows, ({ park }) => germanRegion(park));
+  const body = html`<section aria-labelledby="vergelijk-duitsland" class="mt-10">
+    ${sectionTitle('vergelijk-duitsland', '📍', 'Vergelijk Duitse vakantieparken per streek')}
+    <p class="mt-2 max-w-3xl text-sm text-ink-secondary">De afstand is hemelsbreed gemeten tot het dichtstbijzijnde punt van de Nederlandse landgrens. Per streek staan de dichtstbijzijnde parken eerst.</p>
+    ${nearestGermanParks(rows, pathOf)}
+    <table class="mt-5 w-full border-separate border-spacing-0 overflow-hidden rounded-2xl bg-surface text-sm ring-1 ring-line">
+      <caption class="caption-top px-1 pb-3 text-left text-sm text-ink-secondary">${weekend === null ? 'Parken en afstanden per streek.' : `Totaalprijzen voor ${partyLabel(PAGE_PARTY)}, inclusief toeslagen, ${formatWeekend(weekend)}. ‘Geen prijs’ betekent dat we voor dit weekend geen prijs hebben gevonden.`}</caption>
+      <thead class="bg-surface"><tr>
+        <th scope="col" class="px-2 py-3 text-left sm:px-4">Vakantiepark</th>
+        <th scope="col" class="px-2 py-3 text-right sm:px-4">Afstand tot grens</th>
+        ${weekend !== null && html`<th scope="col" class="px-2 py-3 text-right sm:px-4">Weekend&shy;prijs</th>`}
+      </tr></thead>
+      ${[...regions].map((region) => germanRegionRows(region, { pathOf, weekend }))}
+    </table>
+  </section>`;
+  return {
+    body,
+    title: 'Vakantieparken Duitsland: prijzen per streek en grensafstand',
+    description: `Vergelijk ${count(parks.length, 'vakantiepark', 'vakantieparken')} in Duitsland per streek. Bekijk de afstand tot de Nederlandse grens en prijzen voor hetzelfde weekend.`,
+  };
+}
+
 /**
  * A region's or a country's page: its parks, what they offer and the outings around them.
  * @param place where, as a sentence names it: "op Texel", "in Duitsland"
  * @param links [href, label, count] of the regions inside a country
  */
-function placePage(name, parks, { path, place, emoji, pathOf, surroundings, links = [], brand = null }) {
+function placePage(name, parks, { path, place, emoji, pathOf, surroundings, links = [], brand = null, comparison = null }) {
   // A brand's list of all its parks has no place, so no outings nearby.
   const places = place ? regionPlaces(parks, surroundings) : [];
   const label = brand && brandName(brand);
@@ -1365,6 +1433,7 @@ function placePage(name, parks, { path, place, emoji, pathOf, surroundings, link
   const body = html`
     ${breadcrumb(brand && place ? `${label} ${place}` : name, ['/parken', 'Alle parken'], ...(brand && place ? [[brandPath(brand), label]] : []))}
     <div class="mt-3">${banner(emoji, html`${brand && place ? label : 'Vakantieparken'} ${preposition} <span class="inline-block -rotate-1 rounded-2xl bg-sun px-2 text-on-sun">${name}</span>`, html`<p class="mt-3 max-w-3xl text-lg leading-relaxed font-semibold">${intro}</p>${statTiles(parks)}`)}</div>
+    ${comparison?.body}
     ${links.length > 0 && html`<ul class="mt-6 flex flex-wrap gap-2">${links.map(([href, label, number, icon = '📍']) => html`<li><a href="${href}" class="${chip}"><span aria-hidden="true">${icon}</span> ${label} <span class="text-ink-muted">${number}</span></a></li>`)}</ul>`}
     ${parkList(parks, { pathOf, source: sources[0] })}
     ${
@@ -1380,8 +1449,8 @@ function placePage(name, parks, { path, place, emoji, pathOf, surroundings, link
   return {
     path,
     // People search "vakantiepark Zeeland", not "weekendje weg Zeeland" (Google Trends): the title starts with it.
-    title: fitting(`${titled}: alle parken met weekendprijzen`, `${titled}: parken en weekendprijzen`, `${titled}: weekendprijzen`, titled),
-    description: `${parks.length} vakantieparken ${brand ? `van ${label}${place ? ` ${place}` : ''}` : place} met de prijs van elk komend weekend. ${listIntro(parks)[0] ?? ''}`.trim(),
+    title: comparison?.title ?? fitting(`${titled}: alle parken met weekendprijzen`, `${titled}: parken en weekendprijzen`, `${titled}: weekendprijzen`, titled),
+    description: comparison?.description ?? `${parks.length} vakantieparken ${brand ? `van ${label}${place ? ` ${place}` : ''}` : place} met de prijs van elk komend weekend. ${listIntro(parks)[0] ?? ''}`.trim(),
     image: parks.find((park) => park.imageUrl)?.imageUrl ?? null,
     body: body.text,
   };
@@ -2153,6 +2222,7 @@ export function buildPages({ parks, allParks, computedAt, details: given = {} })
         emoji: '🌍',
         pathOf,
         surroundings: details.surroundings,
+        comparison: country === 'DE' ? germanyComparison(list, { pathOf, today: localToday(new Date(computedAt)) }) : null,
         links: [
           ...regions
             .filter(([, parksOf]) => parksOf.every((park) => park.country === country))
